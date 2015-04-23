@@ -1,0 +1,294 @@
+From 5fc6a35e2c8dd99136def180ae7e8761dc71123a Mon Sep 17 00:00:00 2001
+From: Rhys <rimmington@gmail.com>
+Date: Fri, 24 Apr 2015 09:57:06 +1000
+Subject: [PATCH] FIX: Match generated Thrift code to API
+
+---
+ gen-hs/Api_Types.hs                    | 73 +++----------------------
+ gen-hs/Api_Types2.hs                   | 98 ++++++++++++++++++++++++++++++++++
+ gen-hs/AuroraSchedulerManager.hs       |  8 +--
+ gen-hs/AuroraSchedulerManager_Iface.hs |  2 +-
+ 4 files changed, 111 insertions(+), 70 deletions(-)
+ create mode 100644 gen-hs/Api_Types2.hs
+
+diff --git a/gen-hs/Api_Types.hs b/gen-hs/Api_Types.hs
+index cefb36e..92b13c3 100644
+--- a/gen-hs/Api_Types.hs
++++ b/gen-hs/Api_Types.hs
+@@ -36,29 +36,8 @@ import qualified Thrift.Types as T
+ import qualified Thrift.Arbitraries as T
+ 
+ 
+-data ResponseCode = INVALID_REQUEST|OK|ERROR|WARNING|AUTH_FAILED|LOCK_ERROR|ERROR_TRANSIENT  deriving (P.Show,P.Eq, TY.Typeable, P.Ord, P.Bounded)
+-instance P.Enum ResponseCode where
+-  fromEnum t = case t of
+-    INVALID_REQUEST -> 0
+-    OK -> 1
+-    ERROR -> 2
+-    WARNING -> 3
+-    AUTH_FAILED -> 4
+-    LOCK_ERROR -> 5
+-    ERROR_TRANSIENT -> 6
+-  toEnum t = case t of
+-    0 -> INVALID_REQUEST
+-    1 -> OK
+-    2 -> ERROR
+-    3 -> WARNING
+-    4 -> AUTH_FAILED
+-    5 -> LOCK_ERROR
+-    6 -> ERROR_TRANSIENT
+-    _ -> X.throw T.ThriftException
+-instance H.Hashable ResponseCode where
+-  hashWithSalt salt = H.hashWithSalt salt P.. P.fromEnum
+-instance QC.Arbitrary ResponseCode where
+-  arbitrary = QC.elements (P.enumFromTo P.minBound P.maxBound)
++import Api_Types2 (ScheduleStatus, ResponseCode)
++
+ data MaintenanceMode = NONE|SCHEDULED|DRAINING|DRAINED  deriving (P.Show,P.Eq, TY.Typeable, P.Ord, P.Bounded)
+ instance P.Enum MaintenanceMode where
+   fromEnum t = case t of
+@@ -104,43 +83,7 @@ instance H.Hashable CronCollisionPolicy where
+   hashWithSalt salt = H.hashWithSalt salt P.. P.fromEnum
+ instance QC.Arbitrary CronCollisionPolicy where
+   arbitrary = QC.elements (P.enumFromTo P.minBound P.maxBound)
+-data ScheduleStatus = INIT|THROTTLED|PENDING|ASSIGNED|STARTING|RUNNING|FINISHED|PREEMPTING|RESTARTING|DRAINING|FAILED|KILLED|KILLING|LOST  deriving (P.Show,P.Eq, TY.Typeable, P.Ord, P.Bounded)
+-instance P.Enum ScheduleStatus where
+-  fromEnum t = case t of
+-    INIT -> 11
+-    THROTTLED -> 16
+-    PENDING -> 0
+-    ASSIGNED -> 9
+-    STARTING -> 1
+-    RUNNING -> 2
+-    FINISHED -> 3
+-    PREEMPTING -> 13
+-    RESTARTING -> 12
+-    DRAINING -> 17
+-    FAILED -> 4
+-    KILLED -> 5
+-    KILLING -> 6
+-    LOST -> 7
+-  toEnum t = case t of
+-    11 -> INIT
+-    16 -> THROTTLED
+-    0 -> PENDING
+-    9 -> ASSIGNED
+-    1 -> STARTING
+-    2 -> RUNNING
+-    3 -> FINISHED
+-    13 -> PREEMPTING
+-    12 -> RESTARTING
+-    17 -> DRAINING
+-    4 -> FAILED
+-    5 -> KILLED
+-    6 -> KILLING
+-    7 -> LOST
+-    _ -> X.throw T.ThriftException
+-instance H.Hashable ScheduleStatus where
+-  hashWithSalt salt = H.hashWithSalt salt P.. P.fromEnum
+-instance QC.Arbitrary ScheduleStatus where
+-  arbitrary = QC.elements (P.enumFromTo P.minBound P.maxBound)
++
+ data JobUpdateStatus = ROLLING_FORWARD|ROLLING_BACK|ROLL_FORWARD_PAUSED|ROLL_BACK_PAUSED|ROLLED_FORWARD|ROLLED_BACK|ABORTED|ERROR|FAILED  deriving (P.Show,P.Eq, TY.Typeable, P.Ord, P.Bounded)
+ instance P.Enum JobUpdateStatus where
+   fromEnum t = case t of
+@@ -1109,10 +1052,10 @@ default_TaskConfig = TaskConfig{
+   taskConfig_environment = "",
+   taskConfig_metadata = P.Nothing,
+   taskConfig_job = default_JobKey,
+-  taskConfig_container = P.Just default_Container{container_mesos = default_MesosContainer{}}}
++  taskConfig_container = P.Just default_Container{container_mesos = default_MesosContainer}}
+ data JobConfiguration = JobConfiguration  { jobConfiguration_key :: JobKey
+   , jobConfiguration_owner :: Identity
+-  , jobConfiguration_cronSchedule :: LT.Text
++  , jobConfiguration_cronSchedule :: P.Maybe LT.Text
+   , jobConfiguration_cronCollisionPolicy :: CronCollisionPolicy
+   , jobConfiguration_taskConfig :: TaskConfig
+   , jobConfiguration_instanceCount :: I.Int32
+@@ -1137,7 +1080,7 @@ instance QC.Arbitrary JobConfiguration where
+     ]
+ from_JobConfiguration :: JobConfiguration -> T.ThriftVal
+ from_JobConfiguration record = T.TStruct $ Map.fromList $ M.catMaybes
+-  [ (\_v197 -> P.Just (4, ("cronSchedule",T.TString $ E.encodeUtf8 _v197))) $ jobConfiguration_cronSchedule record
++  [ (\_v197 -> (4, ("cronSchedule",T.TString $ E.encodeUtf8 _v197))) <$> jobConfiguration_cronSchedule record
+   , (\_v197 -> P.Just (5, ("cronCollisionPolicy",T.TI32 $ P.fromIntegral $ P.fromEnum _v197))) $ jobConfiguration_cronCollisionPolicy record
+   , (\_v197 -> P.Just (6, ("taskConfig",from_TaskConfig _v197))) $ jobConfiguration_taskConfig record
+   , (\_v197 -> P.Just (7, ("owner",from_Identity _v197))) $ jobConfiguration_owner record
+@@ -1152,7 +1095,7 @@ to_JobConfiguration :: T.ThriftVal -> JobConfiguration
+ to_JobConfiguration (T.TStruct fields) = JobConfiguration{
+   jobConfiguration_key = P.maybe (jobConfiguration_key default_JobConfiguration) (\(_,_val199) -> (case _val199 of {T.TStruct _val200 -> (to_JobKey (T.TStruct _val200)); _ -> P.error "wrong type"})) (Map.lookup (9) fields),
+   jobConfiguration_owner = P.maybe (jobConfiguration_owner default_JobConfiguration) (\(_,_val199) -> (case _val199 of {T.TStruct _val201 -> (to_Identity (T.TStruct _val201)); _ -> P.error "wrong type"})) (Map.lookup (7) fields),
+-  jobConfiguration_cronSchedule = P.maybe (jobConfiguration_cronSchedule default_JobConfiguration) (\(_,_val199) -> (case _val199 of {T.TString _val202 -> E.decodeUtf8 _val202; _ -> P.error "wrong type"})) (Map.lookup (4) fields),
++  jobConfiguration_cronSchedule = P.maybe (P.Nothing) (\(_,_val199) -> P.Just (case _val199 of {T.TString _val202 -> E.decodeUtf8 _val202; _ -> P.error "wrong type"})) (Map.lookup (4) fields),
+   jobConfiguration_cronCollisionPolicy = P.maybe (jobConfiguration_cronCollisionPolicy default_JobConfiguration) (\(_,_val199) -> (case _val199 of {T.TI32 _val203 -> P.toEnum $ P.fromIntegral _val203; _ -> P.error "wrong type"})) (Map.lookup (5) fields),
+   jobConfiguration_taskConfig = P.maybe (jobConfiguration_taskConfig default_JobConfiguration) (\(_,_val199) -> (case _val199 of {T.TStruct _val204 -> (to_TaskConfig (T.TStruct _val204)); _ -> P.error "wrong type"})) (Map.lookup (6) fields),
+   jobConfiguration_instanceCount = P.maybe (jobConfiguration_instanceCount default_JobConfiguration) (\(_,_val199) -> (case _val199 of {T.TI32 _val205 -> _val205; _ -> P.error "wrong type"})) (Map.lookup (8) fields)
+@@ -1166,7 +1109,7 @@ typemap_JobConfiguration :: T.TypeMap
+ typemap_JobConfiguration = Map.fromList [(4,("cronSchedule",T.T_STRING)),(5,("cronCollisionPolicy",T.T_I32)),(6,("taskConfig",(T.T_STRUCT typemap_TaskConfig))),(7,("owner",(T.T_STRUCT typemap_Identity))),(8,("instanceCount",T.T_I32)),(9,("key",(T.T_STRUCT typemap_JobKey)))]
+ default_JobConfiguration :: JobConfiguration
+ default_JobConfiguration = JobConfiguration{
+-  jobConfiguration_cronSchedule = "",
++  jobConfiguration_cronSchedule = P.Nothing,
+   jobConfiguration_cronCollisionPolicy = (P.toEnum 0),
+   jobConfiguration_taskConfig = default_TaskConfig,
+   jobConfiguration_owner = default_Identity,
+diff --git a/gen-hs/Api_Types2.hs b/gen-hs/Api_Types2.hs
+new file mode 100644
+index 0000000..cd62e68
+--- /dev/null
++++ b/gen-hs/Api_Types2.hs
+@@ -0,0 +1,98 @@
++{-# LANGUAGE DeriveDataTypeable #-}
++{-# LANGUAGE OverloadedStrings #-}
++{-# OPTIONS_GHC -fno-warn-missing-fields #-}
++{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
++{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
++{-# OPTIONS_GHC -fno-warn-unused-imports #-}
++{-# OPTIONS_GHC -fno-warn-unused-matches #-}
++
++-----------------------------------------------------------------
++-- Autogenerated by Thrift Compiler (0.9.2)                      --
++--                                                             --
++-- DO NOT EDIT UNLESS YOU ARE SURE YOU KNOW WHAT YOU ARE DOING --
++-----------------------------------------------------------------
++
++module Api_Types2 where
++import Prelude (($), (.), (>>=), (==), (++))
++import qualified Prelude as P
++import qualified Control.Exception as X
++import qualified Control.Monad as M ( liftM, ap, when )
++import Data.Functor ( (<$>) )
++import qualified Data.ByteString.Lazy as LBS
++import qualified Data.Hashable as H
++import qualified Data.Int as I
++import qualified Data.Maybe as M (catMaybes)
++import qualified Data.Text.Lazy.Encoding as E ( decodeUtf8, encodeUtf8 )
++import qualified Data.Text.Lazy as LT
++import qualified Data.Typeable as TY ( Typeable )
++import qualified Data.HashMap.Strict as Map
++import qualified Data.HashSet as Set
++import qualified Data.Vector as Vector
++import qualified Test.QuickCheck.Arbitrary as QC ( Arbitrary(..) )
++import qualified Test.QuickCheck as QC ( elements )
++
++import qualified Thrift as T
++import qualified Thrift.Types as T
++import qualified Thrift.Arbitraries as T
++
++data ResponseCode = INVALID_REQUEST|OK|ERROR|WARNING|AUTH_FAILED|LOCK_ERROR|ERROR_TRANSIENT  deriving (P.Show,P.Eq, TY.Typeable, P.Ord, P.Bounded)
++instance P.Enum ResponseCode where
++  fromEnum t = case t of
++    INVALID_REQUEST -> 0
++    OK -> 1
++    ERROR -> 2
++    WARNING -> 3
++    AUTH_FAILED -> 4
++    LOCK_ERROR -> 5
++    ERROR_TRANSIENT -> 6
++  toEnum t = case t of
++    0 -> INVALID_REQUEST
++    1 -> OK
++    2 -> ERROR
++    3 -> WARNING
++    4 -> AUTH_FAILED
++    5 -> LOCK_ERROR
++    6 -> ERROR_TRANSIENT
++    _ -> X.throw T.ThriftException
++instance H.Hashable ResponseCode where
++  hashWithSalt salt = H.hashWithSalt salt P.. P.fromEnum
++instance QC.Arbitrary ResponseCode where
++  arbitrary = QC.elements (P.enumFromTo P.minBound P.maxBound)
++
++data ScheduleStatus = INIT|THROTTLED|PENDING|ASSIGNED|STARTING|RUNNING|FINISHED|PREEMPTING|RESTARTING|DRAINING|FAILED|KILLED|KILLING|LOST  deriving (P.Show,P.Eq, TY.Typeable, P.Ord, P.Bounded)
++instance P.Enum ScheduleStatus where
++  fromEnum t = case t of
++    INIT -> 11
++    THROTTLED -> 16
++    PENDING -> 0
++    ASSIGNED -> 9
++    STARTING -> 1
++    RUNNING -> 2
++    FINISHED -> 3
++    PREEMPTING -> 13
++    RESTARTING -> 12
++    DRAINING -> 17
++    FAILED -> 4
++    KILLED -> 5
++    KILLING -> 6
++    LOST -> 7
++  toEnum t = case t of
++    11 -> INIT
++    16 -> THROTTLED
++    0 -> PENDING
++    9 -> ASSIGNED
++    1 -> STARTING
++    2 -> RUNNING
++    3 -> FINISHED
++    13 -> PREEMPTING
++    12 -> RESTARTING
++    17 -> DRAINING
++    4 -> FAILED
++    5 -> KILLED
++    6 -> KILLING
++    7 -> LOST
++    _ -> X.throw T.ThriftException
++instance H.Hashable ScheduleStatus where
++  hashWithSalt salt = H.hashWithSalt salt P.. P.fromEnum
++instance QC.Arbitrary ScheduleStatus where
++  arbitrary = QC.elements (P.enumFromTo P.minBound P.maxBound)
+diff --git a/gen-hs/AuroraSchedulerManager.hs b/gen-hs/AuroraSchedulerManager.hs
+index 9dca6d4..796d4b8 100644
+--- a/gen-hs/AuroraSchedulerManager.hs
++++ b/gen-hs/AuroraSchedulerManager.hs
+@@ -42,7 +42,7 @@ import qualified AuroraSchedulerManager_Iface as Iface
+ -- HELPER FUNCTIONS AND STRUCTURES --
+ 
+ data CreateJob_args = CreateJob_args  { createJob_args_description :: JobConfiguration
+-  , createJob_args_lock :: Lock
++  , createJob_args_lock :: P.Maybe Lock
+   , createJob_args_session :: SessionKey
+   } deriving (P.Show,P.Eq,TY.Typeable)
+ instance H.Hashable CreateJob_args where
+@@ -61,7 +61,7 @@ from_CreateJob_args :: CreateJob_args -> T.ThriftVal
+ from_CreateJob_args record = T.TStruct $ Map.fromList $ M.catMaybes
+   [ (\_v901 -> P.Just (1, ("description",from_JobConfiguration _v901))) $ createJob_args_description record
+   , (\_v901 -> P.Just (2, ("session",from_SessionKey _v901))) $ createJob_args_session record
+-  , (\_v901 -> P.Just (3, ("lock",from_Lock _v901))) $ createJob_args_lock record
++  , (\_v901 -> (3, ("lock",from_Lock _v901))) <$> createJob_args_lock record
+   ]
+ write_CreateJob_args :: (T.Protocol p, T.Transport t) => p t -> CreateJob_args -> P.IO ()
+ write_CreateJob_args oprot record = T.writeVal oprot $ from_CreateJob_args record
+@@ -70,7 +70,7 @@ encode_CreateJob_args oprot record = T.serializeVal oprot $ from_CreateJob_args
+ to_CreateJob_args :: T.ThriftVal -> CreateJob_args
+ to_CreateJob_args (T.TStruct fields) = CreateJob_args{
+   createJob_args_description = P.maybe (createJob_args_description default_CreateJob_args) (\(_,_val903) -> (case _val903 of {T.TStruct _val904 -> (to_JobConfiguration (T.TStruct _val904)); _ -> P.error "wrong type"})) (Map.lookup (1) fields),
+-  createJob_args_lock = P.maybe (createJob_args_lock default_CreateJob_args) (\(_,_val903) -> (case _val903 of {T.TStruct _val905 -> (to_Lock (T.TStruct _val905)); _ -> P.error "wrong type"})) (Map.lookup (3) fields),
++  createJob_args_lock = P.maybe (createJob_args_lock default_CreateJob_args) (\(_,_val903) -> P.Just (case _val903 of {T.TStruct _val905 -> (to_Lock (T.TStruct _val905)); _ -> P.error "wrong type"})) (Map.lookup (3) fields),
+   createJob_args_session = P.maybe (createJob_args_session default_CreateJob_args) (\(_,_val903) -> (case _val903 of {T.TStruct _val906 -> (to_SessionKey (T.TStruct _val906)); _ -> P.error "wrong type"})) (Map.lookup (2) fields)
+   }
+ to_CreateJob_args _ = P.error "not a struct"
+@@ -84,7 +84,7 @@ default_CreateJob_args :: CreateJob_args
+ default_CreateJob_args = CreateJob_args{
+   createJob_args_description = default_JobConfiguration,
+   createJob_args_session = default_SessionKey,
+-  createJob_args_lock = default_Lock}
++  createJob_args_lock = P.Nothing}
+ data CreateJob_result = CreateJob_result  { createJob_result_success :: Response
+   } deriving (P.Show,P.Eq,TY.Typeable)
+ instance H.Hashable CreateJob_result where
+diff --git a/gen-hs/AuroraSchedulerManager_Iface.hs b/gen-hs/AuroraSchedulerManager_Iface.hs
+index 3dacbf0..c3ddedc 100644
+--- a/gen-hs/AuroraSchedulerManager_Iface.hs
++++ b/gen-hs/AuroraSchedulerManager_Iface.hs
+@@ -40,7 +40,7 @@ import Api_Types
+ 
+ import ReadOnlyScheduler_Iface
+ class ReadOnlyScheduler_Iface a => AuroraSchedulerManager_Iface a where
+-  createJob :: a -> JobConfiguration -> Lock -> SessionKey -> P.IO Response
++  createJob :: a -> JobConfiguration -> P.Maybe Lock -> SessionKey -> P.IO Response
+   scheduleCronJob :: a -> JobConfiguration -> Lock -> SessionKey -> P.IO Response
+   descheduleCronJob :: a -> JobKey -> Lock -> SessionKey -> P.IO Response
+   startCronJob :: a -> JobKey -> SessionKey -> P.IO Response
+-- 
+1.9.1
+
