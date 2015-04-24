@@ -86,7 +86,7 @@ core :: a -> Value a Core
 core = Value
 
 mega :: (Fractional a) => (a -> Value a u) -> a -> Value a (Mega u)
-mega f = Value
+mega _ = Value
 
 mebi :: (Fractional a) => (a -> Value a u) -> a -> Value a (Mebi u)
-mebi f = Value
+mebi _ = Value

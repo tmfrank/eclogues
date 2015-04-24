@@ -4,23 +4,16 @@
 
 module Main where
 
-import Api_Types
-
-import AuroraAPI (Client, JobConfiguration, thriftClient, getJobs, createJob)
-import AuroraConfig (taskSpec, auroraJobConfig)
+import AuroraAPI (Client, thriftClient, getJobs, createJob)
+import AuroraConfig (taskSpec)
 import TaskSpec (TaskSpec (..))
-import Units
 
 import Control.Applicative ((<$>), pure)
-import Control.Exception (bracket)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Either (EitherT (..), bimapEitherT)
-import Data.Aeson (encode, decode)
-import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Data.Either (lefts, rights)
-import Data.HashSet (HashSet, toList)
+import Data.HashSet (toList)
 import Data.Proxy (Proxy (Proxy))
-import Data.Text.Lazy.Encoding (encodeUtf8)
 import Network.URI (parseURI)
 import Network.Wai.Handler.Warp (run)
 import Servant.API ((:>), (:<|>) ((:<|>)), Get, ReqBody, Post)

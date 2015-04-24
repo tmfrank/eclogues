@@ -3,23 +3,21 @@
 module AuroraAPI ( Client, Result, JobConfiguration
                  , thriftClient, getJobs, acquireLock, releaseLock, createJob) where
 
-import Api_Types ( Response (Response, response_responseCode, response_result)
+import Api_Types ( Response (response_responseCode, response_result)
                  , JobConfiguration, getJobsResult_configs, result_getJobsResult
                  , SessionKey (..), LockValidation (UNCHECKED)
-                 , Lock, result_acquireLockResult, acquireLockResult_lock, default_Lock )
+                 , Lock, result_acquireLockResult, acquireLockResult_lock )
 import qualified Api_Types
 import Api_Types2 (ResponseCode (OK))
-import qualified AuroraSchedulerManager as A
 import qualified AuroraSchedulerManager_Client as AClient
 import qualified ReadOnlyScheduler_Client as ROClient
 
 import AuroraConfig (auroraJobConfig, lockKey)
-import TaskSpec (TaskSpec (..), Name)
+import TaskSpec (TaskSpec, Name)
 
 import Control.Applicative ((<$>), pure)
 import Control.Monad (void)
 import qualified Data.HashSet as HashSet
-import qualified Data.Text.Lazy as L
 import Network.URI (URI)
 import Thrift.Protocol.JSON (JSONProtocol (..))
 import Thrift.Transport.HttpClient (HttpClient, openHttpClient)
@@ -30,7 +28,7 @@ type Result a = Either Response a
 onlyOK :: Response -> Result Response
 onlyOK res = case response_responseCode res of
     Api_Types2.OK -> Right res
-    otherwise     -> Left res
+    _             -> Left res
 
 onlyRes :: Response -> Result Api_Types.Result
 onlyRes resp = case response_result <$> onlyOK resp of

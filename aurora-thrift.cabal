@@ -56,6 +56,8 @@ executable aurora-thrift
   -- LANGUAGE extensions used by modules in this package.
   other-extensions:    DeriveDataTypeable, OverloadedStrings, RankNTypes, MultiParamTypeClasses, ScopedTypeVariables, CPP, FlexibleInstances, TypeSynonymInstances, ExistentialQuantification, TupleSections
   
+  ghc-options:         -Wall
+
   -- Other library packages from which modules are imported.
   build-depends:       base ==4.7.*,
                        text ==1.2.*,
@@ -84,6 +86,8 @@ test-suite spec
   type:                exitcode-stdio-1.0
 
   hs-source-dirs:      src, gen-hs, test
+
+  ghc-options:         -Wall
 
   main-is:             Spec.hs
 

@@ -8,7 +8,7 @@ import Api_Types
 import TaskSpec (TaskSpec (TaskSpec), Resources (..))
 import Units
 
-import Control.Applicative ((<$>), pure)
+import Control.Applicative (pure)
 import Data.Aeson (ToJSON (toJSON), eitherDecode)
 import Data.Aeson.Encode (encodeToTextBuilder)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
@@ -103,13 +103,6 @@ defaultEnvironment = "devel"
 
 defaultJobKey :: L.Text -> JobKey
 defaultJobKey = JobKey defaultRole defaultEnvironment
-
-defaultConstraints :: HashSet.HashSet Constraint
-defaultConstraints = HashSet.fromList [ Constraint { constraint_name = "host"
-                                                   , constraint_constraint = taskc } ] where
-    taskc = Api_Types.TaskConstraint { taskConstraint_value = default_ValueConstraint
-                                     , taskConstraint_limit = limc }
-    limc =  LimitConstraint { limitConstraint_limit = 1 }
 
 defaultPriority :: Int32
 defaultPriority = 0
