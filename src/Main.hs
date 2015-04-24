@@ -1,30 +1,53 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Main where
 
-import AuroraAPI (thriftClient, createJob)
+import Api_Types
+
+import AuroraAPI (Client, JobConfiguration, thriftClient, getJobs)
 import TaskSpec (Resources (..), TaskSpec (..))
 import Units
 
+import Data.Aeson.TH (deriveJSON, defaultOptions)
+import Control.Applicative ((<$>))
 import Control.Exception (bracket)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Either (EitherT (..))
+import Data.Either.Combinators (mapBoth)
+import Data.HashSet (HashSet)
+import Data.Proxy (Proxy (Proxy))
 import Network.URI (parseURI)
+import Network.Wai.Handler.Warp (run)
+import Servant.API ((:>), Get)
+import Servant.Server (Server, serve)
 
-fromRight :: (Show e) => Either e a -> a
-fromRight (Right a) = a
-fromRight (Left e)  = error $ "fromRight: " ++ show e
+$(deriveJSON defaultOptions ''JobConfiguration)
+$(deriveJSON defaultOptions ''Identity)
+$(deriveJSON defaultOptions ''JobKey)
+$(deriveJSON defaultOptions ''TaskConfig)
+$(deriveJSON defaultOptions ''Constraint)
+$(deriveJSON defaultOptions ''TaskConstraint)
+$(deriveJSON defaultOptions ''LimitConstraint)
+$(deriveJSON defaultOptions ''ValueConstraint)
+$(deriveJSON defaultOptions ''Container)
+$(deriveJSON defaultOptions ''DockerContainer)
+$(deriveJSON defaultOptions ''MesosContainer)
+$(deriveJSON defaultOptions ''ExecutorConfig)
+$(deriveJSON defaultOptions ''Metadata)
+
+type VAPI = "jobs" :> Get (HashSet JobConfiguration)
+
+server :: Client -> Server VAPI
+server client = getJobsH where
+    getJobsH    = EitherT $ mapBoth onError id <$> getJobs client
+    onError res = (500, show res)
 
 main :: IO ()
 main = do
     let (Just uri) = parseURI "http://192.168.100.3:8081/api"
     client <- thriftClient uri
 
-    --print =<< getJobs client
-    let task = TaskSpec "hello2" "/bin/echo hello" (Resources (mega byte 10) (mebi byte 10) (core 0.1))
-    --print $ auroraJobConfig task
-
-    print =<< createJob client task
-    --bracket
-    --    (fromRight <$> acquireLock client "hello1")
-    --    (\lock -> releaseLock client lock)
-    --    (\lock -> print =<< createJob client task lock)
-    return ()
+    run 8000 $ serve (Proxy :: (Proxy VAPI)) (server client)

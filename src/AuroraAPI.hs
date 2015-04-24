@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module AuroraAPI (Client, Result, thriftClient, getJobs, acquireLock, releaseLock, createJob) where
+module AuroraAPI ( Client, Result, JobConfiguration
+                 , thriftClient, getJobs, acquireLock, releaseLock, createJob) where
 
 import Api_Types ( Response (Response, response_responseCode, response_result)
                  , JobConfiguration, getJobsResult_configs, result_getJobsResult
