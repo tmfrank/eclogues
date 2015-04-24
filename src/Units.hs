@@ -41,24 +41,21 @@ instance UnitPrefix Mebi where
     multiplier = const 1048576
     prefixString = const "Mi"
 
-(.:) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
-(.:) f1 f2 a b = f1 $ f2 a b
-
 class Convertible ua ub where
     conv :: (Fractional a) => Value a ua -> Value a ub
     as :: (Fractional a) => Value a ua -> (a -> Value a ub) -> Value a ub
     as = const . conv
     asVal :: (Fractional a) => Value a ua -> (a -> Value a ub) -> a
-    asVal = val .: as
+    asVal v f = val $ as v f
 
 instance Convertible Core Core where
     conv = id
 
 instance (UnitPrefix p) => Convertible (p a) a where
-    conv (Value a) = Value $ a * (fromRational $ multiplier (Proxy :: Proxy (p Void)))
+    conv (Value a) = Value $ a * fromRational (multiplier (Proxy :: Proxy (p Void)))
 
 instance (UnitPrefix p) => Convertible a (p a) where
-    conv (Value a) = Value $ a / (fromRational $ multiplier (Proxy :: Proxy (p Void)))
+    conv (Value a) = Value $ a / fromRational (multiplier (Proxy :: Proxy (p Void)))
 
 instance (UnitPrefix pa, UnitPrefix pb) => Convertible (pa u) (pb u) where
     conv (Value a) = Value $ a * fromRational (mulB / mulA) where
@@ -76,8 +73,8 @@ byte = Value
 core :: a -> Value a Core
 core = Value
 
-mega :: (Fractional a) => (a -> Value a u) -> (a -> Value a (Mega u))
+mega :: (Fractional a) => (a -> Value a u) -> a -> Value a (Mega u)
 mega f = Value
 
-mebi :: (Fractional a) => (a -> Value a u) -> (a -> Value a (Mebi u))
+mebi :: (Fractional a) => (a -> Value a u) -> a -> Value a (Mebi u)
 mebi f = Value

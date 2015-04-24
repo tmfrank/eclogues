@@ -16,6 +16,8 @@ import Data.Int (Int32, Int64)
 import qualified Data.Text.Lazy as L
 import Data.Text.Lazy.Builder (toLazyText)
 
+{-# ANN module ("HLint: ignore Use camelCase" :: String) #-}
+
 encodeToText :: (ToJSON a) => a -> L.Text
 encodeToText = toLazyText . encodeToTextBuilder . toJSON
 
@@ -78,7 +80,7 @@ defaultEnvironment :: L.Text
 defaultEnvironment = "devel"
 
 defaultJobKey :: L.Text -> JobKey
-defaultJobKey name = JobKey defaultRole defaultEnvironment name
+defaultJobKey = JobKey defaultRole defaultEnvironment
 
 defaultConstraints :: HashSet.HashSet Constraint
 defaultConstraints = HashSet.fromList [ Constraint { constraint_name = "host"

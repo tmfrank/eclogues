@@ -16,6 +16,7 @@ import AuroraConfig (auroraJobConfig, lockKey)
 import TaskSpec (TaskSpec (..), Name)
 
 import Control.Applicative ((<$>), pure)
+import Control.Monad (void)
 import qualified Data.HashSet as HashSet
 import qualified Data.Text.Lazy as L
 import Network.URI (URI)
@@ -45,7 +46,7 @@ acquireLock :: Client -> Name -> IO (Result Lock)
 acquireLock client name = fmap (acquireLockResult_lock . result_acquireLockResult) . onlyRes <$> AClient.acquireLock client (lockKey name) unauthenticated
 
 releaseLock :: Client -> Lock -> IO (Result ())
-releaseLock client lock = fmap (const ()) . onlyOK <$> AClient.releaseLock client lock UNCHECKED unauthenticated
+releaseLock client lock = void . onlyOK <$> AClient.releaseLock client lock UNCHECKED unauthenticated
 
 createJob :: Client -> TaskSpec -> IO (Result Api_Types.Result)
 createJob client spec = onlyRes <$> AClient.createJob client (auroraJobConfig spec) Nothing unauthenticated
