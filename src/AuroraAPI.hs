@@ -49,8 +49,8 @@ acquireLock client name = fmap (acquireLockResult_lock . result_acquireLockResul
 releaseLock :: Client -> Lock -> IO (Result ())
 releaseLock client lock = void . onlyOK <$> AClient.releaseLock client lock UNCHECKED unauthenticated
 
-createJob :: Client -> TaskSpec -> IO (Result Api_Types.Result)
-createJob client spec = onlyRes <$> AClient.createJob client (auroraJobConfig spec) Nothing unauthenticated
+createJob :: Client -> TaskSpec -> IO (Result ())
+createJob client spec = void . onlyOK <$> AClient.createJob client (auroraJobConfig spec) Nothing unauthenticated
 
 thriftClient :: URI -> IO Client
 thriftClient uri = do

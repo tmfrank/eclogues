@@ -1,48 +1,47 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Main where
 
 import Api_Types
 
-import AuroraAPI (Client, JobConfiguration, thriftClient, getJobs)
-import TaskSpec (Resources (..), TaskSpec (..))
+import AuroraAPI (Client, JobConfiguration, thriftClient, getJobs, createJob)
+import AuroraConfig (taskSpec, auroraJobConfig)
+import TaskSpec (TaskSpec (..))
 import Units
 
-import Data.Aeson.TH (deriveJSON, defaultOptions)
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), pure)
 import Control.Exception (bracket)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Either (EitherT (..))
-import Data.Either.Combinators (mapBoth)
-import Data.HashSet (HashSet)
+import Control.Monad.Trans.Either (EitherT (..), bimapEitherT)
+import Data.Aeson (encode, decode)
+import Data.Aeson.TH (deriveJSON, defaultOptions)
+import Data.Either (lefts, rights)
+import Data.HashSet (HashSet, toList)
 import Data.Proxy (Proxy (Proxy))
+import Data.Text.Lazy.Encoding (encodeUtf8)
 import Network.URI (parseURI)
 import Network.Wai.Handler.Warp (run)
-import Servant.API ((:>), Get)
+import Servant.API ((:>), (:<|>) ((:<|>)), Get, ReqBody, Post)
 import Servant.Server (Server, serve)
 
-$(deriveJSON defaultOptions ''JobConfiguration)
-$(deriveJSON defaultOptions ''Identity)
-$(deriveJSON defaultOptions ''JobKey)
-$(deriveJSON defaultOptions ''TaskConfig)
-$(deriveJSON defaultOptions ''Constraint)
-$(deriveJSON defaultOptions ''TaskConstraint)
-$(deriveJSON defaultOptions ''LimitConstraint)
-$(deriveJSON defaultOptions ''ValueConstraint)
-$(deriveJSON defaultOptions ''Container)
-$(deriveJSON defaultOptions ''DockerContainer)
-$(deriveJSON defaultOptions ''MesosContainer)
-$(deriveJSON defaultOptions ''ExecutorConfig)
-$(deriveJSON defaultOptions ''Metadata)
+type VAPI =  "jobs"   :> Get [TaskSpec]
+        :<|> "create" :> ReqBody TaskSpec :> Post ()
 
-type VAPI = "jobs" :> Get (HashSet JobConfiguration)
+(<<$>>) :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
+(<<$>>) = fmap . fmap
+infixl 4 <<$>>
 
 server :: Client -> Server VAPI
-server client = getJobsH where
-    getJobsH    = EitherT $ mapBoth onError id <$> getJobs client
+server client = getJobsH :<|> createJobH where
+    getJobsH = bimapEitherT onError id $ do
+        jobSet <- EitherT $ getJobs client
+        let jobs  = toList jobSet
+        let taskEs = taskSpec <$> jobs
+        liftIO $ mapM_ putStrLn $ lefts taskEs
+        pure $ rights taskEs
+    createJobH = bimapEitherT onError id . EitherT . createJob client
     onError res = (500, show res)
 
 main :: IO ()

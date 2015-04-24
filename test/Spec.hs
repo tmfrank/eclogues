@@ -1,11 +1,34 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
+import Api_Types
+
+import AuroraConfig
+import TaskSpec
 import Units
 
 import Test.Hspec
 
+import Data.Aeson (decode)
+import Data.Maybe (isJust)
+import Data.Text.Lazy.Encoding (encodeUtf8)
+
 spec :: Spec
-spec =
+spec = do
+    let spec = TaskSpec "hello" "/bin/echo" $ Resources (mega byte 10) (mebi byte 10) (core 0.1)
+
+    describe "ATaskExecConf" $
+        it "is embedded in a JobConfiguration" $ do
+            let Just ec = taskConfig_executorConfig . jobConfiguration_taskConfig $ auroraJobConfig spec
+            let text = executorConfig_data ec
+            let encoded = encodeUtf8 text
+            (decode encoded :: Maybe ATaskExecConf) `shouldSatisfy` isJust
+
+    describe "TaskSpec" $
+        it "roundtrips with JobConfiguration" $
+            taskSpec (auroraJobConfig spec) `shouldBe` Right spec
+
     describe "Units" $ do
         it "keeps val" $
             val (mega byte 10) `shouldBe` (10 :: Double)

@@ -6,7 +6,12 @@
 
 module Units where
 
+import Control.Applicative (pure)
+import Control.Monad (mzero)
+import Data.Aeson (ToJSON (..), FromJSON (..))
+import qualified Data.Aeson as Aeson
 import Data.Proxy (Proxy (Proxy))
+import qualified Data.Text as Text
 import Data.Void (Void)
 
 data Byte
@@ -66,6 +71,13 @@ newtype Value a u = Value { val :: a } deriving (Eq)
 
 instance (Show a, Unit u) => Show (Value a u) where
     show (Value a) = show a ++ " " ++ unitString (Proxy :: Proxy u)
+
+instance (Show a, Unit u) => ToJSON (Value a u) where
+    toJSON = Aeson.String . Text.pack . show . val
+
+instance (Read a, Unit u) => FromJSON (Value a u) where
+    parseJSON (Aeson.String t) = pure . Value . read $ Text.unpack t
+    parseJSON _                = mzero
 
 byte :: a -> Value a Byte
 byte = Value
