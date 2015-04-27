@@ -24,6 +24,7 @@ createJob :: FilePath -> A.Client -> TaskSpec -> ExceptT CreateJobError IO ()
 createJob root client spec = do
     let dir = root ++ "/" ++ (L.unpack $ name spec)
     lift $ createDirectoryIfMissing False dir
+    lift $ createDirectoryIfMissing False $ dir ++ "/workspace"
     lift $ writeFile (dir ++ "/spec.json") (encode spec)
     let subspec = spec { command = "aurora-subexecutor " <> name spec }
     withExceptT UnknownResponse . ExceptT $ A.createJob client subspec
