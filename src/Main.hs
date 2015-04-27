@@ -4,13 +4,15 @@
 
 module Main where
 
-import AuroraAPI (Client, thriftClient, getJobs, createJob)
+import AuroraAPI (Client, thriftClient, getJobs)
 import AuroraConfig (taskSpec)
+import TaskAPI (createJob)
 import TaskSpec (TaskSpec (..))
 
 import Control.Applicative ((<$>), pure)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Either (EitherT (..), bimapEitherT)
+import Control.Monad.Trans.Either (EitherT (..))
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT, withExceptT)
 import Data.Either (lefts, rights)
 import Data.HashSet (toList)
 import Data.Proxy (Proxy (Proxy))
@@ -28,14 +30,15 @@ infixl 4 <<$>>
 
 server :: Client -> Server VAPI
 server client = getJobsH :<|> createJobH where
-    getJobsH = bimapEitherT onError id $ do
-        jobSet <- EitherT $ getJobs client
+    getJobsH = toEitherT . withExceptT onError $ do
+        jobSet <- ExceptT $ getJobs client
         let jobs  = toList jobSet
         let taskEs = taskSpec <$> jobs
         liftIO $ mapM_ putStrLn $ lefts taskEs
         pure $ rights taskEs
-    createJobH = bimapEitherT onError id . EitherT . createJob client
-    onError res = (500, show res)
+    createJobH = toEitherT . withExceptT onError . createJob "./jobs" client
+    onError e = (500, show e)
+    toEitherT = EitherT . runExceptT
 
 main :: IO ()
 main = do
