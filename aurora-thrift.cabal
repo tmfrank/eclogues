@@ -75,8 +75,10 @@ executable aurora-thrift
                        transformers ==0.4.*,
                        warp,
                        either >= 3.4.2,
-                       directory ==1.2.*
-  
+                       directory ==1.2.*,
+                       stm ==2.4.*,
+                       async ==2.0.*
+
   -- Directories containing source files.
   hs-source-dirs:      src, gen-hs
   

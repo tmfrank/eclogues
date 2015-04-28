@@ -4,45 +4,41 @@
 
 module Main where
 
-import AuroraAPI (Client, thriftClient, getJobs)
-import AuroraConfig (taskSpec)
-import TaskAPI (createJob)
+import TaskAPI (AppState, JobStatus, newAppState, createJob, getJobs, updateJobs)
 import TaskSpec (TaskSpec (..))
+import Units
 
-import Control.Applicative ((<$>), pure)
-import Control.Monad.IO.Class (liftIO)
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.Async (race_)
+import Control.Monad (forever)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Either (EitherT (..))
-import Control.Monad.Trans.Except (ExceptT (..), runExceptT, withExceptT)
-import Data.Either (lefts, rights)
-import Data.HashSet (toList)
+import Control.Monad.Trans.Except (runExceptT, withExceptT)
 import Data.Proxy (Proxy (Proxy))
 import Network.URI (parseURI)
 import Network.Wai.Handler.Warp (run)
 import Servant.API ((:>), (:<|>) ((:<|>)), Get, ReqBody, Post)
 import Servant.Server (Server, serve)
 
-type VAPI =  "jobs"   :> Get [TaskSpec]
+type VAPI =  "jobs"   :> Get [JobStatus]
         :<|> "create" :> ReqBody TaskSpec :> Post ()
 
 (<<$>>) :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
 (<<$>>) = fmap . fmap
 infixl 4 <<$>>
 
-server :: Client -> Server VAPI
-server client = getJobsH :<|> createJobH where
-    getJobsH = toEitherT . withExceptT onError $ do
-        jobSet <- ExceptT $ getJobs client
-        let jobs  = toList jobSet
-        let taskEs = taskSpec <$> jobs
-        liftIO $ mapM_ putStrLn $ lefts taskEs
-        pure $ rights taskEs
-    createJobH = toEitherT . withExceptT onError . createJob "./jobs" client
+server :: AppState -> Server VAPI
+server appState = getJobsH :<|> createJobH where
+    getJobsH = lift $ getJobs appState
+    createJobH = toEitherT . withExceptT onError . createJob appState
     onError e = (500, show e)
     toEitherT = EitherT . runExceptT
 
 main :: IO ()
 main = do
     let (Just uri) = parseURI "http://192.168.100.3:8081/api"
-    client <- thriftClient uri
+    appState <- newAppState uri "./jobs"
 
-    run 8000 $ serve (Proxy :: (Proxy VAPI)) (server client)
+    let web = run 8000 $ serve (Proxy :: (Proxy VAPI)) (server appState)
+    let updater = forever $ updateJobs appState >> threadDelay (floor $ second 1 `asVal` micro second)
+    race_ web updater

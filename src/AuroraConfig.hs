@@ -1,19 +1,25 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module AuroraConfig (ATaskExecConf, TaskConfig, auroraJobConfig, lockKey, taskSpec) where
+module AuroraConfig ( ATaskExecConf, TaskConfig
+                    , auroraJobConfig, lockKey, taskSpec, defaultJobKey
+                    , JobState (..), KillReason (..), jobName, getJobState ) where
 
-import Api_Types
+import Api_Types hiding (DRAINING, FAILED, FINISHED)
+import Api_Types2
 
-import TaskSpec (TaskSpec (TaskSpec), Resources (..))
+import TaskSpec (TaskSpec (TaskSpec), Resources (Resources))
 import Units
 
-import Control.Applicative (pure)
+import Control.Applicative ((<$>), pure)
 import Data.Aeson (ToJSON (toJSON), eitherDecode)
 import Data.Aeson.Encode (encodeToTextBuilder)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import qualified Data.HashSet as HashSet
+import Data.Foldable (toList)
 import Data.Int (Int32, Int64)
+import Data.List (find)
 import Data.Maybe (listToMaybe)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as L
@@ -68,7 +74,7 @@ data ATask = ATask   { task_processes          :: [AProcess]
 
 data ATaskConstraint = ATaskConstraint { order :: [L.Text] } deriving (Eq, Show)
 
-data AProcess = AProcess   { daemon       :: Bool 
+data AProcess = AProcess   { daemon       :: Bool
                            , name         :: L.Text
                            , ephemeral    :: Bool
                            , max_failures :: Int32
@@ -212,3 +218,57 @@ taskSpec jc = do
 
 lockKey :: L.Text -> LockKey
 lockKey = LockKey . defaultJobKey
+
+data KillReason = UserKilled
+                | MemoryExceeded --(Value Double Byte)
+                | DiskExceeded --(Value Double Byte)
+                deriving (Show, Eq)
+
+data JobState = Waiting | Running | Finished | Killed KillReason | RunError
+                deriving (Show, Eq)
+
+$(deriveJSON defaultOptions ''KillReason)
+$(deriveJSON defaultOptions ''JobState)
+
+jobName :: ScheduledTask -> L.Text
+jobName = jobKey_name . taskConfig_job . assignedTask_task . scheduledTask_assignedTask
+
+jobState' :: ScheduleStatus -> [TaskEvent] -> JobState
+jobState' INIT       _  = Waiting
+jobState' THROTTLED  _  = Running
+jobState' PENDING    _  = Waiting
+jobState' ASSIGNED   _  = Waiting
+jobState' STARTING   _  = Running
+jobState' RUNNING    _  = Running
+jobState' KILLING    _  = Running
+jobState' PREEMPTING _  = Waiting
+jobState' RESTARTING _  = Waiting
+jobState' DRAINING   _  = Waiting
+jobState' LOST       es =
+  if KILLING `notElem` (taskEvent_status <$> es)
+    then Waiting
+    else Killed UserKilled
+jobState' KILLED     es = jobEventsToState es
+jobState' FINISHED   es = jobEventsToState es
+jobState' FAILED     es = jobEventsToState es
+
+jobEventsToState :: [TaskEvent] -> JobState
+jobEventsToState es
+  | any isRescheduleEvent events = Waiting
+  | KILLED `elem` events         = Killed UserKilled
+  | Just fev <- find ((== FAILED) . taskEvent_status) es =
+      maybe RunError failureState $ taskEvent_message fev
+  | otherwise                    = Finished
+  where
+    events = taskEvent_status <$> es
+    isRescheduleEvent RESTARTING = True
+    isRescheduleEvent DRAINING   = True
+    isRescheduleEvent PREEMPTING = True
+    isRescheduleEvent _          = False
+    failureState msg
+      | "Memory limit exceeded" `L.isPrefixOf` msg = Killed MemoryExceeded
+      | "Disk limit exceeded"   `L.isPrefixOf` msg = Killed DiskExceeded
+      | otherwise                                  = RunError
+
+getJobState :: ScheduledTask -> JobState
+getJobState st = jobState' (scheduledTask_status st) (toList $ scheduledTask_taskEvents st)

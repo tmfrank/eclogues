@@ -43,5 +43,8 @@ spec = do
         it "converts bytes to MB" $
             byte 1e6 `asVal` mega byte `shouldBe` (1 :: Double)
 
+        it "converts seconds to microseconds" $
+            second 15 `asVal` micro second `shouldBe` (15e6 :: Double)
+
 main :: IO ()
 main = hspec spec

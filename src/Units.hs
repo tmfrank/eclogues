@@ -11,13 +11,16 @@ import Control.Monad (mzero)
 import Data.Aeson (ToJSON (..), FromJSON (..))
 import qualified Data.Aeson as Aeson
 import Data.Proxy (Proxy (Proxy))
+import Data.Ratio ((%))
 import qualified Data.Text as Text
 import Data.Void (Void)
 
 data Byte
 data Mega u
 data Mebi u
+data Micro u
 data Core
+data Second
 
 type MB = Mega Byte
 type MiB = Mebi Byte
@@ -45,6 +48,10 @@ instance UnitPrefix Mega where
 instance UnitPrefix Mebi where
     multiplier = const 1048576
     prefixString = const "Mi"
+
+instance UnitPrefix Micro where
+    multiplier = const $ 1%1000000
+    prefixString = const "µ"
 
 class Convertible ua ub where
     conv :: (Fractional a) => Value a ua -> Value a ub
@@ -85,8 +92,14 @@ byte = Value
 core :: a -> Value a Core
 core = Value
 
+second :: a -> Value a Second
+second = Value
+
 mega :: (Fractional a) => (a -> Value a u) -> a -> Value a (Mega u)
 mega _ = Value
 
 mebi :: (Fractional a) => (a -> Value a u) -> a -> Value a (Mebi u)
 mebi _ = Value
+
+micro :: (Fractional a) => (a -> Value a u) -> a -> Value a (Micro u)
+micro _ = Value

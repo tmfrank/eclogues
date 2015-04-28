@@ -1713,17 +1713,17 @@ typemap_GetJobsResult = Map.fromList [(1,("configs",(T.T_SET (T.T_STRUCT typemap
 default_GetJobsResult :: GetJobsResult
 default_GetJobsResult = GetJobsResult{
   getJobsResult_configs = Set.empty}
-data TaskQuery = TaskQuery  { taskQuery_owner :: Identity
-  , taskQuery_role :: LT.Text
-  , taskQuery_environment :: LT.Text
-  , taskQuery_jobName :: LT.Text
-  , taskQuery_taskIds :: (Set.HashSet LT.Text)
-  , taskQuery_statuses :: (Set.HashSet ScheduleStatus)
-  , taskQuery_instanceIds :: (Set.HashSet I.Int32)
-  , taskQuery_slaveHosts :: (Set.HashSet LT.Text)
-  , taskQuery_jobKeys :: (Set.HashSet JobKey)
-  , taskQuery_offset :: I.Int32
-  , taskQuery_limit :: I.Int32
+data TaskQuery = TaskQuery  { taskQuery_owner :: P.Maybe Identity
+  , taskQuery_role :: P.Maybe LT.Text
+  , taskQuery_environment :: P.Maybe LT.Text
+  , taskQuery_jobName :: P.Maybe LT.Text
+  , taskQuery_taskIds :: P.Maybe (Set.HashSet LT.Text)
+  , taskQuery_statuses :: P.Maybe (Set.HashSet ScheduleStatus)
+  , taskQuery_instanceIds :: P.Maybe (Set.HashSet I.Int32)
+  , taskQuery_slaveHosts :: P.Maybe (Set.HashSet LT.Text)
+  , taskQuery_jobKeys :: P.Maybe (Set.HashSet JobKey)
+  , taskQuery_offset :: P.Maybe I.Int32
+  , taskQuery_limit :: P.Maybe I.Int32
   } deriving (P.Show,P.Eq,TY.Typeable)
 instance H.Hashable TaskQuery where
   hashWithSalt salt record = salt   `H.hashWithSalt` taskQuery_owner record   `H.hashWithSalt` taskQuery_role record   `H.hashWithSalt` taskQuery_environment record   `H.hashWithSalt` taskQuery_jobName record   `H.hashWithSalt` taskQuery_taskIds record   `H.hashWithSalt` taskQuery_statuses record   `H.hashWithSalt` taskQuery_instanceIds record   `H.hashWithSalt` taskQuery_slaveHosts record   `H.hashWithSalt` taskQuery_jobKeys record   `H.hashWithSalt` taskQuery_offset record   `H.hashWithSalt` taskQuery_limit record  
@@ -1755,17 +1755,17 @@ instance QC.Arbitrary TaskQuery where
     ]
 from_TaskQuery :: TaskQuery -> T.ThriftVal
 from_TaskQuery record = T.TStruct $ Map.fromList $ M.catMaybes
-  [ (\_v351 -> P.Just (2, ("jobName",T.TString $ E.encodeUtf8 _v351))) $ taskQuery_jobName record
-  , (\_v351 -> P.Just (4, ("taskIds",T.TSet T.T_STRING $ P.map (\_v353 -> T.TString $ E.encodeUtf8 _v353) $ Set.toList _v351))) $ taskQuery_taskIds record
-  , (\_v351 -> P.Just (5, ("statuses",T.TSet T.T_I32 $ P.map (\_v355 -> T.TI32 $ P.fromIntegral $ P.fromEnum _v355) $ Set.toList _v351))) $ taskQuery_statuses record
-  , (\_v351 -> P.Just (7, ("instanceIds",T.TSet T.T_I32 $ P.map (\_v357 -> T.TI32 _v357) $ Set.toList _v351))) $ taskQuery_instanceIds record
-  , (\_v351 -> P.Just (8, ("owner",from_Identity _v351))) $ taskQuery_owner record
-  , (\_v351 -> P.Just (9, ("environment",T.TString $ E.encodeUtf8 _v351))) $ taskQuery_environment record
-  , (\_v351 -> P.Just (10, ("slaveHosts",T.TSet T.T_STRING $ P.map (\_v359 -> T.TString $ E.encodeUtf8 _v359) $ Set.toList _v351))) $ taskQuery_slaveHosts record
-  , (\_v351 -> P.Just (11, ("jobKeys",T.TSet (T.T_STRUCT typemap_JobKey) $ P.map (\_v361 -> from_JobKey _v361) $ Set.toList _v351))) $ taskQuery_jobKeys record
-  , (\_v351 -> P.Just (12, ("offset",T.TI32 _v351))) $ taskQuery_offset record
-  , (\_v351 -> P.Just (13, ("limit",T.TI32 _v351))) $ taskQuery_limit record
-  , (\_v351 -> P.Just (14, ("role",T.TString $ E.encodeUtf8 _v351))) $ taskQuery_role record
+  [ (\_v351 -> (2, ("jobName",T.TString $ E.encodeUtf8 _v351))) <$> taskQuery_jobName record
+  , (\_v351 -> (4, ("taskIds",T.TSet T.T_STRING $ P.map (\_v353 -> T.TString $ E.encodeUtf8 _v353) $ Set.toList _v351))) <$>  taskQuery_taskIds record
+  , (\_v351 -> (5, ("statuses",T.TSet T.T_I32 $ P.map (\_v355 -> T.TI32 $ P.fromIntegral $ P.fromEnum _v355) $ Set.toList _v351))) <$> taskQuery_statuses record
+  , (\_v351 -> (7, ("instanceIds",T.TSet T.T_I32 $ P.map (\_v357 -> T.TI32 _v357) $ Set.toList _v351))) <$> taskQuery_instanceIds record
+  , (\_v351 -> (8, ("owner",from_Identity _v351))) <$> taskQuery_owner record
+  , (\_v351 -> (9, ("environment",T.TString $ E.encodeUtf8 _v351))) <$> taskQuery_environment record
+  , (\_v351 -> (10, ("slaveHosts",T.TSet T.T_STRING $ P.map (\_v359 -> T.TString $ E.encodeUtf8 _v359) $ Set.toList _v351))) <$> taskQuery_slaveHosts record
+  , (\_v351 -> (11, ("jobKeys",T.TSet (T.T_STRUCT typemap_JobKey) $ P.map (\_v361 -> from_JobKey _v361) $ Set.toList _v351))) <$> taskQuery_jobKeys record
+  , (\_v351 -> (12, ("offset",T.TI32 _v351))) <$> taskQuery_offset record
+  , (\_v351 -> (13, ("limit",T.TI32 _v351))) <$> taskQuery_limit record
+  , (\_v351 -> (14, ("role",T.TString $ E.encodeUtf8 _v351))) <$> taskQuery_role record
   ]
 write_TaskQuery :: (T.Protocol p, T.Transport t) => p t -> TaskQuery -> P.IO ()
 write_TaskQuery oprot record = T.writeVal oprot $ from_TaskQuery record
@@ -1773,17 +1773,17 @@ encode_TaskQuery :: (T.Protocol p, T.Transport t) => p t -> TaskQuery -> LBS.Byt
 encode_TaskQuery oprot record = T.serializeVal oprot $ from_TaskQuery record
 to_TaskQuery :: T.ThriftVal -> TaskQuery
 to_TaskQuery (T.TStruct fields) = TaskQuery{
-  taskQuery_owner = P.maybe (taskQuery_owner default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TStruct _val364 -> (to_Identity (T.TStruct _val364)); _ -> P.error "wrong type"})) (Map.lookup (8) fields),
-  taskQuery_role = P.maybe (taskQuery_role default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TString _val365 -> E.decodeUtf8 _val365; _ -> P.error "wrong type"})) (Map.lookup (14) fields),
-  taskQuery_environment = P.maybe (taskQuery_environment default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TString _val366 -> E.decodeUtf8 _val366; _ -> P.error "wrong type"})) (Map.lookup (9) fields),
-  taskQuery_jobName = P.maybe (taskQuery_jobName default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TString _val367 -> E.decodeUtf8 _val367; _ -> P.error "wrong type"})) (Map.lookup (2) fields),
-  taskQuery_taskIds = P.maybe (taskQuery_taskIds default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TSet _ _val368 -> (Set.fromList $ P.map (\_v369 -> (case _v369 of {T.TString _val370 -> E.decodeUtf8 _val370; _ -> P.error "wrong type"})) _val368); _ -> P.error "wrong type"})) (Map.lookup (4) fields),
-  taskQuery_statuses = P.maybe (taskQuery_statuses default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TSet _ _val371 -> (Set.fromList $ P.map (\_v372 -> (case _v372 of {T.TI32 _val373 -> P.toEnum $ P.fromIntegral _val373; _ -> P.error "wrong type"})) _val371); _ -> P.error "wrong type"})) (Map.lookup (5) fields),
-  taskQuery_instanceIds = P.maybe (taskQuery_instanceIds default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TSet _ _val374 -> (Set.fromList $ P.map (\_v375 -> (case _v375 of {T.TI32 _val376 -> _val376; _ -> P.error "wrong type"})) _val374); _ -> P.error "wrong type"})) (Map.lookup (7) fields),
-  taskQuery_slaveHosts = P.maybe (taskQuery_slaveHosts default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TSet _ _val377 -> (Set.fromList $ P.map (\_v378 -> (case _v378 of {T.TString _val379 -> E.decodeUtf8 _val379; _ -> P.error "wrong type"})) _val377); _ -> P.error "wrong type"})) (Map.lookup (10) fields),
-  taskQuery_jobKeys = P.maybe (taskQuery_jobKeys default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TSet _ _val380 -> (Set.fromList $ P.map (\_v381 -> (case _v381 of {T.TStruct _val382 -> (to_JobKey (T.TStruct _val382)); _ -> P.error "wrong type"})) _val380); _ -> P.error "wrong type"})) (Map.lookup (11) fields),
-  taskQuery_offset = P.maybe (taskQuery_offset default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TI32 _val383 -> _val383; _ -> P.error "wrong type"})) (Map.lookup (12) fields),
-  taskQuery_limit = P.maybe (taskQuery_limit default_TaskQuery) (\(_,_val363) -> (case _val363 of {T.TI32 _val384 -> _val384; _ -> P.error "wrong type"})) (Map.lookup (13) fields)
+  taskQuery_owner = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TStruct _val364 -> (P.Just $ to_Identity (T.TStruct _val364)); _ -> P.error "wrong type"})) (Map.lookup (8) fields),
+  taskQuery_role = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TString _val365 -> P.Just $ E.decodeUtf8 _val365; _ -> P.error "wrong type"})) (Map.lookup (14) fields),
+  taskQuery_environment = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TString _val366 -> P.Just $ E.decodeUtf8 _val366; _ -> P.error "wrong type"})) (Map.lookup (9) fields),
+  taskQuery_jobName = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TString _val367 -> P.Just $ E.decodeUtf8 _val367; _ -> P.error "wrong type"})) (Map.lookup (2) fields),
+  taskQuery_taskIds = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TSet _ _val368 -> P.Just $ (Set.fromList $ P.map (\_v369 -> (case _v369 of {T.TString _val370 -> E.decodeUtf8 _val370; _ -> P.error "wrong type"})) _val368); _ -> P.error "wrong type"})) (Map.lookup (4) fields),
+  taskQuery_statuses = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TSet _ _val371 -> P.Just $ (Set.fromList $ P.map (\_v372 -> (case _v372 of {T.TI32 _val373 -> P.toEnum $ P.fromIntegral _val373; _ -> P.error "wrong type"})) _val371); _ -> P.error "wrong type"})) (Map.lookup (5) fields),
+  taskQuery_instanceIds = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TSet _ _val374 -> P.Just $ (Set.fromList $ P.map (\_v375 -> (case _v375 of {T.TI32 _val376 -> _val376; _ -> P.error "wrong type"})) _val374); _ -> P.error "wrong type"})) (Map.lookup (7) fields),
+  taskQuery_slaveHosts = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TSet _ _val377 -> P.Just $ (Set.fromList $ P.map (\_v378 -> (case _v378 of {T.TString _val379 -> E.decodeUtf8 _val379; _ -> P.error "wrong type"})) _val377); _ -> P.error "wrong type"})) (Map.lookup (10) fields),
+  taskQuery_jobKeys = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TSet _ _val380 -> P.Just $ (Set.fromList $ P.map (\_v381 -> (case _v381 of {T.TStruct _val382 -> (to_JobKey (T.TStruct _val382)); _ -> P.error "wrong type"})) _val380); _ -> P.error "wrong type"})) (Map.lookup (11) fields),
+  taskQuery_offset = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TI32 _val383 -> P.Just _val383; _ -> P.error "wrong type"})) (Map.lookup (12) fields),
+  taskQuery_limit = P.maybe (P.Nothing) (\(_,_val363) -> (case _val363 of {T.TI32 _val384 -> P.Just _val384; _ -> P.error "wrong type"})) (Map.lookup (13) fields)
   }
 to_TaskQuery _ = P.error "not a struct"
 read_TaskQuery :: (T.Transport t, T.Protocol p) => p t -> P.IO TaskQuery
@@ -1794,17 +1794,17 @@ typemap_TaskQuery :: T.TypeMap
 typemap_TaskQuery = Map.fromList [(2,("jobName",T.T_STRING)),(4,("taskIds",(T.T_SET T.T_STRING))),(5,("statuses",(T.T_SET T.T_I32))),(7,("instanceIds",(T.T_SET T.T_I32))),(8,("owner",(T.T_STRUCT typemap_Identity))),(9,("environment",T.T_STRING)),(10,("slaveHosts",(T.T_SET T.T_STRING))),(11,("jobKeys",(T.T_SET (T.T_STRUCT typemap_JobKey)))),(12,("offset",T.T_I32)),(13,("limit",T.T_I32)),(14,("role",T.T_STRING))]
 default_TaskQuery :: TaskQuery
 default_TaskQuery = TaskQuery{
-  taskQuery_jobName = "",
-  taskQuery_taskIds = Set.empty,
-  taskQuery_statuses = Set.empty,
-  taskQuery_instanceIds = Set.empty,
-  taskQuery_owner = default_Identity,
-  taskQuery_environment = "",
-  taskQuery_slaveHosts = Set.empty,
-  taskQuery_jobKeys = Set.empty,
-  taskQuery_offset = 0,
-  taskQuery_limit = 0,
-  taskQuery_role = ""}
+  taskQuery_jobName = P.Nothing,
+  taskQuery_taskIds = P.Nothing,
+  taskQuery_statuses = P.Nothing,
+  taskQuery_instanceIds = P.Nothing,
+  taskQuery_owner = P.Nothing,
+  taskQuery_environment = P.Nothing,
+  taskQuery_slaveHosts = P.Nothing,
+  taskQuery_jobKeys = P.Nothing,
+  taskQuery_offset = P.Nothing,
+  taskQuery_limit =P.Nothing,
+  taskQuery_role = P.Nothing}
 data HostStatus = HostStatus  { hostStatus_host :: LT.Text
   , hostStatus_mode :: MaintenanceMode
   } deriving (P.Show,P.Eq,TY.Typeable)
