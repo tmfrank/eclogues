@@ -13,6 +13,9 @@ API
 ### GET `/jobs`
 List all jobs.
 
+### GET `/job/:name`
+Information about a particular job.
+
 ### POST `/create`
 Post a task spec of the form:
 

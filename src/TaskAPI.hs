@@ -3,7 +3,7 @@
 
 module TaskAPI ( AppState (..), newAppState
                , JobStatus (..), JobState (..), KillReason (..)
-               , JobError, createJob, updateJobs, getJobs )
+               , JobError, createJob, updateJobs, getJob, getJobs )
                where
 
 import Api_Types (Response)
@@ -21,7 +21,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), withExceptT)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
-import Data.List (unionBy)
+import Data.List (find, unionBy)
 import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as L
 import Data.ByteString.Lazy (writeFile)
@@ -86,3 +86,6 @@ updateJobs state = do
 
 getJobs :: AppState -> IO [JobStatus]
 getJobs = atomically . readTVar . jobs
+
+getJob :: AppState -> Name -> IO (Maybe JobStatus)
+getJob st jid = find ((== jid) . name . jobSpec) <$> atomically (readTVar $ jobs st)

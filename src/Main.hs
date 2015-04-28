@@ -4,10 +4,12 @@
 
 module Main where
 
-import TaskAPI (AppState, JobStatus, newAppState, createJob, getJobs, updateJobs)
-import TaskSpec (TaskSpec (..))
+import TaskAPI ( AppState, JobStatus, newAppState
+               , createJob, getJob, getJobs, updateJobs )
+import TaskSpec (TaskSpec (..), Name)
 import Units
 
+import Control.Applicative ((<$>))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race_)
 import Control.Monad (forever)
@@ -15,21 +17,28 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Either (EitherT (..))
 import Control.Monad.Trans.Except (runExceptT, withExceptT)
 import Data.Proxy (Proxy (Proxy))
+import qualified Data.Text.Lazy as L
 import Network.URI (parseURI)
 import Network.Wai.Handler.Warp (run)
-import Servant.API ((:>), (:<|>) ((:<|>)), Get, ReqBody, Post)
+import Servant.API ((:>), (:<|>) ((:<|>)), Get, ReqBody, Post, Capture)
+import Servant.Common.Text (FromText (..))
 import Servant.Server (Server, serve)
 
+instance FromText L.Text where
+    fromText = fmap L.fromStrict . fromText
+
 type VAPI =  "jobs"   :> Get [JobStatus]
-        :<|> "create" :> ReqBody TaskSpec :> Post ()
+        :<|> "job"    :> Capture "id" Name :> Get JobStatus
+        :<|> "create" :> ReqBody TaskSpec  :> Post ()
 
 (<<$>>) :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
 (<<$>>) = fmap . fmap
 infixl 4 <<$>>
 
 server :: AppState -> Server VAPI
-server appState = getJobsH :<|> createJobH where
+server appState = getJobsH :<|> getJobH :<|> createJobH where
     getJobsH = lift $ getJobs appState
+    getJobH jid = EitherT $ maybe (Left (404, "")) Right <$> getJob appState jid
     createJobH = toEitherT . withExceptT onError . createJob appState
     onError e = (500, show e)
     toEitherT = EitherT . runExceptT
