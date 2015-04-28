@@ -19,7 +19,7 @@ import Control.Applicative ((<$>), pure)
 import Control.Arrow ((&&&))
 import Control.Concurrent.STM (TVar, newTVar, readTVar, writeTVar, atomically)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT (..), withExceptT, throwE)
+import Control.Monad.Trans.Except (ExceptT (..), withExceptT, throwE, runExceptT)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import Data.List (find, unionBy)
@@ -56,7 +56,7 @@ createJob state spec = do
     lift $ writeFile (dir ++ "/spec.json") (encode spec)
     let subspec = spec { command = "aurora-subexecutor " <> name spec }
     client <- lift . A.thriftClient $ auroraURI state
-    withExceptT UnknownResponse . ExceptT $ A.createJob client subspec
+    withExceptT UnknownResponse $ A.createJob client subspec
     lift . atomically $ do
         let jsv = jobs state
         js <- readTVar jsv
@@ -67,14 +67,14 @@ killJob state jid = lift (getJob state jid) >>= \case
     Nothing -> throwE NoSuchJob
     Just _  -> do
         client <- lift . A.thriftClient $ auroraURI state
-        withExceptT UnknownResponse . ExceptT $ A.killTasks client [jid]
+        withExceptT UnknownResponse $ A.killTasks client [jid]
 
 updateJobs :: AppState -> IO ()
 updateJobs state = do
     client <- A.thriftClient $ auroraURI state
     prevStatuses <- atomically $ readTVar $ jobs state
     -- TODO: don't pattern match on Right
-    Right auroraTasks <- A.getTasksWithoutConfigs client $ name . jobSpec <$> prevStatuses
+    Right auroraTasks <- runExceptT $ A.getTasksWithoutConfigs client $ name . jobSpec <$> prevStatuses
     let
         newStates :: [(Name, JobState)]
         newStates = (jobName &&& getJobState) <$> auroraTasks
