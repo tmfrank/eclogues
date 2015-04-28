@@ -30,3 +30,7 @@ Post a task spec of the form:
     }
 }
 ```
+
+Known Issues
+------------
+Job names need to be unique, or statuses may not update correctly.
