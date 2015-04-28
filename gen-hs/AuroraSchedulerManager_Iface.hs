@@ -45,7 +45,7 @@ class ReadOnlyScheduler_Iface a => AuroraSchedulerManager_Iface a where
   descheduleCronJob :: a -> JobKey -> Lock -> SessionKey -> P.IO Response
   startCronJob :: a -> JobKey -> SessionKey -> P.IO Response
   restartShards :: a -> JobKey -> (Set.HashSet I.Int32) -> Lock -> SessionKey -> P.IO Response
-  killTasks :: a -> TaskQuery -> Lock -> SessionKey -> P.IO Response
+  killTasks :: a -> TaskQuery -> P.Maybe Lock -> SessionKey -> P.IO Response
   addInstances :: a -> AddInstancesConfig -> Lock -> SessionKey -> P.IO Response
   acquireLock :: a -> LockKey -> SessionKey -> P.IO Response
   releaseLock :: a -> Lock -> LockValidation -> SessionKey -> P.IO Response

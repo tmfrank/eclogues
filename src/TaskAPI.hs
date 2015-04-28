@@ -1,9 +1,10 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module TaskAPI ( AppState (..), newAppState
                , JobStatus (..), JobState (..), KillReason (..)
-               , JobError, createJob, updateJobs, getJob, getJobs )
+               , JobError (..), createJob, updateJobs, getJob, getJobs, killJob )
                where
 
 import Api_Types (Response)
@@ -18,7 +19,7 @@ import Control.Applicative ((<$>), pure)
 import Control.Arrow ((&&&))
 import Control.Concurrent.STM (TVar, newTVar, readTVar, writeTVar, atomically)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT (..), withExceptT)
+import Control.Monad.Trans.Except (ExceptT (..), withExceptT, throwE)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import Data.List (find, unionBy)
@@ -44,6 +45,7 @@ newAppState auroraURI' jobsDir' = do
     pure $ AppState jobsDir' auroraURI' jobs'
 
 data JobError = UnknownResponse Response
+              | NoSuchJob
                 deriving (Show)
 
 createJob :: AppState -> TaskSpec -> ExceptT JobError IO ()
@@ -59,6 +61,13 @@ createJob state spec = do
         let jsv = jobs state
         js <- readTVar jsv
         writeTVar jsv $ (JobStatus spec Waiting):js
+
+killJob :: AppState -> Name -> ExceptT JobError IO ()
+killJob state jid = lift (getJob state jid) >>= \case
+    Nothing -> throwE NoSuchJob
+    Just _  -> do
+        client <- lift . A.thriftClient $ auroraURI state
+        withExceptT UnknownResponse . ExceptT $ A.killTasks client [jid]
 
 updateJobs :: AppState -> IO ()
 updateJobs state = do

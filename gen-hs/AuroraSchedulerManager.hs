@@ -422,7 +422,7 @@ default_RestartShards_result :: RestartShards_result
 default_RestartShards_result = RestartShards_result{
   restartShards_result_success = default_Response}
 data KillTasks_args = KillTasks_args  { killTasks_args_query :: TaskQuery
-  , killTasks_args_lock :: Lock
+  , killTasks_args_lock :: P.Maybe Lock
   , killTasks_args_session :: SessionKey
   } deriving (P.Show,P.Eq,TY.Typeable)
 instance H.Hashable KillTasks_args where
@@ -441,7 +441,7 @@ from_KillTasks_args :: KillTasks_args -> T.ThriftVal
 from_KillTasks_args record = T.TStruct $ Map.fromList $ M.catMaybes
   [ (\_v975 -> P.Just (1, ("query",from_TaskQuery _v975))) $ killTasks_args_query record
   , (\_v975 -> P.Just (2, ("session",from_SessionKey _v975))) $ killTasks_args_session record
-  , (\_v975 -> P.Just (3, ("lock",from_Lock _v975))) $ killTasks_args_lock record
+  , (\_v975 -> (3, ("lock",from_Lock _v975))) <$> killTasks_args_lock record
   ]
 write_KillTasks_args :: (T.Protocol p, T.Transport t) => p t -> KillTasks_args -> P.IO ()
 write_KillTasks_args oprot record = T.writeVal oprot $ from_KillTasks_args record
@@ -450,7 +450,7 @@ encode_KillTasks_args oprot record = T.serializeVal oprot $ from_KillTasks_args 
 to_KillTasks_args :: T.ThriftVal -> KillTasks_args
 to_KillTasks_args (T.TStruct fields) = KillTasks_args{
   killTasks_args_query = P.maybe (killTasks_args_query default_KillTasks_args) (\(_,_val977) -> (case _val977 of {T.TStruct _val978 -> (to_TaskQuery (T.TStruct _val978)); _ -> P.error "wrong type"})) (Map.lookup (1) fields),
-  killTasks_args_lock = P.maybe (killTasks_args_lock default_KillTasks_args) (\(_,_val977) -> (case _val977 of {T.TStruct _val979 -> (to_Lock (T.TStruct _val979)); _ -> P.error "wrong type"})) (Map.lookup (3) fields),
+  killTasks_args_lock = P.maybe (killTasks_args_lock default_KillTasks_args) (\(_,_val977) -> (case _val977 of {T.TStruct _val979 -> P.Just (to_Lock (T.TStruct _val979)); _ -> P.error "wrong type"})) (Map.lookup (3) fields),
   killTasks_args_session = P.maybe (killTasks_args_session default_KillTasks_args) (\(_,_val977) -> (case _val977 of {T.TStruct _val980 -> (to_SessionKey (T.TStruct _val980)); _ -> P.error "wrong type"})) (Map.lookup (2) fields)
   }
 to_KillTasks_args _ = P.error "not a struct"
@@ -464,7 +464,7 @@ default_KillTasks_args :: KillTasks_args
 default_KillTasks_args = KillTasks_args{
   killTasks_args_query = default_TaskQuery,
   killTasks_args_session = default_SessionKey,
-  killTasks_args_lock = default_Lock}
+  killTasks_args_lock = P.Nothing}
 data KillTasks_result = KillTasks_result  { killTasks_result_success :: Response
   } deriving (P.Show,P.Eq,TY.Typeable)
 instance H.Hashable KillTasks_result where

@@ -2,7 +2,7 @@
 
 module AuroraAPI ( Client, Result, JobConfiguration
                  , thriftClient, acquireLock, releaseLock, createJob
-                 , getJobs, getTasksWithoutConfigs ) where
+                 , getJobs, getTasksWithoutConfigs, killTasks ) where
 
 import Api_Types ( Response (response_responseCode, response_result)
                  , JobConfiguration, getJobsResult_configs, result_getJobsResult
@@ -39,12 +39,17 @@ onlyRes resp = case response_result <$> onlyOK resp of
     Right (Just res) -> Right res
     _                -> Left resp
 
+-- TODO: ExceptT
+
 getJobs :: Client -> IO (Result (HashSet.HashSet JobConfiguration))
 getJobs client = (fmap (getJobsResult_configs . result_getJobsResult) . onlyRes) <$> ROClient.getJobs client ""
 
+taskQuery :: [Name] -> TaskQuery
+taskQuery names = default_TaskQuery { taskQuery_jobKeys = Just . HashSet.fromList $ defaultJobKey <$> names }
+
 getTasksWithoutConfigs :: Client -> [Name] -> IO (Result [ScheduledTask])
 getTasksWithoutConfigs client names = fmap tasks . onlyRes <$> ROClient.getTasksWithoutConfigs client q where
-    q = default_TaskQuery { taskQuery_jobKeys = Just . HashSet.fromList $ defaultJobKey <$> names }
+    q = taskQuery names
     tasks = toList . scheduleStatusResult_tasks . result_scheduleStatusResult
 
 unauthenticated :: SessionKey
@@ -58,6 +63,9 @@ releaseLock client lock = void . onlyOK <$> AClient.releaseLock client lock UNCH
 
 createJob :: Client -> TaskSpec -> IO (Result ())
 createJob client spec = void . onlyOK <$> AClient.createJob client (auroraJobConfig spec) Nothing unauthenticated
+
+killTasks :: Client -> [Name] -> IO (Result ())
+killTasks client names = void . onlyOK <$> AClient.killTasks client (taskQuery names) Nothing unauthenticated
 
 thriftClient :: URI -> IO Client
 thriftClient uri = do

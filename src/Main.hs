@@ -4,8 +4,8 @@
 
 module Main where
 
-import TaskAPI ( AppState, JobStatus, newAppState
-               , createJob, getJob, getJobs, updateJobs )
+import TaskAPI ( AppState, JobStatus, JobError (..), newAppState
+               , createJob, killJob, getJob, getJobs, updateJobs )
 import TaskSpec (TaskSpec (..), Name)
 import Units
 
@@ -20,7 +20,7 @@ import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Lazy as L
 import Network.URI (parseURI)
 import Network.Wai.Handler.Warp (run)
-import Servant.API ((:>), (:<|>) ((:<|>)), Get, ReqBody, Post, Capture)
+import Servant.API ((:>), (:<|>) ((:<|>)), Get, Post, Delete, ReqBody, Capture)
 import Servant.Common.Text (FromText (..))
 import Servant.Server (Server, serve)
 import System.IO (hPutStrLn, stderr)
@@ -30,6 +30,7 @@ instance FromText L.Text where
 
 type VAPI =  "jobs"   :> Get [JobStatus]
         :<|> "job"    :> Capture "id" Name :> Get JobStatus
+        :<|> "job"    :> Capture "id" Name :> Delete
         :<|> "create" :> ReqBody TaskSpec  :> Post ()
 
 (<<$>>) :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
@@ -37,11 +38,14 @@ type VAPI =  "jobs"   :> Get [JobStatus]
 infixl 4 <<$>>
 
 server :: AppState -> Server VAPI
-server appState = getJobsH :<|> getJobH :<|> createJobH where
+server appState = getJobsH :<|> getJobH :<|> killJobH :<|> createJobH where
     getJobsH = lift $ getJobs appState
     getJobH jid = EitherT $ maybe (Left (404, "")) Right <$> getJob appState jid
+    killJobH = toEitherT . withExceptT onError . killJob appState
     createJobH = toEitherT . withExceptT onError . createJob appState
-    onError e = (500, show e)
+    onError e = case e of
+        UnknownResponse res -> (500, show res)
+        NoSuchJob           -> (404, "")
     toEitherT = EitherT . runExceptT
 
 main :: IO ()

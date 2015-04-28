@@ -16,6 +16,9 @@ List all jobs.
 ### GET `/job/:name`
 Information about a particular job.
 
+### DELETE `/job/:name`
+Kill a job.
+
 ### POST `/create`
 Post a task spec of the form:
 
