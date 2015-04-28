@@ -23,6 +23,7 @@ import Network.Wai.Handler.Warp (run)
 import Servant.API ((:>), (:<|>) ((:<|>)), Get, ReqBody, Post, Capture)
 import Servant.Common.Text (FromText (..))
 import Servant.Server (Server, serve)
+import System.IO (hPutStrLn, stderr)
 
 instance FromText L.Text where
     fromText = fmap L.fromStrict . fromText
@@ -47,6 +48,8 @@ main :: IO ()
 main = do
     let (Just uri) = parseURI "http://192.168.100.3:8081/api"
     appState <- newAppState uri "./jobs"
+
+    hPutStrLn stderr "Starting server on port 8000"
 
     let web = run 8000 $ serve (Proxy :: (Proxy VAPI)) (server appState)
     let updater = forever $ updateJobs appState >> threadDelay (floor $ second 1 `asVal` micro second)
