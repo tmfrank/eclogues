@@ -22,6 +22,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), withExceptT, throwE, runExceptT)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
+import Data.Char (toLower)
 import Data.List (find, unionBy)
 import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as L
@@ -33,8 +34,9 @@ data JobStatus = JobStatus { jobSpec  :: TaskSpec
                            , jobState :: JobState }
                            deriving (Show)
 
-$(deriveJSON defaultOptions{fieldLabelModifier = drop 3} ''JobStatus)
+$(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 3} ''JobStatus)
 
+-- TODO: store jobs as HashMap
 data AppState = AppState { jobsDir   :: FilePath
                          , auroraURI :: URI
                          , jobs      :: TVar [JobStatus] }
