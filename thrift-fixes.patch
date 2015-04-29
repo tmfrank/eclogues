@@ -1,0 +1,46 @@
+diff --git a/Thrift.cabal b/Thrift.cabal
+index 4fdb49a..6d8f19c 100755
+--- a/Thrift.cabal
++++ b/Thrift.cabal
+@@ -27,7 +27,6 @@ Synopsis:       Haskell bindings for the Apache Thrift RPC system
+ Homepage:       http://thrift.apache.org
+ Bug-Reports:    https://issues.apache.org/jira/browse/THRIFT
+ Maintainer:     dev@thrift.apache.org
+-License-File:   ../../LICENSE
+ 
+ Description:
+   Haskell bindings for the Apache Thrift RPC system. Requires the use of the thrift code generator.
+diff --git a/src/Thrift/Protocol/JSON.hs b/src/Thrift/Protocol/JSON.hs
+index f378ea2..d8c153d 100644
+--- a/src/Thrift/Protocol/JSON.hs
++++ b/src/Thrift/Protocol/JSON.hs
+@@ -105,7 +105,7 @@ buildJSONValue (TList ty entries) =
+    else mempty) <>
+   B.char8 ']'
+ buildJSONValue (TSet ty entries) = buildJSONValue (TList ty entries)
+-buildJSONValue (TBool b) = if b then B.string8 "true" else B.string8 "false"
++buildJSONValue (TBool b) = if b then B.char8 '1' else B.char8 '0'
+ buildJSONValue (TByte b) = buildShowable b
+ buildJSONValue (TI16 i) = buildShowable i
+ buildJSONValue (TI32 i) = buildShowable i
+@@ -150,15 +150,14 @@ parseJSONValue (T_MAP kt vt) = fmap (TMap kt vt) $
+ parseJSONValue (T_LIST ty) = fmap (TList ty) $
+   between '[' ']' $ do
+     len <- lexeme escapedString *> lexeme (PC.char8 ',') *>
+-           lexeme decimal <* lexeme (PC.char8 ',')
+-    if len > 0 then parseJSONList ty else return []
++           lexeme decimal
++    if len > 0 then (lexeme (PC.char8 ',') *> parseJSONList ty) else return []
+ parseJSONValue (T_SET ty) = fmap (TSet ty) $
+   between '[' ']' $ do
+     len <- lexeme escapedString *> lexeme (PC.char8 ',') *>
+-           lexeme decimal <* lexeme (PC.char8 ',')
+-    if len > 0 then parseJSONList ty else return []
+-parseJSONValue T_BOOL =
+-  (TBool True <$ string "true") <|> (TBool False <$ string "false")
++           lexeme decimal
++    if len > 0 then (lexeme (PC.char8 ',') *> parseJSONList ty) else return []
++parseJSONValue T_BOOL = TBool <$> (== 0) <$> signed decimal
+ parseJSONValue T_BYTE = TByte <$> signed decimal
+ parseJSONValue T_I16 = TI16 <$> signed decimal
+ parseJSONValue T_I32 = TI32 <$> signed decimal
