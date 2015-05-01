@@ -23,6 +23,7 @@ import Network.Wai.Handler.Warp (run)
 import Servant.API ((:>), (:<|>) ((:<|>)), Get, Post, Delete, ReqBody, Capture)
 import Servant.Common.Text (FromText (..))
 import Servant.Server (Server, serve)
+import System.Environment (getArgs)
 import System.IO (hPutStrLn, stderr)
 
 instance FromText L.Text where
@@ -50,7 +51,8 @@ server appState = getJobsH :<|> getJobH :<|> killJobH :<|> createJobH where
 
 main :: IO ()
 main = do
-    let (Just uri) = parseURI "http://192.168.100.3:8081/api"
+    (hostArg:_) <- getArgs
+    let (Just uri) = parseURI $ "http://" ++ hostArg ++ "/api"
     appState <- newAppState uri "./jobs"
 
     hPutStrLn stderr "Starting server on port 8000"
