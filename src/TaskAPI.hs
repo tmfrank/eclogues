@@ -56,7 +56,7 @@ createJob state spec = do
     lift $ createDirectoryIfMissing False dir
     lift $ createDirectoryIfMissing False $ dir ++ "/workspace"
     lift $ writeFile (dir ++ "/spec.json") (encode spec)
-    let subspec = spec { command = "aurora-subexecutor " <> name spec }
+    let subspec = spec { command = "aurora-rest-subexecutor " <> name spec }
     client <- lift . A.thriftClient $ auroraURI state
     withExceptT UnknownResponse $ A.createJob client subspec
     lift . atomically $ do
