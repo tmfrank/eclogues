@@ -52,7 +52,7 @@ data JobError = UnknownResponse Response
 
 createJob :: AppState -> TaskSpec -> ExceptT JobError IO ()
 createJob state spec = do
-    let dir = (jobsDir state) ++ "/" ++ (L.unpack $ name spec)
+    let dir = jobsDir state ++ "/" ++ L.unpack (name spec)
     lift $ createDirectoryIfMissing False dir
     lift $ createDirectoryIfMissing False $ dir ++ "/workspace"
     lift $ writeFile (dir ++ "/spec.json") (encode spec)
@@ -62,7 +62,7 @@ createJob state spec = do
     lift . atomically $ do
         let jsv = jobs state
         js <- readTVar jsv
-        writeTVar jsv $ (JobStatus spec Waiting):js
+        writeTVar jsv $ JobStatus spec Waiting : js
 
 killJob :: AppState -> Name -> ExceptT JobError IO ()
 killJob state jid = lift (getJob state jid) >>= \case
