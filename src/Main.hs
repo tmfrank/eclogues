@@ -23,6 +23,7 @@ import Network.Wai.Handler.Warp (run)
 import Servant.API ((:>), (:<|>) ((:<|>)), Get, Post, Delete, ReqBody, Capture)
 import Servant.Common.Text (FromText (..))
 import Servant.Server (Server, serve)
+import System.Directory (createDirectoryIfMissing)
 import System.Environment (getArgs)
 import System.IO (hPutStrLn, stderr)
 
@@ -53,7 +54,9 @@ main :: IO ()
 main = do
     (hostArg:_) <- getArgs
     let (Just uri) = parseURI $ "http://" ++ hostArg ++ "/api"
-    appState <- newAppState uri "./jobs"
+    let jobsDir = "/vagrant/jobs"
+    createDirectoryIfMissing False jobsDir
+    appState <- newAppState uri jobsDir
 
     hPutStrLn stderr "Starting server on port 8000"
 
