@@ -41,6 +41,9 @@ type VAPI =  "jobs"   :> Get [JobStatus]
 (<<$>>) = fmap . fmap
 infixl 4 <<$>>
 
+bool :: a -> a -> Bool -> a
+bool a b p = if p then b else a
+
 server :: AppState -> Server VAPI
 server appState = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> deleteJobH :<|> createJobH where
     getJobsH = lift $ getJobs appState
@@ -55,7 +58,7 @@ server appState = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> del
     onError e = case e of
         UnexpectedResponse res -> (500, show res)
         NoSuchJob              -> (404, "")
-        InvalidOperation   msg -> (409, msg)
+        JobMustBeTerminated yn -> (409, "Job " ++ (bool "must not" "must" yn) ++ " be terminated")
         JobNameUsed            -> (409, "Job name already used")
     toEitherT = EitherT . runExceptT
 

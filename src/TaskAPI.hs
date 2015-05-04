@@ -57,7 +57,7 @@ newAppState auroraURI' jobsDir' = do
 data JobError = UnexpectedResponse A.UnexpectedResponse
               | JobNameUsed
               | NoSuchJob
-              | InvalidOperation String
+              | JobMustBeTerminated Bool
                 deriving (Show)
 
 jobDir :: AppState -> Name -> FilePath
@@ -93,14 +93,14 @@ createJob state spec = catchUnexpectedResponse . mapExceptT atomically $ do
 killJob :: AppState -> Name -> ExceptT JobError IO ()
 killJob state name = do
     js <- mapExceptT atomically $ getJob' state name
-    when (isTerminationState $ jobState js) . throwE $ InvalidOperation "Cannot kill terminated job"
+    when (isTerminationState $ jobState js) . throwE $ JobMustBeTerminated False
     client <- lift . A.thriftClient $ auroraURI state
     withExceptT UnexpectedResponse $ A.killTasks client [name]
 
 deleteJob :: AppState -> Name -> ExceptT JobError IO ()
 deleteJob state name = mapExceptT atomically $ do
     js <- getJob' state name
-    when (isActiveState $ jobState js) . throwE $ InvalidOperation "Cannot delete running job"
+    when (isActiveState $ jobState js) . throwE $ JobMustBeTerminated True
     lift . onCommit . void $ tryJust (guard . isDoesNotExistError) . removeDirectoryRecursive $ jobDir state name
     lift . modifyTVar (jobs state) $ delete name
 
