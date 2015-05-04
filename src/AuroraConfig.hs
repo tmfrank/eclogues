@@ -4,7 +4,7 @@
 
 module AuroraConfig ( ATaskExecConf, TaskConfig
                     , auroraJobConfig, lockKey, taskSpec, defaultJobKey
-                    , jobName, getJobState ) where
+                    , getJobName, getJobState ) where
 
 import Api_Types hiding (DRAINING, FAILED, FINISHED)
 import Api_Types2
@@ -219,8 +219,8 @@ taskSpec jc = do
 lockKey :: L.Text -> LockKey
 lockKey = LockKey . defaultJobKey
 
-jobName :: ScheduledTask -> L.Text
-jobName = jobKey_name . taskConfig_job . assignedTask_task . scheduledTask_assignedTask
+getJobName :: ScheduledTask -> L.Text
+getJobName = jobKey_name . taskConfig_job . assignedTask_task . scheduledTask_assignedTask
 
 jobState' :: ScheduleStatus -> [TaskEvent] -> JobState
 jobState' INIT       _  = Waiting

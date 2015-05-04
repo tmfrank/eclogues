@@ -2,7 +2,8 @@
 
 module TaskSpec where
 
-import Data.Aeson.TH (deriveJSON, defaultOptions)
+import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
+import Data.Char (toLower)
 import qualified Data.Text.Lazy as L
 
 import Units
@@ -15,9 +16,9 @@ data Resources = Resources { disk :: Value Double MB
                            , cpu  :: Value Double Core }
                            deriving (Show, Eq)
 
-data TaskSpec = TaskSpec { name      :: Name
-                         , command   :: Command
-                         , resources :: Resources }
+data TaskSpec = TaskSpec { taskName      :: Name
+                         , taskCommand   :: Command
+                         , taskResources :: Resources }
                          deriving (Show, Eq)
 
 data FailureReason = UserKilled
@@ -29,7 +30,7 @@ data FailureReason = UserKilled
 data JobState = Waiting | Running | Finished | Failed FailureReason | RunError
                 deriving (Show, Eq)
 
-$(deriveJSON defaultOptions ''TaskSpec)
+$(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 4} ''TaskSpec)
 $(deriveJSON defaultOptions ''Resources)
 $(deriveJSON defaultOptions ''FailureReason)
 $(deriveJSON defaultOptions ''JobState)

@@ -11,8 +11,8 @@ module TaskAPI ( AppState (..), newAppState
 import Api_Types (Response)
 
 import qualified AuroraAPI as A
-import AuroraConfig (jobName, getJobState)
-import TaskSpec (TaskSpec (name, command), Name, JobState (..), FailureReason (..))
+import AuroraConfig (getJobName, getJobState)
+import TaskSpec (TaskSpec (taskName, taskCommand), Name, JobState (..), FailureReason (..))
 
 import Prelude hiding (writeFile)
 
@@ -25,6 +25,7 @@ import Control.Monad.Trans.Except (ExceptT (..), withExceptT, throwE, runExceptT
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import Data.Char (toLower)
+import Data.Function (on)
 import Data.List (find, unionBy)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
@@ -55,16 +56,20 @@ data JobError = UnknownResponse Response
               | NoSuchJob
                 deriving (Show)
 
+jobName :: JobStatus -> Name
+jobName = taskName . jobSpec
+
 jobDir :: AppState -> Name -> FilePath
 jobDir state n = jobsDir state ++ "/" ++ L.unpack n
 
 createJob :: AppState -> TaskSpec -> ExceptT JobError IO ()
 createJob state spec = do
-    let dir = jobDir state (name spec)
+    let name = taskName spec
+    let dir = jobDir state name
     lift $ createDirectoryIfMissing False dir
     lift $ createDirectoryIfMissing False $ dir ++ "/workspace"
     lift $ writeFile (dir ++ "/spec.json") (encode spec)
-    let subspec = spec { command = "aurora-rest-subexecutor " <> name spec }
+    let subspec = spec { taskCommand = "aurora-rest-subexecutor " <> name }
     client <- lift . A.thriftClient $ auroraURI state
     withExceptT UnknownResponse $ A.createJob client subspec
     lift . atomically $ do
@@ -73,22 +78,22 @@ createJob state spec = do
         writeTVar jsv $ JobStatus spec Waiting : js
 
 killJob :: AppState -> Name -> ExceptT JobError IO ()
-killJob state jid = lift (getJob state jid) >>= \case
+killJob state name = lift (getJob state name) >>= \case
     Nothing -> throwE NoSuchJob
     Just _  -> do
         client <- lift . A.thriftClient $ auroraURI state
-        withExceptT UnknownResponse $ A.killTasks client [jid]
+        withExceptT UnknownResponse $ A.killTasks client [name]
 
 updateJobs :: AppState -> IO ()
 updateJobs state = do
     client <- A.thriftClient $ auroraURI state
     prevStatuses <- atomically $ readTVar $ jobs state
     -- TODO: don't pattern match on Right
-    Right auroraTasks <- runExceptT $ A.getTasksWithoutConfigs client $ name . jobSpec <$> prevStatuses
-    let newUncheckedStates = (jobName &&& getJobState) <$> auroraTasks
+    Right auroraTasks <- runExceptT $ A.getTasksWithoutConfigs client $ jobName <$> prevStatuses
+    let newUncheckedStates = (getJobName &&& getJobState) <$> auroraTasks
     newStates <- mapM checkFinState newUncheckedStates
     let updatedStatuses = flip fmap prevStatuses $ \pst ->
-            case lookup (name $ jobSpec pst) newStates of
+            case lookup (taskName $ jobSpec pst) newStates of
                 Just se -> pst { jobState = se }
                 Nothing -> pst { jobState = RunError }
     atomically $ do
@@ -99,7 +104,7 @@ updateJobs state = do
         writeTVar jobsV statuses'
     where
         jobNameEq :: JobStatus -> JobStatus -> Bool
-        jobNameEq s1 s2 = name (jobSpec s1) == name (jobSpec s2)
+        jobNameEq = (==) `on` jobName
         checkFinState :: (Name, JobState) -> IO (Name, JobState)
         checkFinState (n, Finished) = do
             exitCodeStrM <- try $ readFile (jobDir state n ++ "/exitcode") :: IO (Either IOException String)
@@ -116,4 +121,4 @@ getJobs :: AppState -> IO [JobStatus]
 getJobs = atomically . readTVar . jobs
 
 getJob :: AppState -> Name -> IO (Maybe JobStatus)
-getJob st jid = find ((== jid) . name . jobSpec) <$> atomically (readTVar $ jobs st)
+getJob st name = find ((== name) . jobName) <$> atomically (readTVar $ jobs st)

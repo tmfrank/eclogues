@@ -2,7 +2,7 @@
 
 module Main where
 
-import TaskSpec (Command, TaskSpec (command))
+import TaskSpec (Command, TaskSpec (taskCommand))
 
 import Prelude hiding (readFile)
 
@@ -36,7 +36,7 @@ runTask path name = do
 
     let wsdir = dir ++ "/workspace"
     copyDirContents wsdir "."
-    exitCode <- runCommand $ command spec
+    exitCode <- runCommand $ taskCommand spec
     copyDirContents "." wsdir
 
     writeFile (dir ++ "/exitcode") (show exitCode)
