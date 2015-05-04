@@ -13,7 +13,7 @@ import Api_Types (Response)
 import qualified AuroraAPI as A
 import AuroraConfig (getJobName, getJobState)
 import TaskSpec ( TaskSpec (taskName, taskCommand), Name, FailureReason (..)
-                , JobState (..), isActiveState )
+                , JobState (..), isActiveState, isTerminationState )
 
 import Prelude hiding (writeFile)
 
@@ -82,8 +82,8 @@ createJob state spec = do
 
 killJob :: AppState -> Name -> ExceptT JobError IO ()
 killJob state name = do
-    -- TODO: check job state
-    _ <- mapExceptT atomically $ getJob' state name
+    js <- mapExceptT atomically $ getJob' state name
+    when (isTerminationState $ jobState js) . throwE $ InvalidOperation "Cannot kill terminated job"
     client <- lift . A.thriftClient $ auroraURI state
     withExceptT UnknownResponse $ A.killTasks client [name]
 
