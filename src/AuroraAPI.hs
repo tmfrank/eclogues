@@ -1,6 +1,7 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module AuroraAPI ( Client, Result, JobConfiguration
+module AuroraAPI ( Client, Result, JobConfiguration, UnexpectedResponse (..)
                  , thriftClient, acquireLock, releaseLock, createJob
                  , getJobs, getTasksWithoutConfigs, killTasks ) where
 
@@ -19,26 +20,31 @@ import AuroraConfig (auroraJobConfig, lockKey, defaultJobKey)
 import TaskSpec (TaskSpec, Name)
 
 import Control.Applicative ((<$>), pure)
+import Control.Exception (Exception)
 import Control.Monad (void)
 import Control.Monad.Trans.Except (ExceptT (..))
 import Data.Foldable (toList)
 import qualified Data.HashSet as HashSet
+import Data.Typeable (Typeable)
 import Network.URI (URI)
 import Thrift.Protocol.JSON (JSONProtocol (..))
 import Thrift.Transport.HttpClient (HttpClient, openHttpClient)
 
-type Client = (JSONProtocol HttpClient, JSONProtocol HttpClient)
-type Result a = ExceptT Response IO a
+data UnexpectedResponse = UnexpectedResponse Response deriving (Show, Typeable)
+instance Exception UnexpectedResponse
 
-onlyOK :: Response -> Either Response Response
+type Client = (JSONProtocol HttpClient, JSONProtocol HttpClient)
+type Result a = ExceptT UnexpectedResponse IO a
+
+onlyOK :: Response -> Either UnexpectedResponse Response
 onlyOK res = case response_responseCode res of
     Api_Types2.OK -> Right res
-    _             -> Left res
+    _             -> Left $ UnexpectedResponse res
 
-onlyRes :: Response -> Either Response Api_Types.Result
+onlyRes :: Response -> Either UnexpectedResponse Api_Types.Result
 onlyRes resp = case response_result <$> onlyOK resp of
     Right (Just res) -> Right res
-    _                -> Left resp
+    _                -> Left $ UnexpectedResponse resp
 
 -- TODO: output a list?
 getJobs :: Client -> Result (HashSet.HashSet JobConfiguration)

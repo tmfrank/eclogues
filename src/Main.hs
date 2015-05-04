@@ -53,9 +53,10 @@ server appState = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> del
     killJobH jid _                   = left (409, "Can only set state to Failed UserKilled") <* getJobH jid
 
     onError e = case e of
-        UnknownResponse res  -> (500, show res)
-        NoSuchJob            -> (404, "")
-        InvalidOperation msg -> (409, msg)
+        UnexpectedResponse res -> (500, show res)
+        NoSuchJob              -> (404, "")
+        InvalidOperation   msg -> (409, msg)
+        JobNameUsed            -> (409, "Job name already used")
     toEitherT = EitherT . runExceptT
 
 main :: IO ()
