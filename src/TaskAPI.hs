@@ -25,8 +25,8 @@ import Control.Monad.Trans.Except (ExceptT (..), withExceptT, throwE, runExceptT
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import Data.Char (toLower)
-import Data.Function (on)
-import Data.List (find, unionBy)
+import Data.HashMap.Lazy (HashMap, empty, insert, keys, elems, union)
+import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as L
@@ -42,22 +42,18 @@ data JobStatus = JobStatus { jobSpec  :: TaskSpec
 
 $(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 3} ''JobStatus)
 
--- TODO: store jobs as HashMap
 data AppState = AppState { jobsDir   :: FilePath
                          , auroraURI :: URI
-                         , jobs      :: TVar [JobStatus] }
+                         , jobs      :: TVar (HashMap Name JobStatus) }
 
 newAppState :: URI -> FilePath -> IO AppState
 newAppState auroraURI' jobsDir' = do
-    jobs' <- atomically $ newTVar []
+    jobs' <- atomically $ newTVar empty
     pure $ AppState jobsDir' auroraURI' jobs'
 
 data JobError = UnknownResponse Response
               | NoSuchJob
                 deriving (Show)
-
-jobName :: JobStatus -> Name
-jobName = taskName . jobSpec
 
 jobDir :: AppState -> Name -> FilePath
 jobDir state n = jobsDir state ++ "/" ++ L.unpack n
@@ -75,7 +71,7 @@ createJob state spec = do
     lift . atomically $ do
         let jsv = jobs state
         js <- readTVar jsv
-        writeTVar jsv $ JobStatus spec Waiting : js
+        writeTVar jsv $ insert name (JobStatus spec Waiting) js
 
 killJob :: AppState -> Name -> ExceptT JobError IO ()
 killJob state name = lift (getJob state name) >>= \case
@@ -89,7 +85,7 @@ updateJobs state = do
     client <- A.thriftClient $ auroraURI state
     prevStatuses <- atomically $ readTVar $ jobs state
     -- TODO: don't pattern match on Right
-    Right auroraTasks <- runExceptT $ A.getTasksWithoutConfigs client $ jobName <$> prevStatuses
+    Right auroraTasks <- runExceptT $ A.getTasksWithoutConfigs client $ keys prevStatuses
     let newUncheckedStates = (getJobName &&& getJobState) <$> auroraTasks
     newStates <- mapM checkFinState newUncheckedStates
     let updatedStatuses = flip fmap prevStatuses $ \pst ->
@@ -99,12 +95,10 @@ updateJobs state = do
     atomically $ do
         let jobsV = jobs state
         statuses <- readTVar jobsV
-        -- For unionBy, first list has priority
-        let statuses' = unionBy jobNameEq updatedStatuses statuses
+        -- For union, first list has priority
+        let statuses' = union updatedStatuses statuses
         writeTVar jobsV statuses'
     where
-        jobNameEq :: JobStatus -> JobStatus -> Bool
-        jobNameEq = (==) `on` jobName
         checkFinState :: (Name, JobState) -> IO (Name, JobState)
         checkFinState (n, Finished) = do
             exitCodeStrM <- try $ readFile (jobDir state n ++ "/exitcode") :: IO (Either IOException String)
@@ -118,7 +112,7 @@ updateJobs state = do
             ExitFailure c -> Failed (NonZeroExitCode c)
 
 getJobs :: AppState -> IO [JobStatus]
-getJobs = atomically . readTVar . jobs
+getJobs = fmap elems . atomically . readTVar . jobs
 
 getJob :: AppState -> Name -> IO (Maybe JobStatus)
-getJob st name = find ((== name) . jobName) <$> atomically (readTVar $ jobs st)
+getJob st name = HashMap.lookup name <$> atomically (readTVar $ jobs st)
