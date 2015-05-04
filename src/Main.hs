@@ -48,7 +48,7 @@ server appState = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> cre
     createJobH = toEitherT . withExceptT onError . createJob appState
 
     killJobH jid (Failed UserKilled) = toEitherT $ withExceptT onError $ killJob appState jid
-    killJobH jid _                   = left (400, "Cannot set that state") <* getJobH jid
+    killJobH jid _                   = left (409, "Can only set state to Failed UserKilled") <* getJobH jid
 
     onError e = case e of
         UnknownResponse res -> (500, show res)
