@@ -4,12 +4,12 @@
 
 module AuroraConfig ( ATaskExecConf, TaskConfig
                     , auroraJobConfig, lockKey, taskSpec, defaultJobKey
-                    , JobState (..), KillReason (..), jobName, getJobState ) where
+                    , jobName, getJobState ) where
 
 import Api_Types hiding (DRAINING, FAILED, FINISHED)
 import Api_Types2
 
-import TaskSpec (TaskSpec (TaskSpec), Resources (Resources))
+import TaskSpec (TaskSpec (TaskSpec), Resources (Resources), JobState (..), FailureReason (..))
 import Units
 
 import Control.Applicative ((<$>), pure)
@@ -219,17 +219,6 @@ taskSpec jc = do
 lockKey :: L.Text -> LockKey
 lockKey = LockKey . defaultJobKey
 
-data KillReason = UserKilled
-                | MemoryExceeded --(Value Double Byte)
-                | DiskExceeded --(Value Double Byte)
-                deriving (Show, Eq)
-
-data JobState = Waiting | Running | Finished | Killed KillReason | RunError
-                deriving (Show, Eq)
-
-$(deriveJSON defaultOptions ''KillReason)
-$(deriveJSON defaultOptions ''JobState)
-
 jobName :: ScheduledTask -> L.Text
 jobName = jobKey_name . taskConfig_job . assignedTask_task . scheduledTask_assignedTask
 
@@ -247,7 +236,7 @@ jobState' DRAINING   _  = Waiting
 jobState' LOST       es =
   if KILLING `notElem` (taskEvent_status <$> es)
     then Waiting
-    else Killed UserKilled
+    else Failed UserKilled
 jobState' KILLED     es = jobEventsToState es
 jobState' FINISHED   es = jobEventsToState es
 jobState' FAILED     es = jobEventsToState es
@@ -255,7 +244,7 @@ jobState' FAILED     es = jobEventsToState es
 jobEventsToState :: [TaskEvent] -> JobState
 jobEventsToState es
   | any isRescheduleEvent events = Waiting
-  | KILLED `elem` events         = Killed UserKilled
+  | KILLED `elem` events         = Failed UserKilled
   | Just fev <- find ((== FAILED) . taskEvent_status) es =
       maybe RunError failureState $ taskEvent_message fev
   | otherwise                    = Finished
@@ -266,8 +255,8 @@ jobEventsToState es
     isRescheduleEvent PREEMPTING = True
     isRescheduleEvent _          = False
     failureState msg
-      | "Memory limit exceeded" `L.isPrefixOf` msg = Killed MemoryExceeded
-      | "Disk limit exceeded"   `L.isPrefixOf` msg = Killed DiskExceeded
+      | "Memory limit exceeded" `L.isPrefixOf` msg = Failed MemoryExceeded
+      | "Disk limit exceeded"   `L.isPrefixOf` msg = Failed DiskExceeded
       | otherwise                                  = RunError
 
 getJobState :: ScheduledTask -> JobState

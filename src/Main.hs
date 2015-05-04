@@ -52,9 +52,8 @@ server appState = getJobsH :<|> getJobH :<|> killJobH :<|> createJobH where
 
 main :: IO ()
 main = do
-    (hostArg:_) <- getArgs
+    (jobsDir:hostArg:_) <- getArgs
     let (Just uri) = parseURI $ "http://" ++ hostArg ++ "/api"
-    let jobsDir = "/vagrant/jobs"
     createDirectoryIfMissing False jobsDir
     appState <- newAppState uri jobsDir
 

@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module TaskSpec (Name, Command, Resources (..), TaskSpec (..)) where
+module TaskSpec where
 
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import qualified Data.Text.Lazy as L
@@ -20,5 +20,16 @@ data TaskSpec = TaskSpec { name      :: Name
                          , resources :: Resources }
                          deriving (Show, Eq)
 
+data FailureReason = UserKilled
+                   | NonZeroExitCode Int
+                   | MemoryExceeded --(Value Double Byte)
+                   | DiskExceeded --(Value Double Byte)
+                   deriving (Show, Eq)
+
+data JobState = Waiting | Running | Finished | Failed FailureReason | RunError
+                deriving (Show, Eq)
+
 $(deriveJSON defaultOptions ''TaskSpec)
 $(deriveJSON defaultOptions ''Resources)
+$(deriveJSON defaultOptions ''FailureReason)
+$(deriveJSON defaultOptions ''JobState)

@@ -77,7 +77,8 @@ executable aurora-rest
                        either >= 3.4.2,
                        directory ==1.2.*,
                        stm ==2.4.*,
-                       async ==2.0.*
+                       async ==2.0.*,
+                       utility-ht >=0.0.8 && < 0.1
 
   -- Directories containing source files.
   hs-source-dirs:      src, gen-hs
