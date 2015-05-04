@@ -30,6 +30,16 @@ data FailureReason = UserKilled
 data JobState = Waiting | Running | Finished | Failed FailureReason | RunError
                 deriving (Show, Eq)
 
+isTerminationState :: JobState -> Bool
+isTerminationState Waiting    = False
+isTerminationState Running    = False
+isTerminationState Finished   = True
+isTerminationState (Failed _) = True
+isTerminationState RunError   = True
+
+isActiveState :: JobState -> Bool
+isActiveState = not . isTerminationState
+
 $(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 4} ''TaskSpec)
 $(deriveJSON defaultOptions ''Resources)
 $(deriveJSON defaultOptions ''FailureReason)

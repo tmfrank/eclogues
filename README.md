@@ -26,6 +26,9 @@ Kill a job, by putting the following state:
 {"tag":"Failed","contents":{"tag":"UserKilled","contents":[]}}
 ```
 
+### DELETE `/job/:name`
+Clean up a non-terminated job.
+
 ### POST `/create`
 Post a task spec of the form:
 

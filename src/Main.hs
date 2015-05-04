@@ -5,7 +5,7 @@
 module Main where
 
 import TaskAPI ( AppState, JobStatus (jobState), JobError (..), newAppState
-               , createJob, killJob, getJob, getJobs, updateJobs )
+               , createJob, killJob, deleteJob, getJob, getJobs, updateJobs )
 import TaskSpec (TaskSpec (..), Name, JobState (..), FailureReason (..))
 import Units
 
@@ -20,7 +20,7 @@ import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Lazy as L
 import Network.URI (parseURI)
 import Network.Wai.Handler.Warp (run)
-import Servant.API ((:>), (:<|>) ((:<|>)), Get, Post, Put, ReqBody, Capture)
+import Servant.API ((:>), (:<|>) ((:<|>)), Get, Post, Put, Delete, ReqBody, Capture)
 import Servant.Common.Text (FromText (..))
 import Servant.Server (Server, serve)
 import System.Directory (createDirectoryIfMissing)
@@ -34,6 +34,7 @@ type VAPI =  "jobs"   :> Get [JobStatus]
         :<|> "job"    :> Capture "id" Name :> Get JobStatus
         :<|> "job"    :> Capture "id" Name :> "state" :> Get JobState
         :<|> "job"    :> Capture "id" Name :> "state" :> ReqBody JobState :> Put ()
+        :<|> "job"    :> Capture "id" Name :> Delete
         :<|> "create" :> ReqBody TaskSpec  :> Post ()
 
 (<<$>>) :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
@@ -41,18 +42,20 @@ type VAPI =  "jobs"   :> Get [JobStatus]
 infixl 4 <<$>>
 
 server :: AppState -> Server VAPI
-server appState = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> createJobH where
+server appState = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> deleteJobH :<|> createJobH where
     getJobsH = lift $ getJobs appState
     getJobH jid = EitherT $ maybe (Left (404, "")) Right <$> getJob appState jid
     getJobStateH = fmap jobState . getJobH
     createJobH = toEitherT . withExceptT onError . createJob appState
+    deleteJobH = toEitherT . withExceptT onError . deleteJob appState
 
     killJobH jid (Failed UserKilled) = toEitherT $ withExceptT onError $ killJob appState jid
     killJobH jid _                   = left (409, "Can only set state to Failed UserKilled") <* getJobH jid
 
     onError e = case e of
-        UnknownResponse res -> (500, show res)
-        NoSuchJob           -> (404, "")
+        UnknownResponse res  -> (500, show res)
+        NoSuchJob            -> (404, "")
+        InvalidOperation msg -> (409, msg)
     toEitherT = EitherT . runExceptT
 
 main :: IO ()

@@ -5,27 +5,29 @@
 
 module TaskAPI ( AppState (..), newAppState
                , JobStatus (..)
-               , JobError (..), createJob, updateJobs, getJob, getJobs, killJob )
+               , JobError (..), createJob, updateJobs, getJob, getJobs, killJob, deleteJob )
                where
 
 import Api_Types (Response)
 
 import qualified AuroraAPI as A
 import AuroraConfig (getJobName, getJobState)
-import TaskSpec (TaskSpec (taskName, taskCommand), Name, JobState (..), FailureReason (..))
+import TaskSpec ( TaskSpec (taskName, taskCommand), Name, FailureReason (..)
+                , JobState (..), isActiveState )
 
 import Prelude hiding (writeFile)
 
 import Control.Applicative ((<$>), pure)
 import Control.Arrow ((&&&))
 import Control.Concurrent.STM (TVar, newTVar, readTVar, writeTVar, atomically)
-import Control.Exception (IOException, try)
+import Control.Exception (IOException, try, tryJust)
+import Control.Monad (when, guard)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), withExceptT, throwE, runExceptT)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import Data.Char (toLower)
-import Data.HashMap.Lazy (HashMap, empty, insert, keys, elems, union)
+import Data.HashMap.Lazy (HashMap, empty, insert, delete, keys, elems, union)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
@@ -33,8 +35,9 @@ import qualified Data.Text.Lazy as L
 import Data.ByteString.Lazy (writeFile)
 import Network.URI (URI)
 import Text.Read.HT (maybeRead)
-import System.Directory (createDirectoryIfMissing)
+import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
 import System.Exit (ExitCode (..))
+import System.IO.Error (isDoesNotExistError)
 
 data JobStatus = JobStatus { jobSpec  :: TaskSpec
                            , jobState :: JobState }
@@ -53,6 +56,7 @@ newAppState auroraURI' jobsDir' = do
 
 data JobError = UnknownResponse Response
               | NoSuchJob
+              | InvalidOperation String
                 deriving (Show)
 
 jobDir :: AppState -> Name -> FilePath
@@ -68,17 +72,28 @@ createJob state spec = do
     let subspec = spec { taskCommand = "aurora-rest-subexecutor " <> name }
     client <- lift . A.thriftClient $ auroraURI state
     withExceptT UnknownResponse $ A.createJob client subspec
+    -- TODO: check name is used within atomically
     lift . atomically $ do
         let jsv = jobs state
         js <- readTVar jsv
         writeTVar jsv $ insert name (JobStatus spec Waiting) js
 
 killJob :: AppState -> Name -> ExceptT JobError IO ()
-killJob state name = lift (getJob state name) >>= \case
-    Nothing -> throwE NoSuchJob
-    Just _  -> do
-        client <- lift . A.thriftClient $ auroraURI state
-        withExceptT UnknownResponse $ A.killTasks client [name]
+killJob state name = do
+    _ <- getJob' state name
+    client <- lift . A.thriftClient $ auroraURI state
+    withExceptT UnknownResponse $ A.killTasks client [name]
+
+deleteJob :: AppState -> Name -> ExceptT JobError IO ()
+deleteJob state name = do
+    js <- getJob' state name
+    when (isActiveState $ jobState js) $ throwE $ InvalidOperation "Cannot delete running job"
+    _ <- lift $ tryJust (guard . isDoesNotExistError) $ removeDirectoryRecursive $ jobDir state name
+    -- TODO: possible race if delete and insert happens around here
+    lift . atomically $ do
+        let jobsV = jobs state
+        jobs <- readTVar jobsV
+        writeTVar jobsV $ delete name jobs
 
 updateJobs :: AppState -> IO ()
 updateJobs state = do
@@ -116,3 +131,8 @@ getJobs = fmap elems . atomically . readTVar . jobs
 
 getJob :: AppState -> Name -> IO (Maybe JobStatus)
 getJob st name = HashMap.lookup name <$> atomically (readTVar $ jobs st)
+
+getJob' :: AppState -> Name -> ExceptT JobError IO JobStatus
+getJob' st jid = lift (getJob st jid) >>= \case
+    Nothing -> throwE NoSuchJob
+    Just js -> pure js
