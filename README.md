@@ -16,8 +16,15 @@ List all jobs.
 ### GET `/job/:name`
 Information about a particular job.
 
-### DELETE `/job/:name`
-Kill a job.
+### GET `/job/:name/state`
+Get only the state of a particular job.
+
+### PUT `/job/:name/state`
+Kill a job, by putting the following state:
+
+```
+{"tag":"Failed","contents":{"tag":"UserKilled","contents":[]}}
+```
 
 ### POST `/create`
 Post a task spec of the form:

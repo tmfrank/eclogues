@@ -4,23 +4,23 @@
 
 module Main where
 
-import TaskAPI ( AppState, JobStatus, JobError (..), newAppState
+import TaskAPI ( AppState, JobStatus (jobState), JobError (..), newAppState
                , createJob, killJob, getJob, getJobs, updateJobs )
-import TaskSpec (TaskSpec (..), Name)
+import TaskSpec (TaskSpec (..), Name, JobState (..), FailureReason (..))
 import Units
 
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race_)
 import Control.Monad (forever)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Either (EitherT (..))
+import Control.Monad.Trans.Either (EitherT (..), left)
 import Control.Monad.Trans.Except (runExceptT, withExceptT)
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Lazy as L
 import Network.URI (parseURI)
 import Network.Wai.Handler.Warp (run)
-import Servant.API ((:>), (:<|>) ((:<|>)), Get, Post, Delete, ReqBody, Capture)
+import Servant.API ((:>), (:<|>) ((:<|>)), Get, Post, Put, ReqBody, Capture)
 import Servant.Common.Text (FromText (..))
 import Servant.Server (Server, serve)
 import System.Directory (createDirectoryIfMissing)
@@ -32,7 +32,8 @@ instance FromText L.Text where
 
 type VAPI =  "jobs"   :> Get [JobStatus]
         :<|> "job"    :> Capture "id" Name :> Get JobStatus
-        :<|> "job"    :> Capture "id" Name :> Delete
+        :<|> "job"    :> Capture "id" Name :> "state" :> Get JobState
+        :<|> "job"    :> Capture "id" Name :> "state" :> ReqBody JobState :> Put ()
         :<|> "create" :> ReqBody TaskSpec  :> Post ()
 
 (<<$>>) :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
@@ -40,11 +41,15 @@ type VAPI =  "jobs"   :> Get [JobStatus]
 infixl 4 <<$>>
 
 server :: AppState -> Server VAPI
-server appState = getJobsH :<|> getJobH :<|> killJobH :<|> createJobH where
+server appState = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> createJobH where
     getJobsH = lift $ getJobs appState
     getJobH jid = EitherT $ maybe (Left (404, "")) Right <$> getJob appState jid
-    killJobH = toEitherT . withExceptT onError . killJob appState
+    getJobStateH = fmap jobState . getJobH
     createJobH = toEitherT . withExceptT onError . createJob appState
+
+    killJobH jid (Failed UserKilled) = toEitherT $ withExceptT onError $ killJob appState jid
+    killJobH jid _                   = left (400, "Cannot set that state") <* getJobH jid
+
     onError e = case e of
         UnknownResponse res -> (500, show res)
         NoSuchJob           -> (404, "")
