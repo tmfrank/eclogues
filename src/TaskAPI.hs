@@ -19,14 +19,16 @@ import Prelude hiding (writeFile)
 
 import Control.Applicative ((<$>), pure)
 import Control.Arrow ((&&&))
-import Control.Concurrent.STM (TVar, newTVar, readTVar, modifyTVar, atomically)
+import Control.Concurrent.AdvSTM (MonadAdvSTM, AdvSTM, atomically, onCommit)
+import Control.Concurrent.AdvSTM.TVar (TVar, newTVar, readTVar, writeTVar)
 import Control.Exception (IOException, try, tryJust)
-import Control.Monad (when, guard)
+import Control.Monad (when, guard, void)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT (..), withExceptT, throwE, runExceptT)
+import Control.Monad.Trans.Except (ExceptT (..), withExceptT, throwE, runExceptT, mapExceptT)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import Data.Char (toLower)
+import Data.Either.Combinators (rightToMaybe)
 import Data.HashMap.Lazy (HashMap, empty, insert, delete, keys, elems, union)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe (fromMaybe)
@@ -62,6 +64,9 @@ data JobError = UnknownResponse Response
 jobDir :: AppState -> Name -> FilePath
 jobDir state n = jobsDir state ++ "/" ++ L.unpack n
 
+modifyTVar :: MonadAdvSTM m => TVar a -> (a -> a) -> m ()
+modifyTVar var f = readTVar var >>= writeTVar var . f
+
 createJob :: AppState -> TaskSpec -> ExceptT JobError IO ()
 createJob state spec = do
     let name = taskName spec
@@ -77,17 +82,17 @@ createJob state spec = do
 
 killJob :: AppState -> Name -> ExceptT JobError IO ()
 killJob state name = do
-    _ <- getJob' state name
+    -- TODO: check job state
+    _ <- mapExceptT atomically $ getJob' state name
     client <- lift . A.thriftClient $ auroraURI state
     withExceptT UnknownResponse $ A.killTasks client [name]
 
 deleteJob :: AppState -> Name -> ExceptT JobError IO ()
-deleteJob state name = do
+deleteJob state name = mapExceptT atomically $ do
     js <- getJob' state name
-    when (isActiveState $ jobState js) $ throwE $ InvalidOperation "Cannot delete running job"
-    _ <- lift $ tryJust (guard . isDoesNotExistError) $ removeDirectoryRecursive $ jobDir state name
-    -- TODO: possible race if delete and insert happens around here
-    lift . atomically . modifyTVar (jobs state) $ delete name
+    when (isActiveState $ jobState js) . throwE $ InvalidOperation "Cannot delete running job"
+    lift . onCommit . void $ tryJust (guard . isDoesNotExistError) . removeDirectoryRecursive $ jobDir state name
+    lift . modifyTVar (jobs state) $ delete name
 
 updateJobs :: AppState -> IO ()
 updateJobs state = do
@@ -120,9 +125,11 @@ getJobs :: AppState -> IO [JobStatus]
 getJobs = fmap elems . atomically . readTVar . jobs
 
 getJob :: AppState -> Name -> IO (Maybe JobStatus)
-getJob st name = HashMap.lookup name <$> atomically (readTVar $ jobs st)
+getJob state = atomically . fmap rightToMaybe . runExceptT . getJob' state
 
-getJob' :: AppState -> Name -> ExceptT JobError IO JobStatus
-getJob' st jid = lift (getJob st jid) >>= \case
-    Nothing -> throwE NoSuchJob
-    Just js -> pure js
+getJob' :: AppState -> Name -> ExceptT JobError AdvSTM JobStatus
+getJob' state name = do
+    jss <- lift . readTVar $ jobs state
+    case HashMap.lookup name jss of
+        Nothing -> throwE NoSuchJob
+        Just js -> pure js
