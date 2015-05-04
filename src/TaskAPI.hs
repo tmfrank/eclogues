@@ -19,7 +19,7 @@ import Prelude hiding (writeFile)
 
 import Control.Applicative ((<$>), pure)
 import Control.Arrow ((&&&))
-import Control.Concurrent.STM (TVar, newTVar, readTVar, writeTVar, atomically)
+import Control.Concurrent.STM (TVar, newTVar, readTVar, modifyTVar, atomically)
 import Control.Exception (IOException, try, tryJust)
 import Control.Monad (when, guard)
 import Control.Monad.Trans.Class (lift)
@@ -73,10 +73,7 @@ createJob state spec = do
     client <- lift . A.thriftClient $ auroraURI state
     withExceptT UnknownResponse $ A.createJob client subspec
     -- TODO: check name is used within atomically
-    lift . atomically $ do
-        let jsv = jobs state
-        js <- readTVar jsv
-        writeTVar jsv $ insert name (JobStatus spec Waiting) js
+    lift . atomically . modifyTVar (jobs state) $ insert name (JobStatus spec Waiting)
 
 killJob :: AppState -> Name -> ExceptT JobError IO ()
 killJob state name = do
@@ -90,10 +87,7 @@ deleteJob state name = do
     when (isActiveState $ jobState js) $ throwE $ InvalidOperation "Cannot delete running job"
     _ <- lift $ tryJust (guard . isDoesNotExistError) $ removeDirectoryRecursive $ jobDir state name
     -- TODO: possible race if delete and insert happens around here
-    lift . atomically $ do
-        let jobsV = jobs state
-        jobs <- readTVar jobsV
-        writeTVar jobsV $ delete name jobs
+    lift . atomically . modifyTVar (jobs state) $ delete name
 
 updateJobs :: AppState -> IO ()
 updateJobs state = do
@@ -107,12 +101,8 @@ updateJobs state = do
             case lookup (taskName $ jobSpec pst) newStates of
                 Just se -> pst { jobState = se }
                 Nothing -> pst { jobState = RunError }
-    atomically $ do
-        let jobsV = jobs state
-        statuses <- readTVar jobsV
-        -- For union, first list has priority
-        let statuses' = union updatedStatuses statuses
-        writeTVar jobsV statuses'
+    -- For union, first list has priority
+    atomically . modifyTVar (jobs state) $ union updatedStatuses
     where
         checkFinState :: (Name, JobState) -> IO (Name, JobState)
         checkFinState (n, Finished) = do
