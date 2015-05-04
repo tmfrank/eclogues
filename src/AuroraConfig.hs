@@ -58,9 +58,9 @@ data ATaskExecConf = ATaskExecConf   { tec_environment           :: L.Text
                                      , tec_production            :: Bool }
                                      deriving (Eq, Show)
 
-data AResources = AResources { disk :: Int64
-                             , ram  :: Int64
-                             , cpu  :: Double }
+data AResources = AResources { _disk :: Int64
+                             , _ram  :: Int64
+                             , _cpu  :: Double }
                              deriving (Eq, Show)
 
 data ATask = ATask   { task_processes          :: [AProcess]
@@ -74,13 +74,13 @@ data ATask = ATask   { task_processes          :: [AProcess]
 
 data ATaskConstraint = ATaskConstraint { order :: [L.Text] } deriving (Eq, Show)
 
-data AProcess = AProcess   { daemon       :: Bool
-                           , name         :: L.Text
-                           , ephemeral    :: Bool
-                           , max_failures :: Int32
-                           , min_duration :: Integer
-                           , cmdline      :: L.Text
-                           , final        :: Bool }
+data AProcess = AProcess   { p_daemon       :: Bool
+                           , p_name         :: L.Text
+                           , p_ephemeral    :: Bool
+                           , p_max_failures :: Int32
+                           , p_min_duration :: Integer
+                           , p_cmdline      :: L.Text
+                           , p_final        :: Bool }
                            deriving (Eq, Show)
 
 data AHealthCheckConfig = AHealthCheckConfig   { initial_interval_secs    :: Double
@@ -94,8 +94,8 @@ $(deriveJSON defaultOptions ''CronCollisionPolicy)
 $(deriveJSON defaultOptions{fieldLabelModifier = drop 4} ''ATaskExecConf)
 $(deriveJSON defaultOptions{fieldLabelModifier = drop 5} ''ATask)
 $(deriveJSON defaultOptions ''ATaskConstraint)
-$(deriveJSON defaultOptions ''AProcess)
-$(deriveJSON defaultOptions ''AResources)
+$(deriveJSON defaultOptions{fieldLabelModifier = drop 2} ''AProcess)
+$(deriveJSON defaultOptions{fieldLabelModifier = drop 1} ''AResources)
 $(deriveJSON defaultOptions ''AHealthCheckConfig)
 
 defaultRole :: L.Text
@@ -191,13 +191,13 @@ auroraJobConfig (TaskSpec name cmd resources@(Resources disk ram cpu)) = job whe
                   , task_resources          = aResources resources
                   , task_constraints        = [orderConstraint] }
     orderConstraint = ATaskConstraint { order = [name] }
-    aProcess = AProcess { daemon       = False
-                        , name         = name
-                        , ephemeral    = False
-                        , max_failures = defaultMaxTaskFailures
-                        , min_duration = defaultMinDuration
-                        , cmdline      = cmd
-                        , final        = False }
+    aProcess = AProcess { p_daemon       = False
+                        , p_name         = name
+                        , p_ephemeral    = False
+                        , p_max_failures = defaultMaxTaskFailures
+                        , p_min_duration = defaultMinDuration
+                        , p_cmdline      = cmd
+                        , p_final        = False }
 
 taskSpec :: JobConfiguration -> Either String TaskSpec
 taskSpec jc = do
@@ -208,7 +208,7 @@ taskSpec jc = do
     execc <- orError "No executor configuration" $ taskConfig_executorConfig tc
     tec   <- eitherDecode . encodeUtf8 $ executorConfig_data execc
     proc  <- orError "No processes in task" . listToMaybe . task_processes . tec_task $ tec
-    let command = cmdline proc
+    let command = p_cmdline proc
 
     pure $ TaskSpec name command resources
     where

@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Main where
 
@@ -72,5 +73,5 @@ main = do
     hPutStrLn stderr "Starting server on port 8000"
 
     let web = run 8000 $ serve (Proxy :: (Proxy VAPI)) (server appState)
-    let updater = forever $ updateJobs appState >> threadDelay (floor $ second 1 `asVal` micro second)
+    let updater = forever $ updateJobs appState >> threadDelay (floor $ second (1 :: Double) `asVal` micro second)
     race_ web updater

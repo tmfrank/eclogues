@@ -56,7 +56,7 @@ executable aurora-rest
   -- LANGUAGE extensions used by modules in this package.
   other-extensions:    DeriveDataTypeable, OverloadedStrings, RankNTypes, MultiParamTypeClasses, ScopedTypeVariables, CPP, FlexibleInstances, TypeSynonymInstances, ExistentialQuantification, TupleSections, TemplateHaskell, DataKinds, TypeOperators, LambdaCase, EmptyDataDecls, KindSignatures
 
-  ghc-options:         -threaded -with-rtsopts=-N -Wall
+  ghc-options:         -threaded -with-rtsopts=-N -Wall -Werror
 
   -- Other library packages from which modules are imported.
   build-depends:       base ==4.7.*,
@@ -89,7 +89,7 @@ executable aurora-rest
 executable aurora-rest-subexecutor
   main-is:             Subexecutor.hs
 
-  ghc-options:         -threaded -with-rtsopts=-N -Wall
+  ghc-options:         -threaded -with-rtsopts=-N -Wall -Werror
 
   build-depends:       base ==4.7.*,
                        text ==1.2.*,
