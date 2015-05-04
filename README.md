@@ -23,7 +23,7 @@ Get only the state of a particular job.
 Kill a job, by putting the following state:
 
 ```
-{"tag":"Failed","contents":{"tag":"UserKilled","contents":[]}}
+{"type":"Failed","reason":"UserKilled"}
 ```
 
 ### DELETE `/job/:name`

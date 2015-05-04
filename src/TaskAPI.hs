@@ -10,7 +10,7 @@ module TaskAPI ( AppState (..), newAppState
 
 import qualified AuroraAPI as A
 import AuroraConfig (getJobName, getJobState)
-import TaskSpec ( TaskSpec (taskName, taskCommand), Name, FailureReason (..)
+import TaskSpec ( TaskSpec (taskName, taskCommand), Name, FailureReason (NonZeroExitCode)
                 , JobState (..), isActiveState, isTerminationState )
 
 import Prelude hiding (writeFile)
