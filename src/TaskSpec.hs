@@ -29,52 +29,59 @@ data Resources = Resources { disk :: Value Double MB
 
 data TaskSpec = TaskSpec { taskName      :: Name
                          , taskCommand   :: Command
-                         , taskResources :: Resources }
+                         , taskResources :: Resources
+                         , taskDependsOn :: [Name] }
                          deriving (Show, Eq)
 
 data FailureReason = UserKilled
                    | NonZeroExitCode Int
                    | MemoryExceeded --(Value Double Byte)
                    | DiskExceeded --(Value Double Byte)
+                   | DependencyFailed Name
                    deriving (Show, Eq)
 
-data JobState = Queued | Running | Finished | Failed FailureReason | RunError
+data JobState = Queued | Waiting Integer | Running | Finished | Failed FailureReason | RunError
                 deriving (Show, Eq)
 
 isTerminationState :: JobState -> Bool
-isTerminationState Queued    = False
-isTerminationState Running    = False
-isTerminationState Finished   = True
-isTerminationState (Failed _) = True
-isTerminationState RunError   = True
+isTerminationState Queued      = False
+isTerminationState (Waiting _) = False
+isTerminationState Running     = False
+isTerminationState Finished    = True
+isTerminationState (Failed _)  = True
+isTerminationState RunError    = True
 
 isActiveState :: JobState -> Bool
 isActiveState = not . isTerminationState
 
 instance ToJSON JobState where
-    toJSON Queued  = object ["type" .= "Queued"]
-    toJSON Running  = object ["type" .= "Running"]
-    toJSON Finished = object ["type" .= "Finished"]
-    toJSON RunError = object ["type" .= "RunError"]
+    toJSON Queued      = object ["type" .= "Queued"]
+    toJSON (Waiting n) = object ["type" .= "Waiting", "for" .= n]
+    toJSON Running     = object ["type" .= "Running"]
+    toJSON Finished    = object ["type" .= "Finished"]
+    toJSON RunError    = object ["type" .= "RunError"]
     toJSON (Failed UserKilled) = object ["type" .= "Failed", "reason" .= "UserKilled"]
     toJSON (Failed (NonZeroExitCode c)) = object ["type" .= "Failed", "reason" .= "NonZeroExitCode", "exitCode" .= c]
     toJSON (Failed MemoryExceeded) = object ["type" .= "Failed", "reason" .= "MemoryExceeded"]
     toJSON (Failed DiskExceeded) = object ["type" .= "Failed", "reason" .= "DiskExceeded"]
+    toJSON (Failed (DependencyFailed n)) = object ["type" .= "Failed", "reason" .= "DependencyFailed", "dependency" .= n]
 
 instance FromJSON JobState where
     parseJSON (Aeson.Object v) = do
         typ <- v .: "type"
         case typ of
             "Queued"   -> pure Queued
+            "Waiting"  -> Waiting <$> v .: "for"
             "Running"  -> pure Running
             "Finished" -> pure Finished
             "RunError" -> pure RunError
             "Failed"   -> v .: "reason" >>= \case
-                "UserKilled"      -> pure $ Failed UserKilled
-                "MemoryExceeded"  -> pure $ Failed MemoryExceeded
-                "DiskExceeded"    -> pure $ Failed DiskExceeded
-                "NonZeroExitCode" -> Failed . NonZeroExitCode <$> v .: "exitCode"
-                _                 -> mzero
+                "UserKilled"       -> pure $ Failed UserKilled
+                "MemoryExceeded"   -> pure $ Failed MemoryExceeded
+                "DiskExceeded"     -> pure $ Failed DiskExceeded
+                "NonZeroExitCode"  -> Failed . NonZeroExitCode <$> v .: "exitCode"
+                "DependencyFailed" -> Failed . DependencyFailed <$> v .: "dependency"
+                _                  -> mzero
             _          -> mzero
     parseJSON _ = mzero
 

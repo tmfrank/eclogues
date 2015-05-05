@@ -40,7 +40,8 @@ Post a task spec of the form:
         "disk": "10",
         "ram": "10",
         "cpu": "0.1"
-    }
+    },
+    "dependson": []
 }
 ```
 
