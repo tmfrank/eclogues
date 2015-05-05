@@ -63,6 +63,7 @@ server appState = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> del
         JobMustExist name        -> (409, "Job " ++ L.unpack name ++ " must already exist")
         JobCannotHaveFailed name -> (409, "Job " ++ L.unpack name ++ " cannot have failed")
         JobNameUsed              -> (409, "Job name already used")
+        OutstandingDependants l  -> (409, "Job has outstanding dependants " ++ show l)
     toEitherT = EitherT . runExceptT
 
 main :: IO ()

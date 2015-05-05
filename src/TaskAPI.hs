@@ -15,7 +15,7 @@ import TaskSpec ( TaskSpec (..), Name, FailureReason (NonZeroExitCode, Dependenc
 
 import Prelude hiding (writeFile)
 
-import Control.Applicative ((<$>), pure)
+import Control.Applicative ((<$>), (*>), pure)
 import Control.Arrow ((&&&))
 import Control.Concurrent.AdvSTM (MonadAdvSTM, AdvSTM, atomically, onCommit)
 import Control.Concurrent.AdvSTM.TVar (TVar, newTVar, readTVar, writeTVar)
@@ -28,10 +28,11 @@ import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import Data.Char (toLower)
 import Data.Either.Combinators (rightToMaybe, mapLeft)
-import Data.HashMap.Lazy ( HashMap, empty, insert, insertWith, delete, adjust
+import Data.HashMap.Lazy ( HashMap, empty, insert, insertWith, adjust
                          , keys, elems, union, member, traverseWithKey )
 import qualified Data.HashMap.Lazy as HashMap
 import Data.List (foldl')
+import qualified Data.List as List
 import Data.Maybe (fromMaybe, catMaybes)
 import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as L
@@ -67,6 +68,7 @@ data JobError = UnexpectedResponse A.UnexpectedResponse
               | JobMustExist Name
               | JobCannotHaveFailed Name
               | JobMustBeTerminated Bool
+              | OutstandingDependants [Name]
                 deriving (Show)
 
 jobDir :: AppState -> Name -> FilePath
@@ -112,12 +114,12 @@ createJob state spec = catchUnexpectedResponse . mapExceptT atomically $ do
         checkDep :: Name -> JSS -> Name -> ExceptT JobError AdvSTM Integer
         checkDep name jss depName
             | Just ds <- HashMap.lookup depName jss = case jobState ds of
-                Finished            -> pure 0
-                s | isActiveState s -> do
-                        lift $ modifyTVar (revDeps state) $ insertWith (++) depName [name]
-                        pure 1
+                Finished            -> lift (addRdep name depName) *> pure 0
+                s | isActiveState s -> lift (addRdep name depName) *> pure 1
                   | otherwise       -> throwE $ JobCannotHaveFailed depName
             | otherwise = throwE $ JobMustExist depName
+        addRdep :: Name -> Name -> AdvSTM ()
+        addRdep name depName = modifyTVar (revDeps state) $ insertWith (++) depName [name]
 
 killJob :: AppState -> Name -> ExceptT JobError IO ()
 killJob state name = do
@@ -130,10 +132,12 @@ deleteJob :: AppState -> Name -> ExceptT JobError IO ()
 deleteJob state name = mapExceptT atomically $ do
     js <- getJob' state name
     when (isActiveState $ jobState js) . throwE $ JobMustBeTerminated True
+    rdeps <- lift . readTVar $ revDeps state
+    fromMaybe (return ()) $ (throwE . OutstandingDependants) <$> HashMap.lookup name rdeps
     lift . onCommit . void $ tryJust (guard . isDoesNotExistError) . removeDirectoryRecursive $ jobDir state name
-    lift . modifyTVar (jobs state) $ delete name
+    lift . modifyTVar (jobs state) $ HashMap.delete name
 
-data StateTransition = Transition Name JobState JobState
+data StateTransition = Transition JobStatus JobState
 
 updateJobs :: AppState -> IO ()
 updateJobs state = do
@@ -149,12 +153,12 @@ updateJobs state = do
     let (updatedStatuses, transitions) = runWriter $ traverseWithKey (transition newStates) activeStatuses
     atomically $ do
         curStatuses <- readTVar $ jobs state
-        rdeps <- readTVar $ revDeps state
+        allRdeps <- readTVar $ revDeps state
         -- For union, first map has priority
         let newStatuses = updatedStatuses `union` curStatuses
-        (newStatuses', rdeps') <- foldM handleDeps (newStatuses, rdeps) transitions
+        (newStatuses', allRdeps') <- foldM handleDeps (newStatuses, allRdeps) transitions
         writeTVar (jobs state) newStatuses'
-        writeTVar (revDeps state) rdeps'
+        writeTVar (revDeps state) allRdeps'
     where
         isNonWaitingActiveState :: JobState -> Bool
         isNonWaitingActiveState (Waiting _) = False
@@ -174,17 +178,27 @@ updateJobs state = do
         transition newStates name pst = do
             let newState = fromMaybe RunError $ lookup name newStates
             let oldState = jobState pst
-            when (newState /= oldState) $ tell [Transition name oldState newState]
+            when (newState /= oldState) $ tell [Transition pst newState]
             pure pst { jobState = newState }
         handleDeps :: (JSS, HashMap Name [Name]) -> StateTransition -> AdvSTM (JSS, HashMap Name [Name])
-        handleDeps (jss, rdeps) (Transition name _ newState) | isTerminationState newState = do
-            let depNames = fromMaybe [] $ HashMap.lookup name rdeps
-            let deps = catMaybes $ flip HashMap.lookup jss <$> depNames
+        handleDeps (jss, allRdeps) (Transition pst newState) | isTerminationState newState = do
+            let name = jobName pst
+                rdepNames = fromMaybe [] $ HashMap.lookup name allRdeps
+                rdeps = catMaybes $ flip HashMap.lookup jss <$> rdepNames
+                depNames = taskDependsOn $ jobSpec pst
+                -- Remove this job from the rev deps of its dependencies
+                allRdeps' = foldl' (removeRdep name) allRdeps depNames
             jss' <- case newState of
-                Finished -> foldM triggerDep jss deps
-                _        -> return $ foldl' (cancelDep name) jss depNames
-            return (jss', delete name rdeps)
+                Finished -> foldM triggerDep jss rdeps
+                _        -> return $ foldl' (cancelDep name) jss rdepNames
+            return (jss', allRdeps')
         handleDeps jss _ = return jss
+        removeRdep :: Name -> HashMap Name [Name] -> Name -> HashMap Name [Name]
+        removeRdep name allRdeps depName = case rdeps' of
+            [] -> HashMap.delete depName allRdeps
+            l  -> HashMap.insert depName l allRdeps
+            where
+                rdeps' = fromMaybe [] $ List.delete name <$> HashMap.lookup depName allRdeps
         cancelDep :: Name -> JSS -> Name -> JSS
         cancelDep name jss depName = adjust (setJobState . Failed $ DependencyFailed name) depName jss
         triggerDep :: JSS -> JobStatus -> AdvSTM JSS
