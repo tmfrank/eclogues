@@ -73,7 +73,7 @@ instance FromJSON JobState where
                 "UserKilled"      -> pure $ Failed UserKilled
                 "MemoryExceeded"  -> pure $ Failed MemoryExceeded
                 "DiskExceeded"    -> pure $ Failed DiskExceeded
-                "NonZeroExitCode" -> Failed <$> NonZeroExitCode <$> v .: "exitCode"
+                "NonZeroExitCode" -> Failed . NonZeroExitCode <$> v .: "exitCode"
                 _                 -> mzero
             _          -> mzero
     parseJSON _ = mzero
