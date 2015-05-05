@@ -108,7 +108,7 @@ createJob state spec = catchUnexpectedResponse . mapExceptT atomically $ do
     lift . writeTVar (jobs state) $ insert name (JobStatus spec jstate) jss
     where
         catchUnexpectedResponse :: ExceptT JobError IO a -> ExceptT JobError IO a
-        catchUnexpectedResponse = mapExceptT $ (fmap $ join . mapLeft UnexpectedResponse) . try
+        catchUnexpectedResponse = mapExceptT $ fmap (join . mapLeft UnexpectedResponse) . try
         checkDep :: Name -> JSS -> Name -> ExceptT JobError AdvSTM Integer
         checkDep name jss depName
             | Just ds <- HashMap.lookup depName jss = case jobState ds of
@@ -151,7 +151,7 @@ updateJobs state = do
         curStatuses <- readTVar $ jobs state
         rdeps <- readTVar $ revDeps state
         -- For union, first map has priority
-        let newStatuses = union updatedStatuses curStatuses
+        let newStatuses = updatedStatuses `union` curStatuses
         (newStatuses', rdeps') <- foldM handleDeps (newStatuses, rdeps) transitions
         writeTVar (jobs state) newStatuses'
         writeTVar (revDeps state) rdeps'
@@ -174,7 +174,7 @@ updateJobs state = do
         transition newStates name pst = do
             let newState = fromMaybe RunError $ lookup name newStates
             let oldState = jobState pst
-            when (newState /= oldState) $ tell $ [Transition name oldState newState]
+            when (newState /= oldState) $ tell [Transition name oldState newState]
             pure pst { jobState = newState }
         handleDeps :: (JSS, HashMap Name [Name]) -> StateTransition -> AdvSTM (JSS, HashMap Name [Name])
         handleDeps (jss, rdeps) (Transition name _ newState) | isTerminationState newState = do

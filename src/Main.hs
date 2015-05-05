@@ -59,9 +59,9 @@ server appState = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> del
     onError e = case e of
         UnexpectedResponse res   -> (500, show res)
         NoSuchJob                -> (404, "")
-        JobMustBeTerminated yn   -> (409, "Job " ++ (bool "must not" "must" yn) ++ " be terminated")
-        JobMustExist name        -> (409, "Job " ++ (L.unpack name) ++ " must already exist")
-        JobCannotHaveFailed name -> (409, "Job " ++ (L.unpack name) ++ " cannot have failed")
+        JobMustBeTerminated yn   -> (409, "Job " ++ bool "must not" "must" yn ++ " be terminated")
+        JobMustExist name        -> (409, "Job " ++ L.unpack name ++ " must already exist")
+        JobCannotHaveFailed name -> (409, "Job " ++ L.unpack name ++ " cannot have failed")
         JobNameUsed              -> (409, "Job name already used")
     toEitherT = EitherT . runExceptT
 
