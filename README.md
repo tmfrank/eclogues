@@ -27,7 +27,7 @@ Kill a job, by putting the following state:
 ```
 
 ### DELETE `/job/:name`
-Clean up a non-terminated job.
+Clean up a terminated job.
 
 ### POST `/create`
 Post a task spec of the form:
