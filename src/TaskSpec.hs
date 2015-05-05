@@ -38,11 +38,11 @@ data FailureReason = UserKilled
                    | DiskExceeded --(Value Double Byte)
                    deriving (Show, Eq)
 
-data JobState = Waiting | Running | Finished | Failed FailureReason | RunError
+data JobState = Queued | Running | Finished | Failed FailureReason | RunError
                 deriving (Show, Eq)
 
 isTerminationState :: JobState -> Bool
-isTerminationState Waiting    = False
+isTerminationState Queued    = False
 isTerminationState Running    = False
 isTerminationState Finished   = True
 isTerminationState (Failed _) = True
@@ -52,7 +52,7 @@ isActiveState :: JobState -> Bool
 isActiveState = not . isTerminationState
 
 instance ToJSON JobState where
-    toJSON Waiting  = object ["type" .= "Waiting"]
+    toJSON Queued  = object ["type" .= "Queued"]
     toJSON Running  = object ["type" .= "Running"]
     toJSON Finished = object ["type" .= "Finished"]
     toJSON RunError = object ["type" .= "RunError"]
@@ -65,7 +65,7 @@ instance FromJSON JobState where
     parseJSON (Aeson.Object v) = do
         typ <- v .: "type"
         case typ of
-            "Waiting"  -> pure Waiting
+            "Queued"   -> pure Queued
             "Running"  -> pure Running
             "Finished" -> pure Finished
             "RunError" -> pure RunError

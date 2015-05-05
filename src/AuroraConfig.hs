@@ -223,19 +223,19 @@ getJobName :: ScheduledTask -> L.Text
 getJobName = jobKey_name . taskConfig_job . assignedTask_task . scheduledTask_assignedTask
 
 jobState' :: ScheduleStatus -> [TaskEvent] -> JobState
-jobState' INIT       _  = Waiting
+jobState' INIT       _  = Queued
 jobState' THROTTLED  _  = Running
-jobState' PENDING    _  = Waiting
-jobState' ASSIGNED   _  = Waiting
+jobState' PENDING    _  = Queued
+jobState' ASSIGNED   _  = Queued
 jobState' STARTING   _  = Running
 jobState' RUNNING    _  = Running
 jobState' KILLING    _  = Running
-jobState' PREEMPTING _  = Waiting
-jobState' RESTARTING _  = Waiting
-jobState' DRAINING   _  = Waiting
+jobState' PREEMPTING _  = Queued
+jobState' RESTARTING _  = Queued
+jobState' DRAINING   _  = Queued
 jobState' LOST       es =
   if KILLING `notElem` (taskEvent_status <$> es)
-    then Waiting
+    then Queued
     else Failed UserKilled
 jobState' KILLED     es = jobEventsToState es
 jobState' FINISHED   es = jobEventsToState es
@@ -243,7 +243,7 @@ jobState' FAILED     es = jobEventsToState es
 
 jobEventsToState :: [TaskEvent] -> JobState
 jobEventsToState es
-  | any isRescheduleEvent events = Waiting
+  | any isRescheduleEvent events = Queued
   | KILLED `elem` events         = Failed UserKilled
   | Just fev <- find ((== FAILED) . taskEvent_status) es =
       maybe RunError failureState $ taskEvent_message fev

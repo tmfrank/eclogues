@@ -85,7 +85,7 @@ createJob state spec = catchUnexpectedResponse . mapExceptT atomically $ do
         let subspec = spec { taskCommand = "aurora-rest-subexecutor " <> name }
         client <- A.thriftClient $ auroraURI state
         throwExc $ A.createJob client subspec
-    lift . writeTVar jobsV $ insert name (JobStatus spec Waiting) jss
+    lift . writeTVar jobsV $ insert name (JobStatus spec Queued) jss
     where
         catchUnexpectedResponse :: ExceptT JobError IO a -> ExceptT JobError IO a
         catchUnexpectedResponse = mapExceptT $ (fmap $ join . mapLeft UnexpectedResponse) . try
