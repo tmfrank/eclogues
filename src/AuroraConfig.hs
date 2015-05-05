@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module AuroraConfig ( ATaskExecConf, TaskConfig
-                    , auroraJobConfig, lockKey, taskSpec, defaultJobKey
+                    , auroraJobConfig, lockKey, defaultJobKey
                     , getJobName, getJobState ) where
 
 import Api_Types hiding (DRAINING, FAILED, FINISHED)
@@ -12,16 +12,14 @@ import Api_Types2
 import TaskSpec (TaskSpec (TaskSpec), Resources (Resources), JobState (..), FailureReason (..))
 import Units
 
-import Control.Applicative ((<$>), pure)
-import Data.Aeson (ToJSON (toJSON), eitherDecode)
+import Control.Applicative ((<$>))
+import Data.Aeson (ToJSON (toJSON))
 import Data.Aeson.Encode (encodeToTextBuilder)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import qualified Data.HashSet as HashSet
 import Data.Foldable (toList)
 import Data.Int (Int32, Int64)
 import Data.List (find)
-import Data.Maybe (listToMaybe)
-import Data.Text.Lazy.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as L
 import Data.Text.Lazy.Builder (toLazyText)
 
@@ -198,23 +196,6 @@ auroraJobConfig (TaskSpec name cmd resources@(Resources disk ram cpu)) = job whe
                         , p_min_duration = defaultMinDuration
                         , p_cmdline      = cmd
                         , p_final        = False }
-
-taskSpec :: JobConfiguration -> Either String TaskSpec
-taskSpec jc = do
-    let tc        = jobConfiguration_taskConfig jc
-    let name      = taskConfig_jobName tc
-    let resources = Resources (mega byte . fromIntegral $ taskConfig_diskMb tc) (mebi byte . fromIntegral $ taskConfig_ramMb tc) (core $ taskConfig_numCpus tc)
-
-    execc <- orError "No executor configuration" $ taskConfig_executorConfig tc
-    tec   <- eitherDecode . encodeUtf8 $ executorConfig_data execc
-    proc  <- orError "No processes in task" . listToMaybe . task_processes . tec_task $ tec
-    let command = p_cmdline proc
-
-    pure $ TaskSpec name command resources
-    where
-        orError :: String -> Maybe a -> Either String a
-        orError _ (Just a) = Right a
-        orError e Nothing  = Left  e
 
 lockKey :: L.Text -> LockKey
 lockKey = LockKey . defaultJobKey
