@@ -39,7 +39,7 @@ jobDir conf n = jobsDir conf ++ "/" ++ L.unpack n
 runScheduleCommand :: AppConfig -> ScheduleCommand r -> ExceptT A.UnexpectedResponse IO r
 runScheduleCommand conf (QueueJob spec) = do
     let dir = jobDir conf $ taskName spec
-        subspec = spec { taskCommand = "aurora-rest-subexecutor " <> taskName spec }
+        subspec = spec { taskCommand = "eclogues-subexecutor " <> taskName spec }
     lift $ do
         createDirectoryIfMissing False dir
         createDirectoryIfMissing False $ dir ++ "/workspace"

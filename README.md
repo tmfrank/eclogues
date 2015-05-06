@@ -1,9 +1,11 @@
-hs-aurora-thrift
-================
+eclogues
+========
+
+*The Eclogues (/ˈɛklɒɡz/; Latin: Eclogae [ˈɛklɔɡaj]), also called the Bucolics, is the first of the three major works of the Latin poet Virgil.*
 
 ```
 cabal build
-dist/build/aurora-thrift/aurora-thrift
+dist/build/eclogues-api/eclogues-api ./jobs 192.168.100.3:8081
 xdg-open http://localhost:8000
 ```
 
