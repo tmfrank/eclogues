@@ -105,6 +105,7 @@ createJob state spec = catchUnexpectedResponse . mapExceptT atomically $ do
     lift . onCommit $ do
         createDirectoryIfMissing False dir
         createDirectoryIfMissing False $ dir ++ "/workspace"
+        createDirectoryIfMissing False $ dir ++ "/output"
         writeFile (dir ++ "/spec.json") (encode spec)
         when (jstate == Queued) $ throwExc $ scheduleJob (auroraURI state) spec
     lift . writeTVar (jobs state) $ insert name (JobStatus spec jstate) jss

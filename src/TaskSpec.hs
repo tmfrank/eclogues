@@ -27,10 +27,11 @@ data Resources = Resources { disk :: Value Double MB
                            , cpu  :: Value Double Core }
                            deriving (Show, Eq)
 
-data TaskSpec = TaskSpec { taskName      :: Name
-                         , taskCommand   :: Command
-                         , taskResources :: Resources
-                         , taskDependsOn :: [Name] }
+data TaskSpec = TaskSpec { taskName        :: Name
+                         , taskCommand     :: Command
+                         , taskResources   :: Resources
+                         , taskOutputFiles :: [FilePath]
+                         , taskDependsOn   :: [Name] }
                          deriving (Show, Eq)
 
 data FailureReason = UserKilled
