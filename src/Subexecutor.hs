@@ -2,15 +2,17 @@
 
 module Main where
 
-import TaskSpec (Command, TaskSpec (taskCommand))
+import TaskSpec (Command, TaskSpec (..))
 
 import Prelude hiding (readFile)
 
 import Control.Applicative (pure)
+import Control.Arrow ((&&&))
 import Control.Monad ((<=<))
 import Data.Aeson (eitherDecode)
 import Data.ByteString.Lazy (readFile)
 import qualified Data.Text.Lazy as L
+import System.Directory (createDirectoryIfMissing)
 import System.Environment (getArgs)
 import System.Exit (ExitCode)
 import System.Process (callProcess, spawnCommand, waitForProcess)
@@ -31,15 +33,21 @@ copyDirContents from to = callProcess "/bin/cp" ["-r", from ++ "/.", to]
 
 runTask :: FilePath -> String -> IO ()
 runTask path name = do
-    let dir = path ++ "/" ++ name
-    spec <- orError =<< readTaskSpec (dir ++ "/spec.json")
+    spec <- orError =<< readTaskSpec (specDir ++ "/spec.json")
 
-    let wsdir = dir ++ "/workspace"
-    copyDirContents wsdir "."
+    copyDirContents (ws name) "."
+    createDirectoryIfMissing False depDir
+    mapM_ copyDep $ taskDependsOn spec
+
     exitCode <- runCommand $ taskCommand spec
-    copyDirContents "." wsdir
 
-    writeFile (dir ++ "/exitcode") (show exitCode)
+    copyDirContents "." (ws name)
+    writeFile (specDir ++ "/exitcode") (show exitCode)
+    where
+        specDir = path ++ "/" ++ name
+        depDir = "./yb-dependencies/"
+        ws n = path ++ "/" ++ n ++ "/workspace"
+        copyDep = uncurry copyDirContents . (ws &&& (depDir ++)) . L.unpack
 
 main :: IO ()
 main = do

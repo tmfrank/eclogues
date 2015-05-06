@@ -96,7 +96,8 @@ executable aurora-rest-subexecutor
                        aeson ==0.8.*,
                        void >=0.3,
                        bytestring ==0.10.*,
-                       process ==1.2.*
+                       process ==1.2.*,
+                       directory ==1.2.*
 
   hs-source-dirs:      src
 
