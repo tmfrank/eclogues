@@ -41,7 +41,8 @@ Post a task spec of the form:
     "resources": {
         "disk": "10",
         "ram": "10",
-        "cpu": "0.1"
+        "cpu": "0.1",
+        "time": "5"
     },
     "outputfiles": ["hello.txt"],
     "capturestdout": false,
