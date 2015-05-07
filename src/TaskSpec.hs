@@ -6,11 +6,11 @@
 
 module TaskSpec where
 
-import Control.Applicative ((<$>), pure)
-import Control.Monad (mzero)
+import Control.Applicative ((<$>), (<*>), pure)
+import Control.Monad ((<=<))
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
 import qualified Data.Aeson as Aeson
-import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
+import Data.Aeson.TH (deriveJSON, deriveToJSON, defaultOptions, fieldLabelModifier)
 import Data.Char (toLower)
 import qualified Data.Text
 import qualified Data.Text.Lazy as L
@@ -90,9 +90,18 @@ instance FromJSON JobState where
                 "TimeExceeded"     -> pure $ Failed TimeExceeded
                 "NonZeroExitCode"  -> Failed . NonZeroExitCode <$> v .: "exitCode"
                 "DependencyFailed" -> Failed . DependencyFailed <$> v .: "dependency"
-                _                  -> mzero
-            _          -> mzero
-    parseJSON _ = mzero
+                _                  -> fail "Invalid failure reason"
+            _          -> fail "Invalid job state type"
+    parseJSON _ = fail "Invalid job state value"
+
+instance FromJSON Resources where
+    parseJSON = validate <=< getJSON where
+        getJSON (Aeson.Object v) = Resources <$> v .: "disk" <*> v .: "ram" <*> v .: "cpu" <*> v .: "time"
+        getJSON _                = fail "Invalid resources value"
+        validate res@(Resources dsk rm cu te) =
+            if any ((== -1) . signum) [val dsk, val rm, val cu, fromIntegral (val te)]
+                then fail "Negative resource value"
+                else pure res
 
 $(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 4} ''TaskSpec)
-$(deriveJSON defaultOptions ''Resources)
+$(deriveToJSON defaultOptions ''Resources)
