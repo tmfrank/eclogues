@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
@@ -9,7 +10,8 @@ import Prelude hiding (writeFile)
 import AppConfig (AppConfig (..))
 import qualified AuroraAPI as A
 import AuroraConfig (getJobName, getJobState)
-import TaskSpec (TaskSpec (..), JobState (..), Name, FailureReason (NonZeroExitCode))
+import TaskSpec ( TaskSpec (..), JobState (..), Name
+                , FailureReason (NonZeroExitCode, TimeExceeded), RunResult (..))
 
 import Control.Applicative ((<$>), pure)
 import Control.Arrow ((&&&))
@@ -60,12 +62,13 @@ runScheduleCommand conf (GetStatuses names) = do
     where
         checkFinState :: (Name, JobState) -> IO (Name, JobState)
         checkFinState (n, Finished) = do
-            exitCodeStrM <- try $ readFile (jobDir conf n ++ "/exitcode") :: IO (Either IOException String)
+            exitCodeStrM <- try $ readFile (jobDir conf n ++ "/runresult") :: IO (Either IOException String)
             case exitCodeStrM of
                 Left  _ -> pure (n, RunError)
-                Right a -> pure . (n,) . fromMaybe RunError $ checkExitCode <$> maybeRead a
+                Right a -> pure . (n,) . fromMaybe RunError $ checkRunResult <$> maybeRead a
         checkFinState e = pure e
-        checkExitCode :: ExitCode -> JobState
-        checkExitCode exitCode = case exitCode of
-            ExitSuccess   -> Finished
-            ExitFailure c -> Failed (NonZeroExitCode c)
+        checkRunResult :: RunResult -> JobState
+        checkRunResult = \case
+            Ended ExitSuccess     -> Finished
+            Ended (ExitFailure c) -> Failed (NonZeroExitCode c)
+            Overtime              -> Failed TimeExceeded

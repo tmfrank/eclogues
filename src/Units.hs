@@ -38,6 +38,9 @@ instance Unit Byte where
 instance Unit Core where
     unitString = const "cores"
 
+instance Unit Second where
+    unitString = const "s"
+
 instance (UnitPrefix p, Unit a) => Unit (p a) where
     unitString = const $ prefixString (Proxy :: Proxy (p Void)) ++ unitString (Proxy :: Proxy a)
 

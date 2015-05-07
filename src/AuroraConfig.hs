@@ -142,10 +142,10 @@ defaultCronCollisionPolicy :: CronCollisionPolicy
 defaultCronCollisionPolicy = KILL_EXISTING
 
 aResources :: Resources -> AResources
-aResources (Resources disk ram cpu) = AResources (ceiling $ disk `asVal` byte) (ceiling $ ram `asVal` byte) (cpu `asVal` core)
+aResources (Resources disk ram cpu _) = AResources (ceiling $ disk `asVal` byte) (ceiling $ ram `asVal` byte) (cpu `asVal` core)
 
 auroraJobConfig :: TaskSpec -> JobConfiguration
-auroraJobConfig (TaskSpec name cmd resources@(Resources disk ram cpu) _ _ _) = job where
+auroraJobConfig (TaskSpec name cmd resources@(Resources disk ram cpu _) _ _ _) = job where
     jobKey = defaultJobKey name
     job = JobConfiguration  { jobConfiguration_key                 = jobKey
                             , jobConfiguration_owner               = defaultOwner

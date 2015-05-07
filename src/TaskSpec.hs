@@ -14,6 +14,7 @@ import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import Data.Char (toLower)
 import qualified Data.Text
 import qualified Data.Text.Lazy as L
+import System.Exit (ExitCode)
 
 import Units
 
@@ -24,7 +25,8 @@ type Command = L.Text
 
 data Resources = Resources { disk :: Value Double MB
                            , ram  :: Value Double MiB
-                           , cpu  :: Value Double Core }
+                           , cpu  :: Value Double Core
+                           , time :: Value Int Second }
                            deriving (Show, Eq)
 
 data TaskSpec = TaskSpec { taskName          :: Name
@@ -35,10 +37,13 @@ data TaskSpec = TaskSpec { taskName          :: Name
                          , taskDependsOn     :: [Name] }
                          deriving (Show, Eq)
 
+data RunResult = Ended ExitCode | Overtime deriving (Show, Read)
+
 data FailureReason = UserKilled
                    | NonZeroExitCode Int
                    | MemoryExceeded --(Value Double Byte)
                    | DiskExceeded --(Value Double Byte)
+                   | TimeExceeded
                    | DependencyFailed Name
                    deriving (Show, Eq)
 
@@ -66,6 +71,7 @@ instance ToJSON JobState where
     toJSON (Failed (NonZeroExitCode c)) = object ["type" .= "Failed", "reason" .= "NonZeroExitCode", "exitCode" .= c]
     toJSON (Failed MemoryExceeded) = object ["type" .= "Failed", "reason" .= "MemoryExceeded"]
     toJSON (Failed DiskExceeded) = object ["type" .= "Failed", "reason" .= "DiskExceeded"]
+    toJSON (Failed TimeExceeded) = object ["type" .= "Failed", "reason" .= "TimeExceeded"]
     toJSON (Failed (DependencyFailed n)) = object ["type" .= "Failed", "reason" .= "DependencyFailed", "dependency" .= n]
 
 instance FromJSON JobState where
@@ -81,6 +87,7 @@ instance FromJSON JobState where
                 "UserKilled"       -> pure $ Failed UserKilled
                 "MemoryExceeded"   -> pure $ Failed MemoryExceeded
                 "DiskExceeded"     -> pure $ Failed DiskExceeded
+                "TimeExceeded"     -> pure $ Failed TimeExceeded
                 "NonZeroExitCode"  -> Failed . NonZeroExitCode <$> v .: "exitCode"
                 "DependencyFailed" -> Failed . DependencyFailed <$> v .: "dependency"
                 _                  -> mzero
