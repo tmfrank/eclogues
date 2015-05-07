@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Main where
 
@@ -11,7 +12,8 @@ import Control.Applicative ((*>), pure)
 import Control.Arrow ((&&&))
 import Control.Conditional (condM, otherwiseM)
 import Control.Monad (when)
-import Data.Aeson (eitherDecode)
+import Data.Aeson (FromJSON, eitherDecode)
+import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Data.ByteString.Lazy (readFile)
 import qualified Data.Text.Lazy as L
 import System.Directory (createDirectoryIfMissing, doesFileExist, doesDirectoryExist, copyFile)
@@ -21,8 +23,12 @@ import System.FilePath ((</>))
 import System.Path (copyDir)
 import System.Process (callProcess, spawnProcess, waitForProcess)
 
-readTaskSpec :: FilePath -> IO (Either String TaskSpec)
-readTaskSpec = fmap eitherDecode . readFile
+data SubexecutorConfig = SubexecutorConfig { jobsDir :: FilePath }
+
+$(deriveJSON defaultOptions ''SubexecutorConfig)
+
+readJSON :: (FromJSON a) => FilePath -> IO (Either String a)
+readJSON = fmap eitherDecode . readFile
 
 orError :: Either String a -> IO a
 orError = \case
@@ -49,7 +55,7 @@ copyFileOrDir from to =
 
 runTask :: FilePath -> String -> IO ()
 runTask path name = do
-    spec <- orError =<< readTaskSpec (specDir </> "spec.json")
+    spec <- orError =<< readJSON (specDir </> "spec.json")
 
     copyDirContents (specDir </> "workspace") "."
     createDirectoryIfMissing False depsDir
@@ -70,6 +76,6 @@ runTask path name = do
 
 main :: IO ()
 main = do
-    let path = "/vagrant/jobs"
+    conf <- orError =<< readJSON "/etc/eclogues/subexecutor.json"
     (name:_) <- getArgs
-    runTask path name
+    runTask (jobsDir conf) name
