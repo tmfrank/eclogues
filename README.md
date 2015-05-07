@@ -44,6 +44,7 @@ Post a task spec of the form:
         "cpu": "0.1"
     },
     "outputfiles": ["hello.txt"],
+    "capturestdout": false,
     "dependson": []
 }
 ```

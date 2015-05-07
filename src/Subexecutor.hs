@@ -9,7 +9,7 @@ import Prelude hiding (readFile)
 import Control.Applicative ((*>), pure)
 import Control.Arrow ((&&&))
 import Control.Conditional (condM, otherwiseM)
-import Control.Monad ((<=<))
+import Control.Monad ((<=<), when)
 import Data.Aeson (eitherDecode)
 import Data.ByteString.Lazy (readFile)
 import qualified Data.Text.Lazy as L
@@ -54,8 +54,10 @@ runTask path name = do
     -- TODO: Trigger Failed state when output doesn't exist
     mapM_ (flip copyFileOrDir (specDir </> "output/")) $ taskOutputFiles spec
     writeFile (specDir </> "exitcode") (show exitCode)
+    when (taskCaptureStdout spec) $ copyFile stdout $ specDir </> "output/stdout"
     where
         specDir = path </> name
+        stdout = ".logs" </> name </> "0/stdout"
         depsDir = "./yb-dependencies/"
         depOutput n = path </> n </> "output"
         copyDep = uncurry copyDirContents . (depOutput &&& (depsDir ++)) . L.unpack
