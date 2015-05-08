@@ -13,6 +13,7 @@ import TaskAPI ( AppState, JobStatus (jobState), JobError (..), newAppState
                , createJob, killJob, deleteJob, getJob, getJobs, updateJobs, activeJobs )
 import TaskSpec (TaskSpec (..), Name, JobState (..), FailureReason (..))
 import Units
+import Zookeeper (getAuroraMaster)
 
 import Control.Applicative ((<$>), (<*), pure)
 import Control.Concurrent (threadDelay)
@@ -88,12 +89,17 @@ server conf stateV = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> 
 
 main :: IO ()
 main = do
-    (jobsDir:hostArg:_) <- getArgs
-    let (Just uri) = parseURI $ "http://" ++ hostArg ++ "/api"
+    (jobsDir:zkUri:_) <- getArgs
+    auroraHostM <- runExceptT $ getAuroraMaster zkUri "/aurora/scheduler"
+    let (host, port) = case auroraHostM of
+            Right (Just hst) -> hst
+            e                -> error (show e)
+        (Just uri) = parseURI $ "http://" ++ host ++ ':':(show port) ++ "/api"
         conf = AppConfig jobsDir uri
     stateV <- atomically $ newTVar newAppState
     createDirectoryIfMissing False jobsDir
 
+    hPutStrLn stderr $ "Found Aurora API at " ++ show uri
     hPutStrLn stderr "Starting server on port 8000"
 
     let web = run 8000 $ serve (Proxy :: (Proxy VAPI)) $ server conf stateV

@@ -79,7 +79,8 @@ executable eclogues-api
                        stm-io-hooks ==1.0.*,
                        async ==2.0.*,
                        utility-ht >=0.0.8 && < 0.1,
-                       mmorph ==1.0.*
+                       mmorph ==1.0.*,
+                       hzk ==2.1.*
 
   -- Directories containing source files.
   hs-source-dirs:      src, gen-hs
