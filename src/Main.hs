@@ -77,7 +77,6 @@ server conf stateV = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> 
     killJobH jid _                   = left (409, "Can only set state to Failed UserKilled") <* getJobH jid
 
     onError e = case e of
-        UnexpectedResponse res   -> (500, show res)
         NoSuchJob                -> (404, "")
         JobMustBeTerminated yn   -> (409, "Job " ++ bool "must not" "must" yn ++ " be terminated")
         JobMustExist name        -> (409, "Job " ++ L.unpack name ++ " must already exist")

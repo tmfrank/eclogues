@@ -6,7 +6,6 @@ module TaskAPI ( AppState (..), newAppState
                , JobError (..), createJob, updateJobs, getJob, getJobs, activeJobs, killJob, deleteJob )
                where
 
-import qualified AuroraAPI as A
 import Scheduling (ScheduleCommand (..))
 import TaskSpec ( TaskSpec (..), Name, FailureReason (DependencyFailed)
                 , JobState (..), isActiveState, isTerminationState )
@@ -41,8 +40,7 @@ type RevDeps = HashMap Name [Name]
 newAppState :: AppState
 newAppState = AppState empty empty
 
-data JobError = UnexpectedResponse A.UnexpectedResponse
-              | JobNameUsed
+data JobError = JobNameUsed
               | NoSuchJob
               | JobMustExist Name
               | JobCannotHaveFailed Name
