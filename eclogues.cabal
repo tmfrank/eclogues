@@ -53,6 +53,8 @@ executable eclogues-api
   -- Modules included in this executable, other than Main.
   -- other-modules:
 
+  default-extensions:  ScopedTypeVariables
+
   -- LANGUAGE extensions used by modules in this package.
   other-extensions:    DeriveDataTypeable, OverloadedStrings, RankNTypes, MultiParamTypeClasses, ScopedTypeVariables, CPP, FlexibleInstances, TypeSynonymInstances, ExistentialQuantification, TupleSections, TemplateHaskell, DataKinds, TypeOperators, LambdaCase, EmptyDataDecls, KindSignatures
 
@@ -90,6 +92,8 @@ executable eclogues-api
 
 executable eclogues-subexecutor
   main-is:             Subexecutor.hs
+
+  default-extensions:  ScopedTypeVariables
 
   ghc-options:         -threaded -with-rtsopts=-N -Wall -Werror
 
