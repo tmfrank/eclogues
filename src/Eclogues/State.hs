@@ -1,14 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module TaskAPI ( AppState (..), newAppState
-               , JobStatus (..)
-               , JobError (..), createJob, updateJobs, getJob, getJobs, activeJobs, killJob, deleteJob )
-               where
+module Eclogues.State (
+      AppState (..), newAppState
+    , JobStatus (..)
+    , JobError (..), createJob, updateJobs, getJob, getJobs, activeJobs, killJob, deleteJob )
+    where
 
-import Scheduling (ScheduleCommand (..))
-import TaskSpec ( TaskSpec (..), Name, FailureReason (DependencyFailed)
-                , JobState (..), isActiveState, isTerminationState )
+import Eclogues.Scheduling.Command (ScheduleCommand (..))
+import Eclogues.TaskSpec ( TaskSpec (..), Name, FailureReason (DependencyFailed)
+                         , JobState (..), isActiveState, isTerminationState )
 
 import Control.Applicative ((<$>), (*>), pure)
 import Control.Monad (when, foldM)

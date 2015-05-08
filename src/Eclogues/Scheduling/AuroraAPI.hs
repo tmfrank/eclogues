@@ -1,9 +1,10 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module AuroraAPI ( Client, Result, JobConfiguration, UnexpectedResponse (..)
-                 , thriftClient, acquireLock, releaseLock, createJob
-                 , getJobs, getTasksWithoutConfigs, killTasks ) where
+module Eclogues.Scheduling.AuroraAPI (
+      Client, Result, JobConfiguration, UnexpectedResponse (..)
+    , thriftClient, acquireLock, releaseLock, createJob
+    , getJobs, getTasksWithoutConfigs, killTasks ) where
 
 import Api_Types ( Response (response_responseCode, response_result)
                  , JobConfiguration, getJobsResult_configs, result_getJobsResult
@@ -16,8 +17,8 @@ import Api_Types2 (ResponseCode (OK))
 import qualified AuroraSchedulerManager_Client as AClient
 import qualified ReadOnlyScheduler_Client as ROClient
 
-import AuroraConfig (auroraJobConfig, lockKey, defaultJobKey)
-import TaskSpec (TaskSpec, Name)
+import Eclogues.Scheduling.AuroraConfig (auroraJobConfig, lockKey, defaultJobKey)
+import Eclogues.TaskSpec (TaskSpec, Name)
 
 import Control.Applicative ((<$>), pure)
 import Control.Exception (Exception)

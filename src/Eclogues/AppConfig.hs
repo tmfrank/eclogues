@@ -1,4 +1,4 @@
-module AppConfig where
+module Eclogues.AppConfig where
 
 import Network.URI (URI)
 

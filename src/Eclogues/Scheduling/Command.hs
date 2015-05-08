@@ -2,15 +2,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
-module Scheduling where
+module Eclogues.Scheduling.Command where
 
 import Prelude hiding (writeFile)
 
-import AppConfig (AppConfig (..))
-import qualified AuroraAPI as A
-import AuroraConfig (getJobName, getJobState)
-import TaskSpec ( TaskSpec (..), JobState (..), Name
-                , FailureReason (NonZeroExitCode, TimeExceeded), RunResult (..))
+import Eclogues.AppConfig (AppConfig (..))
+import qualified Eclogues.Scheduling.AuroraAPI as A
+import Eclogues.Scheduling.AuroraConfig (getJobName, getJobState)
+import Eclogues.TaskSpec (
+      TaskSpec (..), JobState (..), Name
+    , FailureReason (NonZeroExitCode, TimeExceeded), RunResult (..))
 
 import Control.Applicative ((<$>), pure)
 import Control.Arrow ((&&&))

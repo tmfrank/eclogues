@@ -6,13 +6,14 @@
 
 module Main where
 
-import AppConfig (AppConfig (AppConfig))
-import Scheduling (ScheduleCommand (GetStatuses), runScheduleCommand)
-import TaskAPI ( AppState, JobStatus (jobState), JobError (..), newAppState
-               , createJob, killJob, deleteJob, getJob, getJobs, updateJobs, activeJobs )
-import TaskSpec (TaskSpec (..), Name, JobState (..), FailureReason (..))
+import Eclogues.AppConfig (AppConfig (AppConfig))
+import Eclogues.Scheduling.Command (ScheduleCommand (GetStatuses), runScheduleCommand)
+import Eclogues.State ( AppState, JobStatus (jobState), JobError (..), newAppState
+                      , getJobs, activeJobs
+                      , createJob, killJob, deleteJob, getJob, updateJobs )
+import Eclogues.TaskSpec (TaskSpec (..), Name, JobState (..), FailureReason (..))
+import Eclogues.Zookeeper (getAuroraMaster, whenLeader)
 import Units
-import Zookeeper (getAuroraMaster, whenLeader)
 
 import Control.Applicative ((<$>), (<*), pure)
 import Control.Concurrent (threadDelay)

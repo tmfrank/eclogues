@@ -2,14 +2,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module AuroraConfig ( ATaskExecConf, TaskConfig
-                    , auroraJobConfig, lockKey, defaultJobKey
-                    , getJobName, getJobState ) where
+module Eclogues.Scheduling.AuroraConfig (
+      ATaskExecConf, TaskConfig
+    , auroraJobConfig, lockKey, defaultJobKey
+    , getJobName, getJobState ) where
 
 import Api_Types hiding (DRAINING, FAILED, FINISHED)
 import Api_Types2
 
-import TaskSpec (TaskSpec (TaskSpec), Resources (Resources), JobState (..), FailureReason (..))
+import Eclogues.TaskSpec (TaskSpec (TaskSpec), Resources (Resources), JobState (..), FailureReason (..))
 import Units
 
 import Control.Applicative ((<$>))

@@ -2,7 +2,7 @@
 
 module Main where
 
-import TaskSpec (Command, TaskSpec (..), Resources (..), RunResult (..))
+import Eclogues.TaskSpec (Command, TaskSpec (..), Resources (..), RunResult (..))
 import Units
 
 import Prelude hiding (readFile)

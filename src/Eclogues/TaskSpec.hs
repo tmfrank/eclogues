@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
-module TaskSpec where
+module Eclogues.TaskSpec where
 
 import Control.Applicative ((<$>), (<*>), pure)
 import Control.Monad ((<=<))
