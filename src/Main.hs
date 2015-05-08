@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
@@ -13,7 +12,7 @@ import TaskAPI ( AppState, JobStatus (jobState), JobError (..), newAppState
                , createJob, killJob, deleteJob, getJob, getJobs, updateJobs, activeJobs )
 import TaskSpec (TaskSpec (..), Name, JobState (..), FailureReason (..))
 import Units
-import Zookeeper (getAuroraMaster)
+import Zookeeper (getAuroraMaster, whenLeader)
 
 import Control.Applicative ((<$>), (<*), pure)
 import Control.Concurrent (threadDelay)
@@ -21,11 +20,12 @@ import Control.Concurrent.AdvSTM (atomically, onCommit)
 import Control.Concurrent.AdvSTM.TVar (TVar, newTVar, readTVar, writeTVar)
 import Control.Concurrent.Async (race_)
 import Control.Exception (Exception, throwIO)
-import Control.Monad (forever)
+import Control.Monad (forever, void)
 import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Either (EitherT (..), left)
 import Control.Monad.Trans.Except (Except, ExceptT, runExceptT, withExceptT, mapExceptT)
+import qualified Data.ByteString.Char8 as BC
 import Data.HashMap.Lazy (keys)
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Lazy as L
@@ -89,7 +89,7 @@ server conf stateV = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> 
 
 main :: IO ()
 main = do
-    (jobsDir:zkUri:_) <- getArgs
+    (jobsDir:zkUri:myHost:_) <- getArgs
     auroraHostM <- runExceptT $ getAuroraMaster zkUri "/aurora/scheduler"
     let (host, port) = case auroraHostM of
             Right (Just hst) -> hst
@@ -100,7 +100,6 @@ main = do
     createDirectoryIfMissing False jobsDir
 
     hPutStrLn stderr $ "Found Aurora API at " ++ show uri
-    hPutStrLn stderr "Starting server on port 8000"
 
     let web = run 8000 $ serve (Proxy :: (Proxy VAPI)) $ server conf stateV
         updater = forever $ goUpdate >> threadDelay (floor $ second (1 :: Double) `asVal` micro second)
@@ -114,4 +113,6 @@ main = do
             atomically $ do
                 onCommit . throwExc $ mapM_ (runScheduleCommand conf) cmds
                 writeTVar stateV state'
-    race_ web updater
+    void . runExceptT . withExceptT (error . show) . whenLeader zkUri "/eclogues" (BC.pack myHost) $ do
+        hPutStrLn stderr "Starting server on port 8000"
+        race_ web updater

@@ -5,7 +5,7 @@ eclogues
 
 ```
 cabal build
-dist/build/eclogues-api/eclogues-api ./jobs 192.168.100.3:8081
+dist/build/eclogues-api/eclogues-api ./jobs 192.168.100.3:8081 localhost
 xdg-open http://localhost:8000
 ```
 
