@@ -3,17 +3,14 @@
 module Main where
 
 import Eclogues.TaskSpec (Command, TaskSpec (..), Resources (..), RunResult (..))
+import Eclogues.Util (readJSON, orError)
 import Units
-
-import Prelude hiding (readFile)
 
 import Control.Applicative ((*>), pure)
 import Control.Arrow ((&&&))
 import Control.Conditional (condM, otherwiseM)
 import Control.Monad (when)
-import Data.Aeson (FromJSON, eitherDecode)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
-import Data.ByteString.Lazy (readFile)
 import qualified Data.Text.Lazy as L
 import System.Directory (createDirectoryIfMissing, doesFileExist, doesDirectoryExist, copyFile)
 import System.Environment (getArgs)
@@ -25,14 +22,6 @@ import System.Process (callProcess, spawnProcess, waitForProcess)
 data SubexecutorConfig = SubexecutorConfig { jobsDir :: FilePath }
 
 $(deriveJSON defaultOptions ''SubexecutorConfig)
-
-readJSON :: (FromJSON a) => FilePath -> IO (Either String a)
-readJSON = fmap eitherDecode . readFile
-
-orError :: Either String a -> IO a
-orError = \case
-    Right a -> pure a
-    Left  e -> error e
 
 runCommand :: Value Int Second -> Command -> IO RunResult
 runCommand timeout cmd = do
