@@ -4,8 +4,8 @@ module Main where
 
 import Api_Types
 
-import AuroraConfig
-import TaskSpec
+import Eclogues.Scheduling.AuroraConfig
+import Eclogues.TaskSpec
 import Units
 
 import Test.Hspec
@@ -16,7 +16,7 @@ import Data.Text.Lazy.Encoding (encodeUtf8)
 
 spec :: Spec
 spec = do
-    let task = TaskSpec "hello" "/bin/echo" $ Resources (mega byte 10) (mebi byte 10) (core 0.1)
+    let task = TaskSpec "hello" "/bin/echo" (Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)) [] False []
 
     describe "ATaskExecConf" $
         it "is embedded in a JobConfiguration" $ do
@@ -24,10 +24,6 @@ spec = do
             let text = executorConfig_data ec
             let encoded = encodeUtf8 text
             (decode encoded :: Maybe ATaskExecConf) `shouldSatisfy` isJust
-
-    describe "TaskSpec" $
-        it "roundtrips with JobConfiguration" $
-            taskSpec (auroraJobConfig task) `shouldBe` Right task
 
     describe "Units" $ do
         it "keeps val" $
