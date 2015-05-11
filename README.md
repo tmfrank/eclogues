@@ -1,11 +1,11 @@
-eclogues
+Eclogues
 ========
 
 *The Eclogues (/ˈɛklɒɡz/; Latin: Eclogae [ˈɛklɔɡaj]), also called the Bucolics, is the first of the three major works of the Latin poet Virgil.*
 
 ```
 cabal build
-dist/build/eclogues-api/eclogues-api ./jobs 192.168.100.3:8081 localhost
+dist/build/eclogues-api/eclogues-api ./jobs ZOOKEEPER:2181,ADDRESSES:2181 THIS_HOST
 xdg-open http://localhost:8000
 ```
 
