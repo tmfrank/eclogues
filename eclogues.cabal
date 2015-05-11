@@ -117,6 +117,8 @@ executable eclogues-client
 
   default-extensions:  LambdaCase, ScopedTypeVariables
 
+  other-extensions:    TemplateHaskell
+
   ghc-options:         -threaded -with-rtsopts=-N -Wall -Werror
 
   build-depends:       base ==4.7.*,
@@ -130,7 +132,11 @@ executable eclogues-client
                        servant ==0.4.*,
                        servant-client ==0.4.0,
                        either ==4.3.*,
-                       http-types ==0.8.*
+                       http-types ==0.8.*,
+                       optparse-applicative ==0.11.*,
+                       xdg-basedir ==0.2.*,
+                       monad-loops ==0.4.*,
+                       directory ==1.2.*
 
   hs-source-dirs:      src
 
