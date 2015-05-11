@@ -7,6 +7,7 @@ module Eclogues.State (
     , JobError (..), createJob, updateJobs, getJob, getJobs, activeJobs, killJob, deleteJob )
     where
 
+import Eclogues.API (JobError (..))
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.TaskSpec ( TaskSpec (..), Name, FailureReason (DependencyFailed)
                          , JobState (..), isActiveState, isTerminationState
@@ -33,14 +34,6 @@ type RevDeps = HashMap Name [Name]
 
 newAppState :: AppState
 newAppState = AppState empty empty
-
-data JobError = JobNameUsed
-              | NoSuchJob
-              | JobMustExist Name
-              | JobCannotHaveFailed Name
-              | JobMustBeTerminated Bool
-              | OutstandingDependants [Name]
-                deriving (Show)
 
 jobName :: JobStatus -> Name
 jobName = taskName . jobSpec
