@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Main where
 
@@ -8,6 +7,7 @@ import Prelude hiding ((.))
 
 import Eclogues.API (VAPI)
 import Eclogues.AppConfig (AppConfig (AppConfig))
+import Eclogues.Instances ()
 import Eclogues.Scheduling.Command (ScheduleCommand (GetStatuses), runScheduleCommand)
 import Eclogues.State ( AppState, JobStatus (jobState), JobError (..), newAppState
                       , getJobs, activeJobs
@@ -28,23 +28,19 @@ import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (Except, ExceptT, runExceptT, withExceptT, mapExceptT, throwE)
 import Data.Aeson (encode)
-import qualified Data.ByteString.Char8 as BC
+import Data.ByteString.Lazy (toStrict)
 import Data.HashMap.Lazy (keys)
 import Data.Proxy (Proxy (Proxy))
-import qualified Data.Text.Lazy as L
+import Data.Word (Word16)
 import Network.URI (parseURI)
 import Network.Wai.Handler.Warp (run)
 import Servant.API ((:<|>) ((:<|>)))
-import Servant.Common.Text (FromText (..))
 import Servant.Server (Server, ServerT, ServantErr (..), (:~>) (..)
                       , enter, fromExceptT
                       , serve, err404, err409)
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (getArgs)
 import System.IO (hPutStrLn, stderr)
-
-instance FromText L.Text where
-    fromText = fmap L.fromStrict . fromText
 
 bool :: a -> a -> Bool -> a
 bool a b p = if p then b else a
@@ -109,6 +105,7 @@ main = do
             atomically $ do
                 onCommit . throwExc $ mapM_ (runScheduleCommand conf) cmds
                 writeTVar stateV state'
-    void . runExceptT . withExceptT (error . show) . whenLeader zkUri "/eclogues" (BC.pack myHost) $ do
+        advertisedHost = toStrict $ encode ((myHost, 8000) :: (String, Word16))
+    void . runExceptT . withExceptT (error . show) . whenLeader zkUri "/eclogues" advertisedHost $ do
         hPutStrLn stderr "Starting server on port 8000"
         race_ web updater

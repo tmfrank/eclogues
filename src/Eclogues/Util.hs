@@ -13,3 +13,8 @@ orError :: Either String a -> IO a
 orError = \case
     Right a -> pure a
     Left  e -> error e
+
+orShowError :: (Show e) => Either e a -> IO a
+orShowError = \case
+    Right a -> pure a
+    Left e  -> error $ show e

@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Eclogues.Zookeeper (getAuroraMaster, whenLeader) where
+module Eclogues.Zookeeper (ZKURI, ZookeeperError, getAuroraMaster, whenLeader, getLeaderInfo) where
 
 import Control.Applicative ((<$>), pure)
 import Control.Concurrent (MVar, newEmptyMVar, putMVar, takeMVar)
