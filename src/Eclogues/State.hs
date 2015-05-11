@@ -9,15 +9,14 @@ module Eclogues.State (
 
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.TaskSpec ( TaskSpec (..), Name, FailureReason (DependencyFailed)
-                         , JobState (..), isActiveState, isTerminationState )
+                         , JobState (..), isActiveState, isTerminationState
+                         , JobStatus (..) )
 
 import Control.Applicative ((<$>), (*>), pure)
 import Control.Monad (when, foldM)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (Except, throwE)
 import Control.Monad.Trans.Writer.Lazy (Writer, WriterT, runWriterT, runWriter, tell)
-import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
-import Data.Char (toLower)
 import Data.HashMap.Lazy ( HashMap, empty, insert, insertWith, adjust
                          , elems, union, member, traverseWithKey )
 import qualified Data.HashMap.Lazy as HashMap
@@ -25,12 +24,6 @@ import Data.List (foldl')
 import qualified Data.List as List
 import Data.Maybe (fromMaybe, catMaybes)
 import Data.Monoid (Sum (Sum))
-
-data JobStatus = JobStatus { jobSpec  :: TaskSpec
-                           , jobState :: JobState }
-                           deriving (Show)
-
-$(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 3} ''JobStatus)
 
 data AppState = AppState { jobs      :: HashMap Name JobStatus
                          , revDeps   :: HashMap Name [Name] }

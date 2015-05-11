@@ -49,6 +49,10 @@ data FailureReason = UserKilled
 data JobState = Queued | Waiting Integer | Running | Finished | Failed FailureReason | RunError
                 deriving (Show, Eq)
 
+data JobStatus = JobStatus { jobSpec  :: TaskSpec
+                           , jobState :: JobState }
+                           deriving (Show)
+
 isTerminationState :: JobState -> Bool
 isTerminationState Queued      = False
 isTerminationState (Waiting _) = False
@@ -104,3 +108,4 @@ instance FromJSON Resources where
 
 $(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 4} ''TaskSpec)
 $(deriveToJSON defaultOptions ''Resources)
+$(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 3} ''JobStatus)
