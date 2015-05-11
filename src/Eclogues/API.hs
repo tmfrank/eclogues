@@ -12,11 +12,11 @@ import Servant.API ((:>), (:<|>), Get, Post, Put, Delete, ReqBody, Capture, JSON
 type Get' = Get '[JSON]
 
 type VAPI =  "jobs"   :> Get' [JobStatus]
-        :<|> "job"    :> Capture "id" Name :> Get' JobStatus
-        :<|> "job"    :> Capture "id" Name :> "state" :> Get' JobState
-        :<|> "job"    :> Capture "id" Name :> "state" :> ReqBody '[JSON] JobState :> Put '[] ()
-        :<|> "job"    :> Capture "id" Name :> Delete '[] ()
-        :<|> "create" :> ReqBody '[JSON] TaskSpec  :> Post '[] ()
+        :<|> "job"    :> Capture "name" Name :> Get' JobStatus
+        :<|> "job"    :> Capture "name" Name :> "state" :> Get' JobState
+        :<|> "job"    :> Capture "name" Name :> "state" :> ReqBody '[JSON] JobState :> Put '[JSON] ()
+        :<|> "job"    :> Capture "name" Name :> Delete '[JSON] ()
+        :<|> "create" :> ReqBody '[JSON] TaskSpec  :> Post '[JSON] ()
 
 data JobError = JobNameUsed
               | NoSuchJob

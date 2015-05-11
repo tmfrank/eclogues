@@ -1,11 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Main where
 
 import Prelude hiding ((.))
 
 import Eclogues.API (VAPI)
+import Eclogues.ApiDocs (apiDocsBS)
 import Eclogues.AppConfig (AppConfig (AppConfig))
 import Eclogues.Instances ()
 import Eclogues.Scheduling.Command (ScheduleCommand (GetStatuses), runScheduleCommand)
@@ -32,9 +34,11 @@ import Data.ByteString.Lazy (toStrict)
 import Data.HashMap.Lazy (keys)
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word16)
+import Network.HTTP.Types (ok200)
 import Network.URI (parseURI)
+import Network.Wai (responseLBS)
 import Network.Wai.Handler.Warp (run)
-import Servant.API ((:<|>) ((:<|>)))
+import Servant.API ((:<|>) ((:<|>)), Raw)
 import Servant.Server (Server, ServerT, ServantErr (..), (:~>) (..)
                       , enter, fromExceptT
                       , serve, err404, err409)
@@ -79,6 +83,13 @@ mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server 
         other     -> err409 { errBody = encode other }
     runScheduler' = runScheduler conf stateV
 
+type VAPIWithDocs = VAPI :<|> Raw
+
+docsServer :: Server VAPI -> Server VAPIWithDocs
+docsServer = (:<|> serveDocs) where
+    serveDocs _ respond = respond $ responseLBS ok200 [plain] apiDocsBS
+    plain = ("Content-Type", "text/plain")
+
 main :: IO ()
 main = do
     (jobsDir:zkUri:myHost:_) <- getArgs
@@ -93,7 +104,7 @@ main = do
 
     hPutStrLn stderr $ "Found Aurora API at " ++ show uri
 
-    let web = run 8000 $ serve (Proxy :: (Proxy VAPI)) $ mainServer conf stateV
+    let web = run 8000 . serve (Proxy :: (Proxy VAPIWithDocs)) . docsServer $ mainServer conf stateV
         updater = forever $ goUpdate >> threadDelay (floor $ second (1 :: Double) `asVal` micro second)
         goUpdate = do
             -- TODO: does this race?
