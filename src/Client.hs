@@ -30,6 +30,7 @@ data Opts = Opts { optZkUri  :: Maybe ZKURI
 
 data Command = ListJobs
              | JobState Name
+             | CreateJob FilePath
 
 data ClientConfig = ClientConfig { zookeeperHosts :: ZKURI }
 
@@ -43,8 +44,8 @@ readZkUri = do
         Just p  -> do
             cts <- readFile p
             case eitherDecode cts of
-                Right c  -> pure $ zookeeperHosts c
-                Left err -> error $ "Invalid config file at " ++ p ++ ": " ++ err
+                Right c   -> pure $ zookeeperHosts c
+                Left  err -> error $ "Invalid config file at " ++ p ++ ": " ++ err
         Nothing -> error "Zookeeper hosts unspecified and no config file found (try --zookeeper)"
 
 go :: Opts -> IO ()
@@ -56,6 +57,11 @@ go opts = do
     case optCommand opts of
         ListJobs      -> runClient $ getJobs client
         JobState name -> runClient $ getJobState client name
+        CreateJob sf  -> do
+            cts <- readFile sf
+            case eitherDecode cts of
+                Right spec -> (orShowError =<<) . runExceptT $ createJob client spec
+                Left  err  -> error $ "Invalid spec file: " ++ err
     where
         runClient :: forall a e. (Show a, Show e) => ExceptT e IO a -> IO ()
         runClient = ((print <=< orShowError) =<<) . runExceptT
@@ -73,6 +79,8 @@ main = execParser opts >>= go where
        <> help "Zookeeper hosts" )
     cmdOpt :: Parser Command
     cmdOpt = subparser
-        ( command "list" (info (pure ListJobs) (progDesc "List all jobs"))
-       <> command "state" (info (JobState <$> nameArg) (progDesc "Get the state of a job")) )
+        ( command "list"   (info (pure ListJobs)         (progDesc "List all jobs"))
+       <> command "state"  (info (JobState  <$> nameArg) (progDesc "Get the state of a job"))
+       <> command "create" (info (CreateJob <$> specArg) (progDesc "Schedule a job")) )
     nameArg = pack <$> strArgument (metavar "JOB_NAME")
+    specArg = strArgument (metavar "SPEC_FILE")

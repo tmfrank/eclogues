@@ -1,10 +1,15 @@
-module Eclogues.Client ( EcloguesClient (getJobs, getJobStatus, getJobState), Result
-                       , getEcloguesLeader, ecloguesClient ) where
+module Eclogues.Client ( EcloguesClient ( getJobs
+                                        , getJobStatus
+                                        , getJobState
+                                        , setJobState
+                                        , deleteJob
+                                        , createJob )
+                       , Result, getEcloguesLeader, ecloguesClient ) where
 
 import Eclogues.API (VAPI, JobError)
 import Eclogues.Client.Instances ()
 import Eclogues.Instances ()
-import Eclogues.TaskSpec (JobStatus, JobState, Name)
+import Eclogues.TaskSpec (JobStatus, JobState, Name, TaskSpec)
 import Eclogues.Zookeeper (ZKURI, ZookeeperError, getLeaderInfo)
 
 import Control.Applicative (pure)
@@ -20,16 +25,30 @@ import Servant.Client (BaseUrl (..), Scheme (Http), ServantError (..), client)
 
 type Result a = ExceptT (Either ServantError JobError) IO a
 
-data EcloguesClient = EcloguesClient { getJobs      ::         Result [JobStatus]
-                                     , getJobStatus :: Name -> Result JobStatus
-                                     , getJobState  :: Name -> Result JobState }
+data EcloguesClient = EcloguesClient { getJobs      ::             Result [JobStatus]
+                                     , getJobStatus :: Name     -> Result JobStatus
+                                     , getJobState  :: Name     -> Result JobState
+                                     , setJobState  :: Name     -> JobState -> Result ()
+                                     , deleteJob    :: Name     -> Result ()
+                                     , createJob    :: TaskSpec -> Result () }
 
 ecloguesClient :: ZKURI -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
 ecloguesClient = mkClient <=< getEcloguesLeader where
     mkClient :: Maybe (String, Word16) -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
     mkClient hostM = pure . flip fmap hostM $ \(host, port) ->
-        let getJobs' :<|> jobStatus' :<|> jobState' :<|> _ = client (Proxy :: Proxy VAPI) (BaseUrl Http host $ fromIntegral port)
-        in EcloguesClient (err getJobs') (err . jobStatus') (err . jobState')
+        let (     getJobs'
+             :<|> jobStatus'
+             :<|> jobState'
+             :<|> sJobState'
+             :<|> deleteJob'
+             :<|> createJob') = client (Proxy :: Proxy VAPI) (BaseUrl Http host $ fromIntegral port)
+        in EcloguesClient
+            (err getJobs')
+            (err . jobStatus')
+            (err . jobState')
+            (fmap err . sJobState')
+            (err . deleteJob')
+            (err . createJob')
     err = withExceptT tryParseErr . ExceptT . runEitherT
     tryParseErr :: ServantError -> Either ServantError JobError
     tryParseErr serr@(FailureResponse _ _ bs) = mapLeft (const serr) $ eitherDecode bs
