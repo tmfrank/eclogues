@@ -3,7 +3,8 @@ module Eclogues.Client ( EcloguesClient ( getJobs
                                         , getJobState
                                         , setJobState
                                         , deleteJob
-                                        , createJob )
+                                        , createJob
+                                        , masterHost )
                        , Result, getEcloguesLeader, ecloguesClient ) where
 
 import Eclogues.API (VAPI, JobError)
@@ -30,7 +31,8 @@ data EcloguesClient = EcloguesClient { getJobs      ::             Result [JobSt
                                      , getJobState  :: Name     -> Result JobState
                                      , setJobState  :: Name     -> JobState -> Result ()
                                      , deleteJob    :: Name     -> Result ()
-                                     , createJob    :: TaskSpec -> Result () }
+                                     , createJob    :: TaskSpec -> Result ()
+                                     , masterHost   :: (String, Word16) }
 
 ecloguesClient :: ZKURI -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
 ecloguesClient = mkClient <=< getEcloguesLeader where
@@ -49,6 +51,7 @@ ecloguesClient = mkClient <=< getEcloguesLeader where
             (fmap err . sJobState')
             (err . deleteJob')
             (err . createJob')
+            (host, port)
     err = withExceptT tryParseErr . ExceptT . runEitherT
     tryParseErr :: ServantError -> Either ServantError JobError
     tryParseErr serr@(FailureResponse _ _ bs) = mapLeft (const serr) $ eitherDecode bs

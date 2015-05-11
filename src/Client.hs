@@ -31,6 +31,7 @@ data Opts = Opts { optZkUri  :: Maybe ZKURI
 data Command = ListJobs
              | JobState Name
              | CreateJob FilePath
+             | GetMaster
 
 data ClientConfig = ClientConfig { zookeeperHosts :: ZKURI }
 
@@ -55,6 +56,7 @@ go opts = do
     when (isNothing clientM) $ error "No Eclogues server advertised"
     let Just client = clientM
     case optCommand opts of
+        GetMaster     -> let (h,p) = masterHost client in putStrLn (h ++ ':':show p)
         ListJobs      -> runClient $ getJobs client
         JobState name -> runClient $ getJobState client name
         CreateJob sf  -> do
@@ -81,6 +83,7 @@ main = execParser opts >>= go where
     cmdOpt = subparser
         ( command "list"   (info (pure ListJobs)         (progDesc "List all jobs"))
        <> command "state"  (info (JobState  <$> nameArg) (progDesc "Get the state of a job"))
-       <> command "create" (info (CreateJob <$> specArg) (progDesc "Schedule a job")) )
+       <> command "create" (info (CreateJob <$> specArg) (progDesc "Schedule a job"))
+       <> command "master" (info (pure GetMaster)        (progDesc "Print Eclogues master host")) )
     nameArg = pack <$> strArgument (metavar "JOB_NAME")
     specArg = strArgument (metavar "SPEC_FILE")
