@@ -1,10 +1,10 @@
-module Eclogues.Client ( EcloguesClient (getJobs), Result
+module Eclogues.Client ( EcloguesClient (getJobs, getJobStatus, getJobState), Result
                        , getEcloguesLeader, ecloguesClient ) where
 
 import Eclogues.API (VAPI, JobError)
 import Eclogues.Client.Instances ()
 import Eclogues.Instances ()
-import Eclogues.TaskSpec (JobStatus)
+import Eclogues.TaskSpec (JobStatus, JobState, Name)
 import Eclogues.Zookeeper (ZKURI, ZookeeperError, getLeaderInfo)
 
 import Control.Applicative (pure)
@@ -20,14 +20,16 @@ import Servant.Client (BaseUrl (..), Scheme (Http), ServantError (..), client)
 
 type Result a = ExceptT (Either ServantError JobError) IO a
 
-data EcloguesClient = EcloguesClient { getJobs :: Result [JobStatus] }
+data EcloguesClient = EcloguesClient { getJobs      ::         Result [JobStatus]
+                                     , getJobStatus :: Name -> Result JobStatus
+                                     , getJobState  :: Name -> Result JobState }
 
 ecloguesClient :: ZKURI -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
 ecloguesClient = mkClient <=< getEcloguesLeader where
     mkClient :: Maybe (String, Word16) -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
     mkClient hostM = pure . flip fmap hostM $ \(host, port) ->
-        let getJobs' :<|> _ = client (Proxy :: Proxy VAPI) (BaseUrl Http host $ fromIntegral port)
-        in EcloguesClient (err getJobs')
+        let getJobs' :<|> jobStatus' :<|> jobState' :<|> _ = client (Proxy :: Proxy VAPI) (BaseUrl Http host $ fromIntegral port)
+        in EcloguesClient (err getJobs') (err . jobStatus') (err . jobState')
     err = withExceptT tryParseErr . ExceptT . runEitherT
     tryParseErr :: ServantError -> Either ServantError JobError
     tryParseErr serr@(FailureResponse _ _ bs) = mapLeft (const serr) $ eitherDecode bs
