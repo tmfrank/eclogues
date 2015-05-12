@@ -3,7 +3,22 @@ Eclogues
 
 *The Eclogues (/ˈɛklɒɡz/; Latin: Eclogae [ˈɛklɔɡaj]), also called the Bucolics, is the first of the three major works of the Latin poet Virgil.*
 
+Dependencies
+------------
+
 Requires Apache [Mesos](http://mesos.apache.org) and [Aurora](http://aurora.apache.org/) 0.7.0.
+
+The [thrift](http://hackage.haskell.org/package/thrift) dependency does not build
+due to [a bug in the .cabal file](https://issues.apache.org/jira/browse/THRIFT-3003),
+and has some [interop issues](https://issues.apache.org/jira/browse/THRIFT-3145).
+Clone it from [the GitHub mirror](https://github.com/apache/thrift) and apply the
+included `thrift-fixes.patch` before `cabal install`.
+
+Requires the master branch of [servant-pandoc](https://github.com/mpickering/servant-pandoc)
+until that's published to Hackage.
+
+Running
+-------
 
 ```
 cabal build
