@@ -46,7 +46,12 @@ data FailureReason = UserKilled
                    | DependencyFailed Name
                    deriving (Show, Eq)
 
-data JobState = Queued | Waiting Integer | Running | Finished | Failed FailureReason | RunError
+data RunErrorReason = BadSchedulerTransition
+                    | SubexecutorFailure
+                    | SchedulerLost
+                    deriving (Show, Eq)
+
+data JobState = Queued | Waiting Integer | Running | Finished | Failed FailureReason | RunError RunErrorReason
                 deriving (Show, Eq)
 
 data JobStatus = JobStatus { jobSpec  :: TaskSpec
@@ -54,33 +59,35 @@ data JobStatus = JobStatus { jobSpec  :: TaskSpec
                            deriving (Show)
 
 isTerminationState :: JobState -> Bool
-isTerminationState Queued      = False
-isTerminationState (Waiting _) = False
-isTerminationState Running     = False
-isTerminationState Finished    = True
-isTerminationState (Failed _)  = True
-isTerminationState RunError    = True
+isTerminationState Queued       = False
+isTerminationState (Waiting _)  = False
+isTerminationState Running      = False
+isTerminationState Finished     = True
+isTerminationState (Failed _)   = True
+isTerminationState (RunError _) = True
 
 isActiveState :: JobState -> Bool
 isActiveState = not . isTerminationState
 
 isExpectedTransition :: JobState -> JobState -> Bool
-isExpectedTransition Queued       Running     = True
-isExpectedTransition (Waiting 0)  Running     = True
-isExpectedTransition Running      Queued      = True
+isExpectedTransition Queued       Running       = True
+isExpectedTransition (Waiting 0)  Running       = True
+isExpectedTransition Running      Queued        = True
 isExpectedTransition o n | o `elem` [Queued, Running] = case n of
-                                  Finished   -> True
-                                  (Failed _) -> True
-                                  RunError   -> True
-                                  _          -> False
-isExpectedTransition _            _           = False
+                                  Finished     -> True
+                                  (Failed _)   -> True
+                                  (RunError _) -> True
+                                  _            -> False
+isExpectedTransition _            _             = False
 
 instance ToJSON JobState where
     toJSON Queued      = object ["type" .= "Queued"]
     toJSON (Waiting n) = object ["type" .= "Waiting", "for" .= n]
     toJSON Running     = object ["type" .= "Running"]
     toJSON Finished    = object ["type" .= "Finished"]
-    toJSON RunError    = object ["type" .= "RunError"]
+    toJSON (RunError BadSchedulerTransition) = object ["type" .= "RunError", "reason" .= "BadSchedulerTransition"]
+    toJSON (RunError SubexecutorFailure) = object ["type" .= "RunError", "reason" .= "SubexecutorFailure"]
+    toJSON (RunError SchedulerLost) = object ["type" .= "RunError", "reason" .= "SchedulerLost"]
     toJSON (Failed UserKilled) = object ["type" .= "Failed", "reason" .= "UserKilled"]
     toJSON (Failed (NonZeroExitCode c)) = object ["type" .= "Failed", "reason" .= "NonZeroExitCode", "exitCode" .= c]
     toJSON (Failed MemoryExceeded) = object ["type" .= "Failed", "reason" .= "MemoryExceeded"]
@@ -96,7 +103,11 @@ instance FromJSON JobState where
             "Waiting"  -> Waiting <$> v .: "for"
             "Running"  -> pure Running
             "Finished" -> pure Finished
-            "RunError" -> pure RunError
+            "RunError" -> v .: "reason" >>= \case
+                "BasSchedulerTransition" -> pure $ RunError BadSchedulerTransition
+                "SubexecutorFailure"     -> pure $ RunError SubexecutorFailure
+                "SchedulerLost"          -> pure $ RunError SchedulerLost
+                _                        -> fail "Invalid run error reason"
             "Failed"   -> v .: "reason" >>= \case
                 "UserKilled"       -> pure $ Failed UserKilled
                 "MemoryExceeded"   -> pure $ Failed MemoryExceeded

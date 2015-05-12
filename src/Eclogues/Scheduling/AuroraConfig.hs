@@ -10,7 +10,8 @@ module Eclogues.Scheduling.AuroraConfig (
 import Api_Types hiding (DRAINING, FAILED, FINISHED)
 import Api_Types2
 
-import Eclogues.TaskSpec (TaskSpec (TaskSpec), Resources (Resources), JobState (..), FailureReason (..))
+import Eclogues.TaskSpec ( TaskSpec (TaskSpec), Resources (Resources), JobState (..)
+                         , FailureReason (..), RunErrorReason (..))
 import Units
 
 import Control.Applicative ((<$>))
@@ -228,7 +229,7 @@ jobEventsToState es
   | any isRescheduleEvent events = Queued
   | KILLED `elem` events         = Failed UserKilled
   | Just fev <- find ((== FAILED) . taskEvent_status) es =
-      maybe RunError failureState $ taskEvent_message fev
+      maybe (RunError SubexecutorFailure) failureState $ taskEvent_message fev
   | otherwise                    = Finished
   where
     events = taskEvent_status <$> es
@@ -239,7 +240,7 @@ jobEventsToState es
     failureState msg
       | "Memory limit exceeded" `L.isPrefixOf` msg = Failed MemoryExceeded
       | "Disk limit exceeded"   `L.isPrefixOf` msg = Failed DiskExceeded
-      | otherwise                                  = RunError
+      | otherwise                                  = RunError SubexecutorFailure
 
 getJobState :: ScheduledTask -> JobState
 getJobState st = jobState' (scheduledTask_status st) (toList $ scheduledTask_taskEvents st)
