@@ -64,6 +64,17 @@ isTerminationState RunError    = True
 isActiveState :: JobState -> Bool
 isActiveState = not . isTerminationState
 
+isExpectedTransition :: JobState -> JobState -> Bool
+isExpectedTransition Queued       Running     = True
+isExpectedTransition (Waiting 0)  Running     = True
+isExpectedTransition Running      Queued      = True
+isExpectedTransition o n | o `elem` [Queued, Running] = case n of
+                                  Finished   -> True
+                                  (Failed _) -> True
+                                  RunError   -> True
+                                  _          -> False
+isExpectedTransition _            _           = False
+
 instance ToJSON JobState where
     toJSON Queued      = object ["type" .= "Queued"]
     toJSON (Waiting n) = object ["type" .= "Waiting", "for" .= n]

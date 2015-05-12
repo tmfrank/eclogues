@@ -10,7 +10,7 @@ module Eclogues.State (
 import Eclogues.API (JobError (..))
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.TaskSpec ( TaskSpec (..), Name, FailureReason (DependencyFailed)
-                         , JobState (..), isActiveState, isTerminationState
+                         , JobState (..), isActiveState, isTerminationState, isExpectedTransition
                          , JobStatus (..) )
 
 import Control.Applicative ((<$>), (*>), pure)
@@ -79,9 +79,6 @@ deleteJob name state = do
     let state' = state { jobs = HashMap.delete name (jobs state) }
     pure (state', [CleanupJob name])
 
-data StateTransition = Transition JobStatus JobState
-
-
 -- Only check on active jobs; terminated jobs shouldn't change status
 -- Also Waiting jobs aren't in Aurora so filter out those
 activeJobs :: AppState -> JSS
@@ -89,6 +86,8 @@ activeJobs state = HashMap.filter (isNonWaitingActiveState . jobState) (jobs sta
     isNonWaitingActiveState :: JobState -> Bool
     isNonWaitingActiveState (Waiting _) = False
     isNonWaitingActiveState s           = isActiveState s
+
+data StateTransition = Transition JobStatus JobState
 
 updateJobs :: AppState -> JSS -> [(Name, JobState)] -> (AppState, [ScheduleCommand ()])
 updateJobs state activeStatuses newStates = (AppState statuses'' newRdeps, commands) where
@@ -100,9 +99,13 @@ updateJobs state activeStatuses newStates = (AppState statuses'' newRdeps, comma
     transition :: Name -> JobStatus -> Writer [StateTransition] JobStatus
     transition name pst = do
         let newState = fromMaybe RunError $ lookup name newStates
-        let oldState = jobState pst
-        when (newState /= oldState) $ tell [Transition pst newState]
-        pure pst { jobState = newState }
+            oldState = jobState pst
+            chng st  = tell [Transition pst st] *> pure pst{ jobState = newState }
+        if newState == oldState
+            then pure pst
+            else if isExpectedTransition oldState newState
+                then chng newState
+                else chng RunError
     handleDeps :: (JSS, HashMap Name [Name]) -> StateTransition -> Writer [ScheduleCommand ()] (JSS, HashMap Name [Name])
     handleDeps (jss, allRdeps) (Transition pst newState) | isTerminationState newState = do
         let name = jobName pst
