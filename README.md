@@ -23,6 +23,7 @@ Running
 ```
 cabal build
 cp dist/build/eclogues-subexecutor/eclogues-subexecutor SLAVE_PATH
+echo '{"jobsDir":"SHARED_JOBS_DIR"}' > SLAVE_MACHINE/etc/eclogues/subexecutor.json
 dist/build/eclogues-api/eclogues-api SHARED_JOBS_DIR ZOOKEEPER:2181,ADDRESSES:2181 THIS_HOST
 xdg-open http://localhost:8000
 ```
