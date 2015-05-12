@@ -75,6 +75,8 @@ executable eclogues-api
                        servant == 0.4.*,
                        servant-server ==0.4.*,
                        servant-docs ==0.4.*,
+                       servant-pandoc ==0.1.*,
+                       pandoc ==1.13.*,
                        wai == 3.0.*,
                        http-types ==0.8.*,
                        transformers ==0.4.*,

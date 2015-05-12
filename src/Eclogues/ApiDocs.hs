@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Eclogues.ApiDocs (apiDocs, apiDocsBS) where
+module Eclogues.ApiDocs (apiDocs, apiDocsMd, apiDocsHtml) where
 
 import Eclogues.API (VAPI)
 import Eclogues.TaskSpec (TaskSpec (..), Resources (..), JobState (..), JobStatus (..), FailureReason (..), Name)
@@ -14,8 +14,10 @@ import qualified Data.ByteString.Lazy as L
 import Data.Proxy (Proxy (..))
 import Data.Text.Lazy (pack)
 import Data.Text.Lazy.Encoding (encodeUtf8)
+import Text.Pandoc (writeHtmlString, def)
 import Servant.API (Capture)
 import Servant.Docs (API, ToCapture (..), ToSample (..), DocCapture (..), docs, markdown)
+import Servant.Docs.Pandoc (pandoc)
 
 instance ToCapture (Capture "name" Name) where
     toCapture _ = DocCapture "name" "job name"
@@ -54,5 +56,8 @@ instance ToSample () () where
 apiDocs :: API
 apiDocs = docs (Proxy :: Proxy VAPI)
 
-apiDocsBS :: L.ByteString
-apiDocsBS = encodeUtf8 . pack $ markdown apiDocs
+apiDocsMd :: L.ByteString
+apiDocsMd = encodeUtf8 . pack $ markdown apiDocs
+
+apiDocsHtml :: L.ByteString
+apiDocsHtml = encodeUtf8 . pack . writeHtmlString def $ pandoc apiDocs

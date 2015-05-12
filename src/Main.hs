@@ -7,7 +7,7 @@ module Main where
 import Prelude hiding ((.))
 
 import Eclogues.API (VAPI)
-import Eclogues.ApiDocs (apiDocsBS)
+import Eclogues.ApiDocs (apiDocsHtml)
 import Eclogues.AppConfig (AppConfig (AppConfig))
 import Eclogues.Instances ()
 import Eclogues.Scheduling.Command (ScheduleCommand (GetStatuses), runScheduleCommand)
@@ -87,8 +87,8 @@ type VAPIWithDocs = VAPI :<|> Raw
 
 docsServer :: Server VAPI -> Server VAPIWithDocs
 docsServer = (:<|> serveDocs) where
-    serveDocs _ respond = respond $ responseLBS ok200 [plain] apiDocsBS
-    plain = ("Content-Type", "text/plain")
+    serveDocs _ respond = respond $ responseLBS ok200 [plain] apiDocsHtml
+    plain = ("Content-Type", "text/html")
 
 main :: IO ()
 main = do
