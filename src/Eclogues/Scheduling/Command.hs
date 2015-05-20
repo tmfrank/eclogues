@@ -6,7 +6,6 @@ module Eclogues.Scheduling.Command where
 
 import Prelude hiding (writeFile)
 
-import Eclogues.AppConfig (AppConfig (..))
 import qualified Eclogues.Scheduling.AuroraAPI as A
 import Eclogues.Scheduling.AuroraConfig (getJobName, getJobState)
 import Eclogues.TaskSpec (
@@ -24,21 +23,24 @@ import Data.ByteString.Lazy (writeFile)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as L
+import Network.URI (URI)
 import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
 import System.Exit (ExitCode (..))
 import System.IO.Error (isDoesNotExistError)
 import Text.Read.HT (maybeRead)
 
-data ScheduleCommand r where
-    QueueJob :: TaskSpec -> ScheduleCommand ()
-    KillJob :: Name -> ScheduleCommand ()
-    CleanupJob :: Name -> ScheduleCommand ()
-    GetStatuses :: [Name] -> ScheduleCommand [(Name, JobState)]
+-- TODO: split up
 
-jobDir :: AppConfig -> Name -> FilePath
+data ScheduleCommand = QueueJob TaskSpec
+                     | KillJob Name
+                     | CleanupJob Name
+
+data ScheduleConf = ScheduleConf { jobsDir :: FilePath, auroraURI :: URI }
+
+jobDir :: ScheduleConf -> Name -> FilePath
 jobDir conf n = jobsDir conf ++ "/" ++ L.unpack n
 
-runScheduleCommand :: AppConfig -> ScheduleCommand r -> ExceptT A.UnexpectedResponse IO r
+runScheduleCommand :: ScheduleConf -> ScheduleCommand -> ExceptT A.UnexpectedResponse IO ()
 runScheduleCommand conf (QueueJob spec) = do
     let dir = jobDir conf $ taskName spec
         subspec = spec { taskCommand = "eclogues-subexecutor " <> taskName spec }
@@ -54,7 +56,9 @@ runScheduleCommand conf (KillJob name) = do
     A.killTasks client [name]
 runScheduleCommand conf (CleanupJob name) = lift . void $
     tryJust (guard . isDoesNotExistError) . removeDirectoryRecursive $ jobDir conf name
-runScheduleCommand conf (GetStatuses names) = do
+
+getSchedulerStatuses :: ScheduleConf -> [Name] -> ExceptT A.UnexpectedResponse IO [(Name, JobState)]
+getSchedulerStatuses conf names = do
     client <- lift $ A.thriftClient $ auroraURI conf
     auroraTasks <- A.getTasksWithoutConfigs client names
     let newUncheckedStates = (getJobName &&& getJobState) <$> auroraTasks

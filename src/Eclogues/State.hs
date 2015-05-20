@@ -11,7 +11,7 @@ import Eclogues.API (JobError (..))
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.TaskSpec ( TaskSpec (..), Name, FailureReason (..), RunErrorReason (..)
                          , JobState (..), isActiveState, isTerminationState, isExpectedTransition
-                         , JobStatus (..) )
+                         , JobStatus (..), QueueStage (LocalQueue) )
 
 import Control.Applicative ((<$>), (*>), pure)
 import Control.Monad (when, foldM)
@@ -38,7 +38,7 @@ newAppState = AppState empty empty
 jobName :: JobStatus -> Name
 jobName = taskName . jobSpec
 
-createJob :: TaskSpec -> AppState -> Except JobError (AppState, [ScheduleCommand ()])
+createJob :: TaskSpec -> AppState -> Except JobError (AppState, [ScheduleCommand])
 createJob spec state = do
     let name = taskName spec
         deps = taskDependsOn spec
@@ -46,11 +46,11 @@ createJob spec state = do
     when (member name jss) $ throwE JobNameUsed
     (rdeps', Sum activeDepCount) <- runWriterT $ foldM (checkDep name jss) (revDeps state) deps
     let jstate = if activeDepCount == 0
-            then Queued
+            then Queued LocalQueue
             else Waiting activeDepCount
         jss' = insert name (JobStatus spec jstate) jss
         state' = AppState jss' rdeps'
-    if jstate == Queued
+    if jstate == Queued LocalQueue
         then pure (state', [QueueJob spec])
         else pure (state', [])
     where
@@ -64,14 +64,14 @@ createJob spec state = do
         addRdep :: Name -> Name -> RevDeps -> RevDeps
         addRdep name depName = insertWith (++) depName [name]
 
-killJob :: Name -> AppState -> Except JobError [ScheduleCommand ()]
+killJob :: Name -> AppState -> Except JobError [ScheduleCommand]
 killJob name state = do
     js <- getJob name state
     if isTerminationState (jobState js)
         then throwE $ JobMustBeTerminated False
         else pure [KillJob name]
 
-deleteJob :: Name -> AppState -> Except JobError (AppState, [ScheduleCommand ()])
+deleteJob :: Name -> AppState -> Except JobError (AppState, [ScheduleCommand])
 deleteJob name state = do
     js <- getJob name state
     when (isActiveState $ jobState js) . throwE $ JobMustBeTerminated True
@@ -89,7 +89,7 @@ activeJobs state = HashMap.filter (isNonWaitingActiveState . jobState) (jobs sta
 
 data StateTransition = Transition JobStatus JobState
 
-updateJobs :: AppState -> JSS -> [(Name, JobState)] -> (AppState, [ScheduleCommand ()])
+updateJobs :: AppState -> JSS -> [(Name, JobState)] -> (AppState, [ScheduleCommand])
 updateJobs state activeStatuses newStates = (AppState statuses'' newRdeps, commands) where
     (activeStatuses', transitions) = runWriter $ traverseWithKey transition activeStatuses
     -- For union, first map has priority
@@ -106,7 +106,7 @@ updateJobs state activeStatuses newStates = (AppState statuses'' newRdeps, comma
             else if isExpectedTransition oldState newState
                 then chng newState
                 else chng $ RunError BadSchedulerTransition
-    handleDeps :: (JSS, HashMap Name [Name]) -> StateTransition -> Writer [ScheduleCommand ()] (JSS, HashMap Name [Name])
+    handleDeps :: (JSS, HashMap Name [Name]) -> StateTransition -> Writer [ScheduleCommand] (JSS, HashMap Name [Name])
     handleDeps (jss, allRdeps) (Transition pst newState) | isTerminationState newState = do
         let name = jobName pst
             rdepNames = fromMaybe [] $ HashMap.lookup name allRdeps
@@ -127,11 +127,11 @@ updateJobs state activeStatuses newStates = (AppState statuses'' newRdeps, comma
             rdeps' = fromMaybe [] $ List.delete name <$> HashMap.lookup depName allRdeps
     cancelDep :: Name -> JSS -> Name -> JSS
     cancelDep name jss depName = adjust (setJobState . Failed $ DependencyFailed name) depName jss
-    triggerDep :: JSS -> JobStatus -> Writer [ScheduleCommand ()] JSS
+    triggerDep :: JSS -> JobStatus -> Writer [ScheduleCommand] JSS
     triggerDep jss depSt
         | Waiting 1 <- jobState depSt = do
             tell [QueueJob $ jobSpec depSt]
-            return $ adjust (setJobState Queued) (jobName depSt) jss
+            return $ adjust (setJobState $ Queued LocalQueue) (jobName depSt) jss
         | Waiting n <- jobState depSt =
             return $ adjust (setJobState $ Waiting $ n - 1) (jobName depSt) jss
         | otherwise                   = return jss

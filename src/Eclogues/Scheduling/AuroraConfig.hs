@@ -11,7 +11,7 @@ import Api_Types hiding (DRAINING, FAILED, FINISHED)
 import Api_Types2
 
 import Eclogues.TaskSpec ( TaskSpec (TaskSpec), Resources (Resources), JobState (..)
-                         , FailureReason (..), RunErrorReason (..))
+                         , FailureReason (..), RunErrorReason (..), QueueStage (SchedulerQueue))
 import Units
 
 import Control.Applicative ((<$>))
@@ -206,19 +206,19 @@ getJobName :: ScheduledTask -> L.Text
 getJobName = jobKey_name . taskConfig_job . assignedTask_task . scheduledTask_assignedTask
 
 jobState' :: ScheduleStatus -> [TaskEvent] -> JobState
-jobState' INIT       _  = Queued
+jobState' INIT       _  = Queued SchedulerQueue
 jobState' THROTTLED  _  = Running
-jobState' PENDING    _  = Queued
-jobState' ASSIGNED   _  = Queued
+jobState' PENDING    _  = Queued SchedulerQueue
+jobState' ASSIGNED   _  = Queued SchedulerQueue
 jobState' STARTING   _  = Running
 jobState' RUNNING    _  = Running
 jobState' KILLING    _  = Running
-jobState' PREEMPTING _  = Queued
-jobState' RESTARTING _  = Queued
-jobState' DRAINING   _  = Queued
+jobState' PREEMPTING _  = Queued SchedulerQueue
+jobState' RESTARTING _  = Queued SchedulerQueue
+jobState' DRAINING   _  = Queued SchedulerQueue
 jobState' LOST       es =
   if KILLING `notElem` (taskEvent_status <$> es)
-    then Queued
+    then Queued SchedulerQueue
     else Failed UserKilled
 jobState' KILLED     es = jobEventsToState es
 jobState' FINISHED   es = jobEventsToState es
@@ -226,7 +226,7 @@ jobState' FAILED     es = jobEventsToState es
 
 jobEventsToState :: [TaskEvent] -> JobState
 jobEventsToState es
-  | any isRescheduleEvent events = Queued
+  | any isRescheduleEvent events = Queued SchedulerQueue
   | KILLED `elem` events         = Failed UserKilled
   | Just fev <- find ((== FAILED) . taskEvent_status) es =
       maybe (RunError SubexecutorFailure) failureState $ taskEvent_message fev

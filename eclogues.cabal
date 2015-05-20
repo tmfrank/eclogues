@@ -141,7 +141,8 @@ executable eclogues-client
                        optparse-applicative ==0.11.*,
                        xdg-basedir ==0.2.*,
                        monad-loops ==0.4.*,
-                       directory ==1.2.*
+                       directory ==1.2.*,
+                       stm-io-hooks ==1.0.*
 
   hs-source-dirs:      src
 

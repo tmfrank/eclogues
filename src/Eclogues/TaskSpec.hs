@@ -51,15 +51,21 @@ data RunErrorReason = BadSchedulerTransition
                     | SchedulerLost
                     deriving (Show, Eq)
 
-data JobState = Queued | Waiting Integer | Running | Finished | Failed FailureReason | RunError RunErrorReason
+data QueueStage = LocalQueue | SchedulerQueue deriving (Show, Eq)
+
+data JobState = Queued QueueStage | Waiting Integer | Running | Finished | Failed FailureReason | RunError RunErrorReason
                 deriving (Show, Eq)
 
 data JobStatus = JobStatus { jobSpec  :: TaskSpec
                            , jobState :: JobState }
                            deriving (Show)
 
+isQueueState :: JobState -> Bool
+isQueueState (Queued _) = True
+isQueueState _          = False
+
 isTerminationState :: JobState -> Bool
-isTerminationState Queued       = False
+isTerminationState (Queued _)    = False
 isTerminationState (Waiting _)  = False
 isTerminationState Running      = False
 isTerminationState Finished     = True
@@ -70,10 +76,11 @@ isActiveState :: JobState -> Bool
 isActiveState = not . isTerminationState
 
 isExpectedTransition :: JobState -> JobState -> Bool
-isExpectedTransition Queued       Running       = True
+isExpectedTransition (Queued LocalQueue) (Queued SchedulerQueue) = True
+isExpectedTransition (Queued _)   Running       = True
 isExpectedTransition (Waiting 0)  Running       = True
-isExpectedTransition Running      Queued        = True
-isExpectedTransition o n | o `elem` [Queued, Running] = case n of
+isExpectedTransition Running      (Queued SchedulerQueue) = True
+isExpectedTransition o n | isQueueState o || o == Running = case n of
                                   Finished     -> True
                                   (Failed _)   -> True
                                   (RunError _) -> True
@@ -81,7 +88,8 @@ isExpectedTransition o n | o `elem` [Queued, Running] = case n of
 isExpectedTransition _            _             = False
 
 instance ToJSON JobState where
-    toJSON Queued      = object ["type" .= "Queued"]
+    toJSON (Queued LocalQueue)     = object ["type" .= "Queued", "stage" .= "local"]
+    toJSON (Queued SchedulerQueue) = object ["type" .= "Queued", "stage" .= "scheduler"]
     toJSON (Waiting n) = object ["type" .= "Waiting", "for" .= n]
     toJSON Running     = object ["type" .= "Running"]
     toJSON Finished    = object ["type" .= "Finished"]
@@ -99,7 +107,10 @@ instance FromJSON JobState where
     parseJSON (Aeson.Object v) = do
         typ <- v .: "type"
         case typ of
-            "Queued"   -> pure Queued
+            "Queued"   -> v .: "stage" >>= \case
+                "local"     -> pure $ Queued LocalQueue
+                "scheduler" -> pure $ Queued SchedulerQueue
+                _           -> fail "Invalid queue stage"
             "Waiting"  -> Waiting <$> v .: "for"
             "Running"  -> pure Running
             "Finished" -> pure Finished
