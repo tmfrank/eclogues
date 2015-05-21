@@ -7,6 +7,7 @@ module Main where
 import Prelude hiding ((.))
 
 import Database.Zookeeper.Election (whenLeader)
+import Database.Zookeeper.ManagedEvents (ManagedZK, withZookeeper)
 import Eclogues.API (VAPI)
 import Eclogues.ApiDocs (apiDocsHtml)
 import Eclogues.AppConfig (AppConfig (AppConfig, schedChan), requireAurora)
@@ -38,7 +39,6 @@ import Data.ByteString.Lazy (toStrict)
 import Data.HashMap.Lazy (keys)
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word16)
-import Database.Zookeeper (Zookeeper, withZookeeper)
 import Network.HTTP.Types (ok200)
 import Network.Wai (responseLBS)
 import Network.Wai.Handler.Warp (run)
@@ -94,7 +94,7 @@ docsServer = (:<|> serveDocs) where
     serveDocs _ respond = respond $ responseLBS ok200 [plain] apiDocsHtml
     plain = ("Content-Type", "text/html")
 
-withZK :: FilePath -> ByteString -> Zookeeper -> IO ()
+withZK :: FilePath -> ByteString -> ManagedZK -> IO ()
 withZK jobsDir advertisedHost zk = void . runExceptT . withExceptT (error . show) . whenLeader zk "/eclogues" advertisedHost $ do
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
     stateV <- newTVarIO newAppState
@@ -138,4 +138,4 @@ main :: IO ()
 main = do
     (jobsDir:zkUri:myHost:_) <- getArgs
     let advertisedHost = toStrict $ encode ((myHost, 8000) :: (String, Word16))
-    withZookeeper zkUri 1000 Nothing Nothing $ withZK jobsDir advertisedHost
+    withZookeeper zkUri $ withZK jobsDir advertisedHost

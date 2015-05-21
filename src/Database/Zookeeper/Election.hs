@@ -2,10 +2,14 @@
 
 module Database.Zookeeper.Election (ZKURI, ZNode, ZookeeperError, whenLeader, getLeaderInfo, followLeaderInfo) where
 
+import Database.Zookeeper.ManagedEvents (ZKURI, ZNode, ManagedZK (..), ZKEvent (ZKEvent))
+
 import Control.Applicative ((<$>), (*>), pure)
 import Control.Concurrent (MVar, newEmptyMVar, putMVar, takeMVar, tryPutMVar)
 import Control.Concurrent.AdvSTM (atomically)
 import Control.Concurrent.AdvSTM.TVar (TVar, writeTVar, readTVar)
+import Control.Concurrent.Async (race)
+import Control.Concurrent.Broadcast (listen)
 import Control.Monad (void, join)
 import Control.Monad.Morph (squash, hoist)
 import Control.Monad.Trans.Class (lift)
@@ -15,11 +19,8 @@ import Data.ByteString (ByteString)
 import Data.List (isPrefixOf, isSuffixOf, sort)
 import Data.Maybe (listToMaybe)
 import Database.Zookeeper ( Zookeeper, Event (..), State (..), ZKError (..), AclList (..), CreateFlag (..), Watcher
-                          , withZookeeper, getChildren, get, create, setWatcher )
+                          , withZookeeper, getChildren, get, create )
 import System.IO (hPutStrLn, stderr)
-
-type ZKURI = String
-type ZNode = String
 
 data ZookeeperError e = ContentError e
                       | ZookeeperError ZKError
@@ -38,13 +39,14 @@ getMembers zk node watch = do
     children <- MaybeT . ExceptT $ maybeExists <$> getChildren zk node watch
     pure . sort $ filter (isPrefixOf electionPrefix) children
 
-followLeaderInfo :: Zookeeper -> ZNode -> TVar (Maybe (Maybe ByteString)) -> IO ZKError
-followLeaderInfo zk node var = run where
+followLeaderInfo :: ManagedZK -> ZNode -> TVar (Maybe (Maybe ByteString)) -> IO ZKError
+followLeaderInfo (ManagedZK zk br) node var = run where
     run = do
         errVar <- newEmptyMVar
-        setWatcher zk $ gWatcher errVar
-        follow errVar
-        takeMVar errVar
+        errE <- race (gWatcher errVar) $ do
+            follow errVar
+            takeMVar errVar
+        pure $ either id id errE
     follow errVar = do
         hPutStrLn stderr $ "Looking up leader info for " ++ node
         firstME <- runExceptT . fmap join . runMaybeT $ listToMaybe <$> getMembers zk node (Just $ nodeWatcher errVar)
@@ -66,11 +68,16 @@ followLeaderInfo zk node var = run where
     nodeWatcher errVar _ DeletedEvent _  _       = atomically (writeTVar var Nothing) *> follow errVar
     nodeWatcher errVar _ ChangedEvent _ (Just n) = followNode errVar n
     nodeWatcher _      _ _            _ _        = pure ()
-    gWatcher errVar _ SessionEvent ExpiredSessionState _ = void $ tryPutMVar errVar SessionExpiredError
-    gWatcher _      _ SessionEvent ConnectingState     _ = atomically (writeTVar var Nothing) *> hPutStrLn stderr "Reconnecting..."
-    gWatcher errVar _ SessionEvent ConnectedState      _ = follow errVar
-    gWatcher _      _ _            _                   _ = pure ()
+    gWatcher errVar = listen br >>= \case
+        ZKEvent SessionEvent ExpiredSessionState _ -> pure SessionExpiredError
+        ZKEvent SessionEvent ConnectingState     _ -> do
+            atomically (writeTVar var Nothing)
+            hPutStrLn stderr "Reconnecting..."
+            gWatcher errVar
+        ZKEvent SessionEvent ConnectedState      _ -> follow errVar *> gWatcher errVar
+        _                                          -> pure () *> gWatcher errVar
 
+-- TODO: take ManagedZK
 getLeaderInfo :: forall e a. (Maybe ByteString -> Either e a) -> ZKURI -> ZNode -> ExceptT (ZookeeperError e) IO (Maybe a)
 getLeaderInfo conv zkUri node = ExceptT $ withZookeeper zkUri 1000 Nothing Nothing (runExceptT . runMaybeT . fetch) where
     fetch :: Zookeeper -> MaybeT (ExceptT (ZookeeperError e) IO) a
@@ -85,8 +92,8 @@ getLeaderInfo conv zkUri node = ExceptT $ withZookeeper zkUri 1000 Nothing Nothi
 
 type ResVar a = MVar (Either ZKError a)
 
-whenLeader :: forall a. Zookeeper -> ZNode -> ByteString -> IO a -> ExceptT ZKError IO a
-whenLeader zk node content act = run where
+whenLeader :: forall a. ManagedZK -> ZNode -> ByteString -> IO a -> ExceptT ZKError IO a
+whenLeader (ManagedZK zk _) node content act = run where
     run :: ExceptT ZKError IO a
     run = do
         mvar <- lift $ newEmptyMVar

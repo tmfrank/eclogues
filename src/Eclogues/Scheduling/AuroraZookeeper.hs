@@ -3,7 +3,8 @@
 
 module Eclogues.Scheduling.AuroraZookeeper (getAuroraMaster, followAuroraMaster) where
 
-import Database.Zookeeper.Election (ZKURI, ZNode, ZookeeperError, followLeaderInfo, getLeaderInfo)
+import Database.Zookeeper.Election (ZookeeperError, followLeaderInfo, getLeaderInfo)
+import Database.Zookeeper.ManagedEvents (ZKURI, ZNode, ManagedZK)
 
 import Control.Applicative ((<$>))
 import Control.Arrow ((&&&))
@@ -15,7 +16,7 @@ import Data.Aeson (eitherDecodeStrict)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Data.ByteString (ByteString)
 import Data.Word (Word16)
-import Database.Zookeeper (Zookeeper, ZKError)
+import Database.Zookeeper (ZKError)
 import Network.URI (URI, parseURI)
 
 type AuroraHost = (String, Word16)
@@ -37,7 +38,7 @@ rightMay (Right a) = Just a
 getAuroraMaster :: ZKURI -> ZNode -> ExceptT (ZookeeperError String) IO (Maybe AuroraHost)
 getAuroraMaster = getLeaderInfo conv
 
-followAuroraMaster :: Zookeeper -> ZNode -> IO (Async ZKError, AdvSTM (Maybe URI))
+followAuroraMaster :: ManagedZK -> ZNode -> IO (Async ZKError, AdvSTM (Maybe URI))
 followAuroraMaster zk node = go where
     go = do
         var <- atomically $ newTVar Nothing
