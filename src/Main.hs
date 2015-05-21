@@ -103,7 +103,6 @@ withZK jobsDir advertisedHost zk = void . runExceptT . withExceptT (error . show
 
     let conf = AppConfig jobsDir getURI schedV
 
-    hPutStrLn stderr "Looking for Aurora..."
     uri' <- atomically $ requireAurora conf
     hPutStrLn stderr $ "Found Aurora API at " ++ show uri'
 

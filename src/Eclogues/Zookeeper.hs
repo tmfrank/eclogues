@@ -2,7 +2,7 @@
 
 module Eclogues.Zookeeper (ZKURI, ZNode, ZookeeperError, whenLeader, getLeaderInfo, followLeaderInfo) where
 
-import Control.Applicative ((<$>), pure)
+import Control.Applicative ((<$>), (*>), pure)
 import Control.Concurrent (MVar, newEmptyMVar, putMVar, takeMVar, tryPutMVar)
 import Control.Concurrent.AdvSTM (atomically)
 import Control.Concurrent.AdvSTM.TVar (TVar, writeTVar, readTVar)
@@ -38,8 +38,6 @@ getMembers zk node watch = do
     children <- MaybeT . ExceptT $ maybeExists <$> getChildren zk node watch
     pure . sort $ filter (isPrefixOf electionPrefix) children
 
--- findPrev :: a -> [a] -> a
-
 followLeaderInfo :: Zookeeper -> ZNode -> TVar (Maybe (Maybe ByteString)) -> IO ZKError
 followLeaderInfo zk node var = run where
     run = do
@@ -65,12 +63,11 @@ followLeaderInfo zk node var = run where
     nodeWatcher errVar _ ChildEvent _ _ = atomically (readTVar var) >>= \case
         Nothing -> follow errVar
         Just _  -> pure ()
-    nodeWatcher errVar _ DeletedEvent _ _  = do
-        atomically $ writeTVar var Nothing
-        follow errVar
+    nodeWatcher errVar _ DeletedEvent _  _       = atomically (writeTVar var Nothing) *> follow errVar
     nodeWatcher errVar _ ChangedEvent _ (Just n) = followNode errVar n
-    nodeWatcher _      _  _            _ _       = pure ()
+    nodeWatcher _      _ _            _ _        = pure ()
     gWatcher errVar _ SessionEvent ExpiredSessionState _ = void $ tryPutMVar errVar SessionExpiredError
+    gWatcher _      _ SessionEvent ConnectingState     _ = atomically (writeTVar var Nothing) *> hPutStrLn stderr "Reconnecting..."
     gWatcher errVar _ SessionEvent ConnectedState      _ = follow errVar
     gWatcher _      _ _            _                   _ = pure ()
 
