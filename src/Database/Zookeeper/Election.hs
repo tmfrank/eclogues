@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Eclogues.Zookeeper (ZKURI, ZNode, ZookeeperError, whenLeader, getLeaderInfo, followLeaderInfo) where
+module Database.Zookeeper.Election (ZKURI, ZNode, ZookeeperError, whenLeader, getLeaderInfo, followLeaderInfo) where
 
 import Control.Applicative ((<$>), (*>), pure)
 import Control.Concurrent (MVar, newEmptyMVar, putMVar, takeMVar, tryPutMVar)

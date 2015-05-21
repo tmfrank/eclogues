@@ -4,10 +4,10 @@ module Main where
 
 import Prelude hiding (readFile)
 
+import Database.Zookeeper.Election (ZKURI)
 import Eclogues.Util (orShowError)
 import Eclogues.Client (EcloguesClient (..), ecloguesClient)
 import Eclogues.TaskSpec (Name)
-import Eclogues.Zookeeper (ZKURI)
 
 import Control.Applicative ((<$>), (<*>), pure, optional)
 import Control.Monad ((<=<), when)

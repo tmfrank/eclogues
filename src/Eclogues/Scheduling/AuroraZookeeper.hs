@@ -3,7 +3,7 @@
 
 module Eclogues.Scheduling.AuroraZookeeper (getAuroraMaster, followAuroraMaster) where
 
-import Eclogues.Zookeeper (ZKURI, ZNode, ZookeeperError, followLeaderInfo, getLeaderInfo)
+import Database.Zookeeper.Election (ZKURI, ZNode, ZookeeperError, followLeaderInfo, getLeaderInfo)
 
 import Control.Applicative ((<$>))
 import Control.Arrow ((&&&))

@@ -6,6 +6,7 @@ module Main where
 
 import Prelude hiding ((.))
 
+import Database.Zookeeper.Election (whenLeader)
 import Eclogues.API (VAPI)
 import Eclogues.ApiDocs (apiDocsHtml)
 import Eclogues.AppConfig (AppConfig (AppConfig, schedChan), requireAurora)
@@ -17,7 +18,6 @@ import Eclogues.State ( AppState, JobStatus (jobState), JobError (..), newAppSta
                       , getJobs, activeJobs
                       , createJob, killJob, deleteJob, getJob, updateJobs )
 import Eclogues.TaskSpec (JobState (..), FailureReason (..))
-import Eclogues.Zookeeper (whenLeader)
 import Units
 
 import Control.Applicative ((<$>), (<*), pure)
