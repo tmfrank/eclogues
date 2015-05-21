@@ -16,7 +16,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), withExceptT, runExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.ByteString (ByteString)
-import Data.List (isPrefixOf, isSuffixOf, sort)
+import Data.List (isPrefixOf, sort, stripPrefix)
 import Data.Maybe (listToMaybe)
 import Database.Zookeeper ( Zookeeper, Event (..), State (..), ZKError (..), AclList (..), CreateFlag (..), Watcher
                           , withZookeeper, getChildren, get, create )
@@ -92,6 +92,12 @@ getLeaderInfo conv zkUri node = ExceptT $ withZookeeper zkUri 1000 Nothing Nothi
 
 type ResVar a = MVar (Either ZKError a)
 
+findPrev :: (Eq a) => a -> [a] -> Maybe a
+findPrev a (x:nx:xs)
+    | nx == a   = Just x
+    | otherwise = findPrev a xs
+findPrev _ _    = Nothing
+
 whenLeader :: forall a. ManagedZK -> ZNode -> ByteString -> IO a -> ExceptT ZKError IO a
 whenLeader (ManagedZK zk _) node content act = run where
     run :: ExceptT ZKError IO a
@@ -102,7 +108,8 @@ whenLeader (ManagedZK zk _) node content act = run where
     setup :: ResVar a -> IO ()
     setup mvar = errToVar mvar $ do
         ExceptT $ ignoreExisting <$> create zk node Nothing OpenAclUnsafe []
-        myNode <- ExceptT $ create zk (node ++ '/':electionPrefix) (Just content) ReadAclUnsafe [Sequence, Ephemeral]
+        myNodeAbs <- ExceptT $ create zk (node ++ '/':electionPrefix) (Just content) ReadAclUnsafe [Sequence, Ephemeral]
+        let Just (_:myNode) = stripPrefix node myNodeAbs
         lift . hPutStrLn stderr $ "Zookeeper node is " ++ myNode
         lift $ waitForLeader mvar myNode
     waitForLeader :: ResVar a -> String -> IO ()
@@ -110,13 +117,13 @@ whenLeader (ManagedZK zk _) node content act = run where
         membersM <- runMaybeT $ getMembers zk node Nothing
         lift . hPutStrLn stderr $ "Zookeeper members are " ++ show membersM
         lift $ case membersM of
-            Just (first:_)
-                | first `isSuffixOf` myNode -> do
+            Just ms@(first:_)
+                | first == myNode                 -> do
                     hPutStrLn stderr "Elected as leader!"
                     putMVar mvar =<< Right <$> act
-                | otherwise                 -> do
+                | Just prev <- findPrev myNode ms -> do
                     hPutStrLn stderr $ first ++ " elected as leader."
-                    watch mvar myNode first
+                    watch mvar myNode prev
             _                               -> setup mvar  -- Somehow our node disappeared
     watch :: ResVar a -> String -> ZNode -> IO ()
     watch mvar myNode lowestNode = errToVar mvar $ do
