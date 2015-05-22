@@ -4,7 +4,7 @@ module Main where
 
 import Prelude hiding (readFile)
 
-import Database.Zookeeper.ManagedEvents (ZKURI)
+import Database.Zookeeper.ManagedEvents (ZKURI, withZookeeper)
 import Eclogues.Util (orShowError)
 import Eclogues.Client (EcloguesClient (..), ecloguesClient)
 import Eclogues.TaskSpec (Name)
@@ -19,6 +19,7 @@ import Data.ByteString.Lazy (readFile)
 import Data.Maybe (isNothing)
 import Data.Monoid ((<>))
 import Data.Text.Lazy (pack)
+import Database.Zookeeper (ZLogLevel (ZLogWarn), setDebugLevel)
 import Options.Applicative ( Parser, strOption, strArgument, long, metavar, help
                            , subparser, command, progDesc
                            , execParser, info, helper, fullDesc, header )
@@ -52,7 +53,8 @@ readZkUri = do
 go :: Opts -> IO ()
 go opts = do
     zkUri <- maybe (readZkUri) pure $ optZkUri opts
-    clientM <- (orShowError =<<) . runExceptT . ecloguesClient $ zkUri
+    setDebugLevel ZLogWarn
+    clientM <- withZookeeper zkUri $ (orShowError =<<) . runExceptT . ecloguesClient
     when (isNothing clientM) $ error "No Eclogues server advertised"
     let Just client = clientM
     case optCommand opts of

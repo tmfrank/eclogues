@@ -8,7 +8,7 @@ module Eclogues.Client ( EcloguesClient ( getJobs
                        , Result, getEcloguesLeader, ecloguesClient ) where
 
 import Database.Zookeeper.Election (ZookeeperError, getLeaderInfo)
-import Database.Zookeeper.ManagedEvents (ZKURI)
+import Database.Zookeeper.ManagedEvents (ManagedZK)
 import Eclogues.API (VAPI, JobError)
 import Eclogues.Client.Instances ()
 import Eclogues.Instances ()
@@ -35,7 +35,7 @@ data EcloguesClient = EcloguesClient { getJobs      ::             Result [JobSt
                                      , createJob    :: TaskSpec -> Result ()
                                      , masterHost   :: (String, Word16) }
 
-ecloguesClient :: ZKURI -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
+ecloguesClient :: ManagedZK -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
 ecloguesClient = mkClient <=< getEcloguesLeader where
     mkClient :: Maybe (String, Word16) -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
     mkClient hostM = pure . flip fmap hostM $ \(host, port) ->
@@ -58,7 +58,7 @@ ecloguesClient = mkClient <=< getEcloguesLeader where
     tryParseErr serr@(FailureResponse _ _ bs) = mapLeft (const serr) $ eitherDecode bs
     tryParseErr other                         = Left other
 
-getEcloguesLeader :: ZKURI -> ExceptT (ZookeeperError String) IO (Maybe (String, Word16))
-getEcloguesLeader zkUri = getLeaderInfo parse zkUri "/eclogues" where
+getEcloguesLeader :: ManagedZK -> ExceptT (ZookeeperError String) IO (Maybe (String, Word16))
+getEcloguesLeader mzk = getLeaderInfo parse mzk "/eclogues" where
     parse Nothing   = Left "missing node content"
     parse (Just bs) = eitherDecodeStrict bs

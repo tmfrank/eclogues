@@ -4,7 +4,7 @@ module Database.Zookeeper.Election ( ZookeeperError, LeadershipError (..)
                                    , whenLeader, getLeaderInfo, followLeaderInfo )
                                    where
 
-import Database.Zookeeper.ManagedEvents (ZKURI, ZNode, ManagedZK (ManagedZK), ZKEvent (..))
+import Database.Zookeeper.ManagedEvents (ZNode, ManagedZK (ManagedZK), ZKEvent (..))
 
 import Control.Applicative ((<$>), (*>), pure)
 import Control.Concurrent (MVar, newEmptyMVar, putMVar, takeMVar, tryPutMVar, tryTakeMVar)
@@ -23,7 +23,7 @@ import Data.Either.Combinators (mapLeft)
 import Data.List (isPrefixOf, sort, stripPrefix)
 import Data.Maybe (listToMaybe)
 import Database.Zookeeper ( Zookeeper, Event (..), State (..), ZKError (..), AclList (..), CreateFlag (..), Watcher
-                          , withZookeeper, getChildren, get, create, delete, getState )
+                          , getChildren, get, create, delete, getState )
 import System.IO (hPutStrLn, stderr)
 
 data ZookeeperError e = ContentError e
@@ -82,14 +82,14 @@ followLeaderInfo (ManagedZK zk br) node var = run where
 
 -- TODO: take ManagedZK
 -- TODO: remove ZookeeperError
-getLeaderInfo :: forall e a. (Maybe ByteString -> Either e a) -> ZKURI -> ZNode -> ExceptT (ZookeeperError e) IO (Maybe a)
-getLeaderInfo conv zkUri node = ExceptT $ withZookeeper zkUri 1000 Nothing Nothing (runExceptT . runMaybeT . fetch) where
-    fetch :: Zookeeper -> MaybeT (ExceptT (ZookeeperError e) IO) a
-    fetch zk = do
+getLeaderInfo :: forall e a. (Maybe ByteString -> Either e a) -> ManagedZK -> ZNode -> ExceptT (ZookeeperError e) IO (Maybe a)
+getLeaderInfo conv (ManagedZK zk _) node = runMaybeT fetch where
+    fetch :: MaybeT (ExceptT (ZookeeperError e) IO) a
+    fetch = do
         first <- squash . MaybeT $ listToMaybe <$> (hoist (withExceptT ZookeeperError) $ getMembers zk node Nothing)
         nodeM <- lift . wrapZKE $ maybeExists <$> get zk (node ++ "/" ++ first) Nothing
         case nodeM of
-            Nothing       -> fetch zk
+            Nothing       -> fetch
             Just (bsM, _) -> lift . withExceptT ContentError . ExceptT . pure $ conv bsM
     wrapZKE :: forall e' a' m. (Functor m) => m (Either ZKError a') -> ExceptT (ZookeeperError e') m a'
     wrapZKE = withExceptT ZookeeperError . ExceptT

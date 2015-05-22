@@ -4,7 +4,7 @@
 module Eclogues.Scheduling.AuroraZookeeper (getAuroraMaster, followAuroraMaster) where
 
 import Database.Zookeeper.Election (ZookeeperError, followLeaderInfo, getLeaderInfo)
-import Database.Zookeeper.ManagedEvents (ZKURI, ZNode, ManagedZK)
+import Database.Zookeeper.ManagedEvents (ZNode, ManagedZK)
 
 import Control.Applicative ((<$>))
 import Control.Arrow ((&&&))
@@ -35,7 +35,7 @@ rightMay :: Either e a -> Maybe a
 rightMay (Left  _) = Nothing
 rightMay (Right a) = Just a
 
-getAuroraMaster :: ZKURI -> ZNode -> ExceptT (ZookeeperError String) IO (Maybe AuroraHost)
+getAuroraMaster :: ManagedZK -> ZNode -> ExceptT (ZookeeperError String) IO (Maybe AuroraHost)
 getAuroraMaster = getLeaderInfo conv
 
 followAuroraMaster :: ManagedZK -> ZNode -> IO (Async ZKError, AdvSTM (Maybe URI))
