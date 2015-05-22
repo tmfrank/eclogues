@@ -6,7 +6,7 @@ module Main where
 
 import Prelude hiding ((.))
 
-import Database.Zookeeper.Election (whenLeader)
+import Database.Zookeeper.Election (LeadershipError (..), whenLeader)
 import Database.Zookeeper.ManagedEvents (ManagedZK, withZookeeper)
 import Eclogues.API (VAPI)
 import Eclogues.ApiDocs (apiDocsHtml)
@@ -27,9 +27,11 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.AdvSTM (atomically, onCommit)
 import Control.Concurrent.AdvSTM.TVar (TVar, newTVarIO, readTVar, writeTVar)
 import Control.Concurrent.AdvSTM.TChan (newTChanIO, readTChan, writeTChan)
-import Control.Concurrent.Async (async, waitAnyCancel)
+import Control.Concurrent.Async (waitAny, withAsync)
+import Control.Concurrent.Lock (Lock)
+import qualified Control.Concurrent.Lock as Lock
 import Control.Exception (Exception, IOException, throwIO, try)
-import Control.Monad (forever, void)
+import Control.Monad (forever)
 import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (Except, ExceptT, runExceptT, withExceptT, mapExceptT, throwE)
@@ -39,6 +41,7 @@ import Data.ByteString.Lazy (toStrict)
 import Data.HashMap.Lazy (keys)
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word16)
+import Database.Zookeeper (ZKError)
 import Network.HTTP.Types (ok200)
 import Network.Wai (responseLBS)
 import Network.Wai.Handler.Warp (run)
@@ -94,8 +97,15 @@ docsServer = (:<|> serveDocs) where
     serveDocs _ respond = respond $ responseLBS ok200 [plain] apiDocsHtml
     plain = ("Content-Type", "text/html")
 
-withZK :: FilePath -> ByteString -> ManagedZK -> IO ()
-withZK jobsDir advertisedHost zk = void . runExceptT . withExceptT (error . show) . whenLeader zk "/eclogues" advertisedHost $ do
+whileLeader :: ManagedZK -> ByteString -> IO a -> ExceptT LeadershipError IO a
+whileLeader zk advertisedHost act =
+    lift (runExceptT $ whenLeader zk "/eclogues" advertisedHost act) >>= \case
+        Left LeadershipLost -> whileLeader zk advertisedHost act
+        Left  e             -> throwE e
+        Right a             -> pure a
+
+withZK :: FilePath -> ByteString -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
+withZK jobsDir advertisedHost webLock zk = whileLeader zk advertisedHost $ do
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
     stateV <- newTVarIO newAppState
     schedV <- newTChanIO
@@ -103,10 +113,7 @@ withZK jobsDir advertisedHost zk = void . runExceptT . withExceptT (error . show
 
     let conf = AppConfig jobsDir getURI schedV
 
-    uri' <- atomically $ requireAurora conf
-    hPutStrLn stderr $ "Found Aurora API at " ++ show uri'
-
-    let web = run 8000 . serve (Proxy :: (Proxy VAPIWithDocs)) . docsServer $ mainServer conf stateV
+    let web = Lock.with webLock $ run 8000 . serve (Proxy :: (Proxy VAPIWithDocs)) . docsServer $ mainServer conf stateV
         updater = forever $ goUpdate >> threadDelay (floor $ second (1 :: Double) `asVal` micro second)
         goUpdate = do
             uri <- atomically $ requireAurora conf
@@ -129,13 +136,17 @@ withZK jobsDir advertisedHost zk = void . runExceptT . withExceptT (error . show
             onCommit . throwExc $ runScheduleCommand sconf cmd
 
     hPutStrLn stderr "Starting server on port 8000"
-    webA <- async web
-    updaterA <- async updater
-    enacterA <- async enacter
-    waitAnyCancel [const () <$> followAuroraFailure, webA, updaterA, enacterA]
+    withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA ->
+        snd <$> waitAny [followAuroraFailure, const undefined <$> webA, updaterA, enacterA]
 
 main :: IO ()
 main = do
     (jobsDir:zkUri:myHost:_) <- getArgs
     let advertisedHost = toStrict $ encode ((myHost, 8000) :: (String, Word16))
-    withZookeeper zkUri $ withZK jobsDir advertisedHost
+    webLock <- Lock.new
+    res <- withZookeeper zkUri $ runExceptT . withZK jobsDir advertisedHost webLock
+    case res of
+        Left (LZKError e)         -> error $ "Zookeeper coordination error: " ++ show e
+        Left (ActionException ex) -> throwIO ex
+        Left LeadershipLost       -> error "impossibru!"
+        Right e                   -> error $ "Aurora ZK lookup error: " ++ show e

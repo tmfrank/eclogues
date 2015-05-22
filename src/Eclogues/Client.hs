@@ -7,7 +7,8 @@ module Eclogues.Client ( EcloguesClient ( getJobs
                                         , masterHost )
                        , Result, getEcloguesLeader, ecloguesClient ) where
 
-import Database.Zookeeper.Election (ZKURI, ZookeeperError, getLeaderInfo)
+import Database.Zookeeper.Election (ZookeeperError, getLeaderInfo)
+import Database.Zookeeper.ManagedEvents (ZKURI)
 import Eclogues.API (VAPI, JobError)
 import Eclogues.Client.Instances ()
 import Eclogues.Instances ()

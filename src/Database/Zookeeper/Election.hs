@@ -1,25 +1,29 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Database.Zookeeper.Election (ZKURI, ZNode, ZookeeperError, whenLeader, getLeaderInfo, followLeaderInfo) where
+module Database.Zookeeper.Election ( ZookeeperError, LeadershipError (..)
+                                   , whenLeader, getLeaderInfo, followLeaderInfo )
+                                   where
 
 import Database.Zookeeper.ManagedEvents (ZKURI, ZNode, ManagedZK (..), ZKEvent (ZKEvent))
 
-import Control.Applicative ((<$>), (*>), pure)
-import Control.Concurrent (MVar, newEmptyMVar, putMVar, takeMVar, tryPutMVar)
+import Control.Applicative ((<$>), (*>), (<*), pure)
+import Control.Concurrent (MVar, newEmptyMVar, putMVar, takeMVar, tryPutMVar, tryTakeMVar)
 import Control.Concurrent.AdvSTM (atomically)
 import Control.Concurrent.AdvSTM.TVar (TVar, writeTVar, readTVar)
-import Control.Concurrent.Async (race)
+import Control.Concurrent.Async (Async, async, waitCatch, race, waitAnyCancel, cancel)
 import Control.Concurrent.Broadcast (listen)
+import Control.Exception (SomeException)
 import Control.Monad (void, join)
 import Control.Monad.Morph (squash, hoist)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), withExceptT, runExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.ByteString (ByteString)
+import Data.Either.Combinators (mapLeft)
 import Data.List (isPrefixOf, sort, stripPrefix)
 import Data.Maybe (listToMaybe)
 import Database.Zookeeper ( Zookeeper, Event (..), State (..), ZKError (..), AclList (..), CreateFlag (..), Watcher
-                          , withZookeeper, getChildren, get, create )
+                          , withZookeeper, getChildren, get, create, delete, getState )
 import System.IO (hPutStrLn, stderr)
 
 data ZookeeperError e = ContentError e
@@ -72,12 +76,12 @@ followLeaderInfo (ManagedZK zk br) node var = run where
         ZKEvent SessionEvent ExpiredSessionState _ -> pure SessionExpiredError
         ZKEvent SessionEvent ConnectingState     _ -> do
             atomically (writeTVar var Nothing)
-            hPutStrLn stderr "Reconnecting..."
             gWatcher errVar
         ZKEvent SessionEvent ConnectedState      _ -> follow errVar *> gWatcher errVar
         _                                          -> pure () *> gWatcher errVar
 
 -- TODO: take ManagedZK
+-- TODO: remove ZookeeperError
 getLeaderInfo :: forall e a. (Maybe ByteString -> Either e a) -> ZKURI -> ZNode -> ExceptT (ZookeeperError e) IO (Maybe a)
 getLeaderInfo conv zkUri node = ExceptT $ withZookeeper zkUri 1000 Nothing Nothing (runExceptT . runMaybeT . fetch) where
     fetch :: Zookeeper -> MaybeT (ExceptT (ZookeeperError e) IO) a
@@ -90,7 +94,12 @@ getLeaderInfo conv zkUri node = ExceptT $ withZookeeper zkUri 1000 Nothing Nothi
     wrapZKE :: forall e' a' m. (Functor m) => m (Either ZKError a') -> ExceptT (ZookeeperError e') m a'
     wrapZKE = withExceptT ZookeeperError . ExceptT
 
-type ResVar a = MVar (Either ZKError a)
+data LeadershipError = LZKError ZKError
+                     | ActionException SomeException
+                     | LeadershipLost
+                     deriving (Show)
+
+type NodeBasename = String
 
 findPrev :: (Eq a) => a -> [a] -> Maybe a
 findPrev a (x:nx:xs)
@@ -98,46 +107,83 @@ findPrev a (x:nx:xs)
     | otherwise = findPrev a xs
 findPrev _ _    = Nothing
 
-whenLeader :: forall a. ManagedZK -> ZNode -> ByteString -> IO a -> ExceptT ZKError IO a
-whenLeader (ManagedZK zk _) node content act = run where
-    run :: ExceptT ZKError IO a
+whenLeader :: forall a. ManagedZK -> ZNode -> ByteString -> IO a -> ExceptT LeadershipError IO a
+whenLeader (ManagedZK zk br) node content act = whenConnected where
+    whenConnected = (lift $ getState zk) >>= \case
+        ConnectedState -> run
+        _              -> lift (listen br) *> whenConnected
+    run :: ExceptT LeadershipError IO a
     run = do
-        mvar <- lift $ newEmptyMVar
-        lift $ setup mvar
-        ExceptT $ takeMVar mvar
-    setup :: ResVar a -> IO ()
-    setup mvar = errToVar mvar $ do
+        errVar <- lift newEmptyMVar
+        actVar <- lift newEmptyMVar
+        let vars = (errVar, actVar)
+        myNode <- withExceptT LZKError setup
+        remover <- lift . async $ ensureNodeDeleted myNode
+        startTracking vars myNode remover
+    setup :: ExceptT ZKError IO NodeBasename
+    setup = do
         ExceptT $ ignoreExisting <$> create zk node Nothing OpenAclUnsafe []
         myNodeAbs <- ExceptT $ create zk (node ++ '/':electionPrefix) (Just content) ReadAclUnsafe [Sequence, Ephemeral]
         let Just (_:myNode) = stripPrefix node myNodeAbs
         lift . hPutStrLn stderr $ "Zookeeper node is " ++ myNode
-        lift $ waitForLeader mvar myNode
-    waitForLeader :: ResVar a -> String -> IO ()
-    waitForLeader mvar myNode = errToVar mvar $ do
+        pure myNode
+    startTracking :: (MVar ZKError, MVar (Async a)) -> NodeBasename -> Async () -> ExceptT LeadershipError IO a
+    startTracking vars myNode remover = do
+        withExceptT LZKError $ waitForLeader vars myNode
+        let (errVar, actVar) = vars
+        res <- lift . fmap snd $ waitAnyCancel =<< mapM async
+            [ Left . LZKError <$> takeMVar errVar
+            , mapLeft ActionException <$> (waitCatch =<< takeMVar actVar)
+            , Left <$> watchForLoss ]
+        lift $ deleteNode myNode >>= \case
+            Left _   -> pure ()
+            Right () -> cancel remover
+        lift $ tryTakeMVar actVar >>= \case
+            Just asyn -> cancel asyn
+            Nothing   -> pure ()
+        ExceptT $ pure res
+    waitForLeader :: (MVar ZKError, MVar (Async a)) -> NodeBasename -> ExceptT ZKError IO ()
+    waitForLeader vars myNode = do
         membersM <- runMaybeT $ getMembers zk node Nothing
         lift . hPutStrLn stderr $ "Zookeeper members are " ++ show membersM
-        lift $ case membersM of
+        case membersM of
             Just ms@(first:_)
-                | first == myNode                 -> do
+                | first == myNode                 -> lift $ do
                     hPutStrLn stderr "Elected as leader!"
-                    putMVar mvar =<< Right <$> act
+                    putMVar (snd vars) =<< async (act <* void (deleteNode myNode))
+                    -- TODO: delete leadership node
                 | Just prev <- findPrev myNode ms -> do
-                    hPutStrLn stderr $ first ++ " elected as leader."
-                    watch mvar myNode prev
-            _                               -> setup mvar  -- Somehow our node disappeared
-    watch :: ResVar a -> String -> ZNode -> IO ()
-    watch mvar myNode lowestNode = errToVar mvar $ do
-        nodeM <- ExceptT $ maybeExists <$> get zk (node ++ '/':lowestNode) (Just $ watcher mvar myNode)
+                    lift . hPutStrLn stderr $ first ++ " elected as leader."
+                    watch vars myNode prev
+            _ -> error "impossibru! somehow our node disappeared!"
+    watch :: (MVar ZKError, MVar (Async a)) -> NodeBasename -> NodeBasename -> ExceptT ZKError IO ()
+    watch vars myNode lowestNode = do
+        nodeM <- ExceptT $ maybeExists <$> get zk (node ++ '/':lowestNode) (Just $ watcher vars myNode)
         case nodeM of
-            Nothing -> lift $ waitForLeader mvar myNode
+            Nothing -> waitForLeader vars myNode
             Just _  -> pure ()
-    watcher mvar myNode _ DeletedEvent _ _ = waitForLeader mvar myNode
+    watcher vars myNode _ DeletedEvent _ _ = errToVar (fst vars) $ waitForLeader vars myNode
     watcher _    _      _ _            _ _ = pure ()
     ignoreExisting :: Either ZKError b -> Either ZKError ()
     ignoreExisting (Right _)              = Right ()
     ignoreExisting (Left NodeExistsError) = Right ()
     ignoreExisting (Left e)               = Left e
-    errToVar :: ResVar a -> ExceptT ZKError IO () -> IO ()
+    errToVar :: MVar ZKError -> ExceptT ZKError IO () -> IO ()
     errToVar mvar val = runExceptT val >>= \case
         Right () -> pure ()
-        Left  e  -> putMVar mvar $ Left e
+        Left  e  -> putMVar mvar e
+    watchForLoss :: IO LeadershipError
+    watchForLoss = listen br >>= \case
+        ZKEvent SessionEvent ExpiredSessionState _ -> pure LeadershipLost
+        ZKEvent SessionEvent ConnectingState     _ -> pure LeadershipLost
+        _                                          -> watchForLoss
+    deleteNode :: NodeBasename -> IO (Either ZKError ())
+    deleteNode myNode = delete zk (node ++ '/':myNode) Nothing
+    -- TODO: Cancel when disconnected (event?)
+    ensureNodeDeleted :: NodeBasename -> IO ()
+    ensureNodeDeleted myNode = listen br >>= \case
+        ZKEvent SessionEvent ExpiredSessionState _ -> pure ()
+        ZKEvent SessionEvent ConnectedState      _ -> deleteNode myNode >>= \case
+            Left ConnectionLossError -> ensureNodeDeleted myNode
+            _                        -> pure ()
+        _                            -> ensureNodeDeleted myNode
