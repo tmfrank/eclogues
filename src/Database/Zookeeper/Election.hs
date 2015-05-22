@@ -4,7 +4,7 @@ module Database.Zookeeper.Election ( ZookeeperError, LeadershipError (..)
                                    , whenLeader, getLeaderInfo, followLeaderInfo )
                                    where
 
-import Database.Zookeeper.ManagedEvents (ZKURI, ZNode, ManagedZK (ManagedZK), ZKEvent (ZKEvent))
+import Database.Zookeeper.ManagedEvents (ZKURI, ZNode, ManagedZK (ManagedZK), ZKEvent (..))
 
 import Control.Applicative ((<$>), (*>), pure)
 import Control.Concurrent (MVar, newEmptyMVar, putMVar, takeMVar, tryPutMVar, tryTakeMVar)
@@ -47,7 +47,7 @@ followLeaderInfo :: ManagedZK -> ZNode -> TVar (Maybe (Maybe ByteString)) -> IO 
 followLeaderInfo (ManagedZK zk br) node var = run where
     run = do
         errVar <- newEmptyMVar
-        errE <- race (gWatcher errVar) $ do
+        errE <- flip finally zeroVar . race (gWatcher errVar) $ do
             follow errVar
             takeMVar errVar
         pure $ either id id errE
@@ -72,13 +72,13 @@ followLeaderInfo (ManagedZK zk br) node var = run where
     nodeWatcher errVar _ DeletedEvent _  _       = atomically (writeTVar var Nothing) *> follow errVar
     nodeWatcher errVar _ ChangedEvent _ (Just n) = followNode errVar n
     nodeWatcher _      _ _            _ _        = pure ()
+    zeroVar = atomically $ writeTVar var Nothing
     gWatcher errVar = listen br >>= \case
         ZKEvent SessionEvent ExpiredSessionState _ -> pure SessionExpiredError
-        ZKEvent SessionEvent ConnectingState     _ -> do
-            atomically (writeTVar var Nothing)
-            gWatcher errVar
+        ZKEvent SessionEvent ConnectingState     _ -> zeroVar *> gWatcher errVar
         ZKEvent SessionEvent ConnectedState      _ -> follow errVar *> gWatcher errVar
-        _                                          -> pure () *> gWatcher errVar
+        Disconnected                               -> pure ConnectionLossError
+        _                                          -> gWatcher errVar
 
 -- TODO: take ManagedZK
 -- TODO: remove ZookeeperError
@@ -102,10 +102,10 @@ ensureEphemeralNodeDeleted (ManagedZK zk br) node = async attempt where
         Left NoNodeError         -> pure Nothing
         Left e                   -> pure $ Just e
         Right ()                 -> pure Nothing
-    -- TODO: Cancel when disconnected (event?)
     watch = listen br >>= \case
         ZKEvent SessionEvent ExpiredSessionState _ -> pure Nothing
         ZKEvent SessionEvent ConnectedState      _ -> attempt
+        Disconnected                               -> pure Nothing
         _                                          -> watch
 
 data LeadershipError = LZKError ZKError
