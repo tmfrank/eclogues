@@ -42,9 +42,10 @@ import Data.HashMap.Lazy (keys)
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word16)
 import Database.Zookeeper (ZKError)
-import Network.HTTP.Types (ok200)
+import Network.HTTP.Types (ok200, methodGet, methodPost, methodDelete, methodPut)
 import Network.Wai (responseLBS)
 import Network.Wai.Handler.Warp (run)
+import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), cors)
 import Servant.API ((:<|>) ((:<|>)), Raw)
 import Servant.Server (Server, ServerT, ServantErr (..), (:~>) (..)
                       , enter, fromExceptT
@@ -104,6 +105,16 @@ whileLeader zk advertisedHost act =
         Left  e             -> throwE e
         Right a             -> pure a
 
+corsPolicy :: CorsResourcePolicy
+corsPolicy = CorsResourcePolicy { corsOrigins = Nothing
+                                , corsMethods = [methodGet, methodPost, methodDelete, methodPut]
+                                , corsRequestHeaders = ["content-type"]
+                                , corsExposedHeaders = Nothing
+                                , corsMaxAge = Nothing
+                                , corsVaryOrigin = False
+                                , corsRequireOrigin = False
+                                , corsIgnoreFailures = False }
+
 withZK :: FilePath -> ByteString -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
 withZK jobsDir advertisedHost webLock zk = whileLeader zk advertisedHost $ do
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
@@ -113,7 +124,8 @@ withZK jobsDir advertisedHost webLock zk = whileLeader zk advertisedHost $ do
 
     let conf = AppConfig jobsDir getURI schedV
 
-    let web = Lock.with webLock $ run 8000 . serve (Proxy :: (Proxy VAPIWithDocs)) . docsServer $ mainServer conf stateV
+    let web = Lock.with webLock $ run 8000 . myCors . serve (Proxy :: (Proxy VAPIWithDocs)) . docsServer $ mainServer conf stateV
+        myCors = cors . const $ Just corsPolicy
         updater = forever $ goUpdate >> threadDelay (floor $ second (1 :: Double) `asVal` micro second)
         goUpdate = do
             uri <- atomically $ requireAurora conf

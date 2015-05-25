@@ -89,7 +89,8 @@ executable eclogues-api
                        mmorph ==1.0.*,
                        hzk ==2.1.*,
                        concurrent-extra ==0.7.*,
-                       lifted-base ==0.2.*
+                       lifted-base ==0.2.*,
+                       wai-cors ==0.2.*
 
   -- Directories containing source files.
   hs-source-dirs:      src, gen-hs
