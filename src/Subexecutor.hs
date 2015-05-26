@@ -64,6 +64,6 @@ runTask path name = do
 
 main :: IO ()
 main = do
-    conf <- orError =<< readJSON "/etc/eclogues/subexecutor.json"
+    conf <- orError =<< readJSON "/etc/xdg/eclogues/subexecutor.json"
     (name:_) <- getArgs
     runTask (jobsDir conf) name
