@@ -75,6 +75,11 @@ isTerminationState (RunError _) = True
 isActiveState :: JobState -> Bool
 isActiveState = not . isTerminationState
 
+isOnScheduler :: JobState -> Bool
+isOnScheduler (Queued LocalQueue) = False
+isOnScheduler (Waiting _)         = False
+isOnScheduler s                   = isActiveState s
+
 isExpectedTransition :: JobState -> JobState -> Bool
 isExpectedTransition (Queued LocalQueue) (Queued SchedulerQueue) = True
 isExpectedTransition (Queued _)   Running       = True

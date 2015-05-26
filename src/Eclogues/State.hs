@@ -10,7 +10,8 @@ module Eclogues.State (
 import Eclogues.API (JobError (..))
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.TaskSpec ( TaskSpec (..), Name, FailureReason (..), RunErrorReason (..)
-                         , JobState (..), isActiveState, isTerminationState, isExpectedTransition
+                         , JobState (..), isActiveState, isTerminationState
+                                        , isExpectedTransition, isOnScheduler
                          , JobStatus (..), QueueStage (LocalQueue) )
 
 import Control.Applicative ((<$>), (*>), pure)
@@ -98,11 +99,15 @@ updateJobs state activeStatuses newStates = (AppState statuses'' newRdeps, comma
 
     transition :: Name -> JobStatus -> Writer [StateTransition] JobStatus
     transition name pst = do
-        let newState = fromMaybe (RunError SchedulerLost) $ lookup name newStates
+        let newState = fromMaybe whenMissing $ lookup name newStates
+            whenMissing = if isOnScheduler oldState
+                then RunError SchedulerLost
+                else oldState
             oldState = jobState pst
             chng st  = tell [Transition pst st] *> pure pst{ jobState = newState }
         if newState == oldState
             then pure pst
+            -- TODO: can this ever be False? we don't query non-active jobs.
             else if isExpectedTransition oldState newState
                 then chng newState
                 else chng $ RunError BadSchedulerTransition
