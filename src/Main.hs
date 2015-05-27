@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -7,7 +8,7 @@ module Main where
 import Prelude hiding ((.))
 
 import Database.Zookeeper.Election (LeadershipError (..), whenLeader)
-import Database.Zookeeper.ManagedEvents (ManagedZK, withZookeeper)
+import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
 import Eclogues.API (VAPI)
 import Eclogues.ApiDocs (apiDocsHtml)
 import Eclogues.AppConfig (AppConfig (AppConfig, schedChan), requireAurora)
@@ -19,6 +20,7 @@ import Eclogues.State ( AppState, JobStatus (jobState), JobError (..), newAppSta
                       , getJobs, activeJobs
                       , createJob, killJob, deleteJob, getJob, updateJobs )
 import Eclogues.TaskSpec (JobState (..), FailureReason (..))
+import Eclogues.Util (readJSON, orError)
 import Units
 
 import Control.Applicative ((<$>), (<*), pure)
@@ -36,8 +38,9 @@ import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (Except, ExceptT, runExceptT, withExceptT, mapExceptT, throwE)
 import Data.Aeson (encode)
-import Data.ByteString (ByteString)
-import Data.ByteString.Lazy (toStrict)
+import Data.Aeson.TH (deriveJSON, defaultOptions)
+import qualified Data.ByteString as BSS
+import qualified Data.ByteString.Lazy as BSL
 import Data.HashMap.Lazy (keys)
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word16)
@@ -51,8 +54,14 @@ import Servant.Server (Server, ServerT, ServantErr (..), (:~>) (..)
                       , enter, fromExceptT
                       , serve, err404, err409)
 import System.Directory (createDirectoryIfMissing)
-import System.Environment (getArgs)
 import System.IO (hPutStrLn, stderr)
+
+data ApiConfig = ApiConfig { jobsDir :: FilePath
+                           , zookeeperHosts :: ZKURI
+                           , bindAddress :: String
+                           , bindPort :: Word16 }
+
+$(deriveJSON defaultOptions ''ApiConfig)
 
 bool :: a -> a -> Bool -> a
 bool a b p = if p then b else a
@@ -98,7 +107,7 @@ docsServer = (:<|> serveDocs) where
     serveDocs _ respond = respond $ responseLBS ok200 [plain] apiDocsHtml
     plain = ("Content-Type", "text/html")
 
-whileLeader :: ManagedZK -> ByteString -> IO a -> ExceptT LeadershipError IO a
+whileLeader :: ManagedZK -> BSS.ByteString -> IO a -> ExceptT LeadershipError IO a
 whileLeader zk advertisedHost act =
     lift (runExceptT $ whenLeader zk "/eclogues" advertisedHost act) >>= \case
         Left LeadershipLost -> whileLeader zk advertisedHost act
@@ -115,14 +124,18 @@ corsPolicy = CorsResourcePolicy { corsOrigins = Nothing
                                 , corsRequireOrigin = False
                                 , corsIgnoreFailures = False }
 
-withZK :: FilePath -> ByteString -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
-withZK jobsDir advertisedHost webLock zk = whileLeader zk advertisedHost $ do
+advertisedData :: ApiConfig -> BSS.ByteString
+advertisedData (ApiConfig _ _ host port) = BSL.toStrict $ encode (host, port)
+
+withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
+withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
+    let jdir = jobsDir apiConf
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
     stateV <- newTVarIO newAppState
     schedV <- newTChanIO
-    createDirectoryIfMissing False jobsDir
+    createDirectoryIfMissing False jdir
 
-    let conf = AppConfig jobsDir getURI schedV
+    let conf = AppConfig jdir getURI schedV
 
     let web = Lock.with webLock $ run 8000 . myCors . serve (Proxy :: (Proxy VAPIWithDocs)) . docsServer $ mainServer conf stateV
         myCors = cors . const $ Just corsPolicy
@@ -132,7 +145,7 @@ withZK jobsDir advertisedHost webLock zk = whileLeader zk advertisedHost $ do
             (newStatusesRes, aJobs) <- do
                 state <- atomically $ readTVar stateV
                 let aJobs = activeJobs state
-                    sconf = ScheduleConf jobsDir uri
+                    sconf = ScheduleConf jdir uri
                 newStatusesRes <- try . runExceptT . getSchedulerStatuses sconf $ keys aJobs
                 pure (newStatusesRes, aJobs)
             case newStatusesRes of
@@ -147,7 +160,7 @@ withZK jobsDir advertisedHost webLock zk = whileLeader zk advertisedHost $ do
         enacter = forever . atomically $ do -- TODO: catch run error and reschedule
             cmd <- readTChan schedV
             auri <- requireAurora conf
-            let sconf = ScheduleConf jobsDir auri
+            let sconf = ScheduleConf jdir auri
             onCommit . throwExc $ runScheduleCommand sconf cmd
 
     hPutStrLn stderr "Starting server on port 8000"
@@ -156,10 +169,9 @@ withZK jobsDir advertisedHost webLock zk = whileLeader zk advertisedHost $ do
 
 main :: IO ()
 main = do
-    (jobsDir:zkUri:myHost:_) <- getArgs
-    let advertisedHost = toStrict $ encode ((myHost, 8000) :: (String, Word16))
+    apiConf <- orError =<< readJSON "/etc/xdg/eclogues/api.json"
     webLock <- Lock.new
-    res <- withZookeeper zkUri $ runExceptT . withZK jobsDir advertisedHost webLock
+    res <- withZookeeper (zookeeperHosts apiConf) $ runExceptT . withZK apiConf webLock
     case res of
         Left (LZKError e)         -> error $ "Zookeeper coordination error: " ++ show e
         Left (ActionException ex) -> throwIO ex
