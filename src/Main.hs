@@ -129,12 +129,15 @@ withZK jobsDir advertisedHost webLock zk = whileLeader zk advertisedHost $ do
         updater = forever $ goUpdate >> threadDelay (floor $ second (1 :: Double) `asVal` micro second)
         goUpdate = do
             uri <- atomically $ requireAurora conf
-            state <- atomically $ readTVar stateV
-            let aJobs = activeJobs state
-                sconf = ScheduleConf jobsDir uri
-            newStatusesRes <- try . runExceptT . getSchedulerStatuses sconf $ keys aJobs
+            (newStatusesRes, aJobs) <- do
+                state <- atomically $ readTVar stateV
+                let aJobs = activeJobs state
+                    sconf = ScheduleConf jobsDir uri
+                newStatusesRes <- try . runExceptT . getSchedulerStatuses sconf $ keys aJobs
+                pure (newStatusesRes, aJobs)
             case newStatusesRes of
                 Right (Right newStatuses) -> atomically $ do
+                    state <- readTVar stateV
                     let (state', cmds) = updateJobs state aJobs newStatuses
                     mapM_ (writeTChan schedV) cmds
                     writeTVar stateV state'
