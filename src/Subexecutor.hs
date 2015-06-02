@@ -16,7 +16,6 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, doesDirectoryE
 import System.Environment (getArgs)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
-import System.Path (copyDir)
 import System.Process (callProcess, spawnProcess, waitForProcess)
 
 data SubexecutorConfig = SubexecutorConfig { jobsDir :: FilePath }
@@ -35,11 +34,12 @@ copyDirContents :: FilePath -> FilePath -> IO ()
 copyDirContents from to = callProcess "/bin/cp" ["-r", from ++ "/.", to]
 
 copyFileOrDir :: FilePath -> FilePath -> IO Bool
-copyFileOrDir from to =
-    condM [ (doesFileExist      from, copyFile from to' *> pure True)
-          , (doesDirectoryExist from, copyDir  from to' *> pure True)
-          , (otherwiseM             , pure False) ]
-    where to' = to ++ from
+copyFileOrDir from to = go where
+    go = condM [ (doesFileExist      from, copyFile from to' *> pure True)
+               , (doesDirectoryExist from, copyDir           *> pure True)
+               , (otherwiseM             , pure False) ]
+    to' = to ++ from
+    copyDir = callProcess "mkdir" ["-p", to'] *> copyDirContents from to'
 
 runTask :: FilePath -> String -> IO ()
 runTask path name = do
