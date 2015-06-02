@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Eclogues.Scheduling.AuroraConfig (
-      ATaskExecConf, TaskConfig
+      ATaskExecConf, TaskConfig, Role
     , auroraJobConfig, lockKey, defaultJobKey
     , getJobName, getJobState ) where
 
@@ -44,16 +44,19 @@ $(deriveJSON defaultOptions ''JobConfiguration)
 encodeToText :: (ToJSON a) => a -> L.Text
 encodeToText = toLazyText . encodeToTextBuilder . toJSON
 
+type Role = L.Text
+type Name = L.Text
+
 data ATaskExecConf = ATaskExecConf   { tec_environment           :: L.Text
                                      , tec_task                  :: ATask
-                                     , tec_name                  :: L.Text
+                                     , tec_name                  :: Name
                                      , tec_service               :: Bool
                                      , tec_max_task_failures     :: Int32
                                      , tec_cron_collision_policy :: CronCollisionPolicy
                                      , tec_priority              :: Int32
                                      , tec_cluster               :: L.Text
                                      , tec_health_check_config   :: AHealthCheckConfig
-                                     , tec_role                  :: L.Text
+                                     , tec_role                  :: Role
                                      , tec_enable_hooks          :: Bool
                                      , tec_production            :: Bool }
                                      deriving (Eq, Show)
@@ -64,7 +67,7 @@ data AResources = AResources { _disk :: Int64
                              deriving (Eq, Show)
 
 data ATask = ATask   { task_processes          :: [AProcess]
-                     , task_name               :: L.Text
+                     , task_name               :: Name
                      , task_finalization_wait  :: Integer
                      , task_max_failures       :: Int32
                      , task_max_concurrency    :: Integer
@@ -75,7 +78,7 @@ data ATask = ATask   { task_processes          :: [AProcess]
 data ATaskConstraint = ATaskConstraint { order :: [L.Text] } deriving (Eq, Show)
 
 data AProcess = AProcess   { p_daemon       :: Bool
-                           , p_name         :: L.Text
+                           , p_name         :: Name
                            , p_ephemeral    :: Bool
                            , p_max_failures :: Int32
                            , p_min_duration :: Integer
@@ -98,17 +101,11 @@ $(deriveJSON defaultOptions{fieldLabelModifier = drop 2} ''AProcess)
 $(deriveJSON defaultOptions{fieldLabelModifier = drop 1} ''AResources)
 $(deriveJSON defaultOptions ''AHealthCheckConfig)
 
-defaultRole :: L.Text
-defaultRole = "vagrant"
-
-defaultOwner :: Identity
-defaultOwner = Identity defaultRole defaultRole
-
 defaultEnvironment :: L.Text
 defaultEnvironment = "devel"
 
-defaultJobKey :: L.Text -> JobKey
-defaultJobKey = JobKey defaultRole defaultEnvironment
+defaultJobKey :: Role -> Name -> JobKey
+defaultJobKey role = JobKey role defaultEnvironment
 
 defaultPriority :: Int32
 defaultPriority = 0
@@ -146,17 +143,18 @@ defaultCronCollisionPolicy = KILL_EXISTING
 aResources :: Resources -> AResources
 aResources (Resources disk ram cpu _) = AResources (ceiling $ disk `asVal` byte) (ceiling $ ram `asVal` byte) (cpu `asVal` core)
 
-auroraJobConfig :: TaskSpec -> JobConfiguration
-auroraJobConfig (TaskSpec name cmd resources@(Resources disk ram cpu _) _ _ _) = job where
-    jobKey = defaultJobKey name
+auroraJobConfig :: Role -> TaskSpec -> JobConfiguration
+auroraJobConfig role (TaskSpec name cmd resources@(Resources disk ram cpu _) _ _ _) = job where
+    jobKey = defaultJobKey role name
+    owner = Identity role role
     job = JobConfiguration  { jobConfiguration_key                 = jobKey
-                            , jobConfiguration_owner               = defaultOwner
+                            , jobConfiguration_owner               = owner
                             , jobConfiguration_cronSchedule        = Nothing
                             , jobConfiguration_cronCollisionPolicy = defaultCronCollisionPolicy
                             , jobConfiguration_taskConfig          = task
                             , jobConfiguration_instanceCount       = 1 }
     task = default_TaskConfig   { taskConfig_job             = jobKey
-                                , taskConfig_owner           = defaultOwner
+                                , taskConfig_owner           = owner
                                 , taskConfig_environment     = defaultEnvironment
                                 , taskConfig_jobName         = name
                                 , taskConfig_isService       = defaultIsService
@@ -180,7 +178,7 @@ auroraJobConfig (TaskSpec name cmd resources@(Resources disk ram cpu _) _ _ _) =
                                     , tec_priority              = defaultPriority
                                     , tec_cluster               = defaultCluster
                                     , tec_health_check_config   = defaultHealthCheckConfig
-                                    , tec_role                  = defaultRole
+                                    , tec_role                  = role
                                     , tec_enable_hooks          = False
                                     , tec_production            = defaultProduction }
     aTask = ATask { task_processes          = [aProcess]
@@ -199,10 +197,10 @@ auroraJobConfig (TaskSpec name cmd resources@(Resources disk ram cpu _) _ _ _) =
                         , p_cmdline      = cmd
                         , p_final        = False }
 
-lockKey :: L.Text -> LockKey
-lockKey = LockKey . defaultJobKey
+lockKey :: Role -> Name -> LockKey
+lockKey role = LockKey . defaultJobKey role
 
-getJobName :: ScheduledTask -> L.Text
+getJobName :: ScheduledTask -> Name
 getJobName = jobKey_name . taskConfig_job . assignedTask_task . scheduledTask_assignedTask
 
 jobState' :: ScheduleStatus -> [TaskEvent] -> JobState

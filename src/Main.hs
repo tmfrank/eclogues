@@ -43,6 +43,7 @@ import qualified Data.ByteString as BSS
 import qualified Data.ByteString.Lazy as BSL
 import Data.HashMap.Lazy (keys)
 import Data.Proxy (Proxy (Proxy))
+import qualified Data.Text.Lazy as TL
 import Data.Word (Word16)
 import Database.Zookeeper (ZKError)
 import Network.HTTP.Types (ok200, methodGet, methodPost, methodDelete, methodPut)
@@ -59,7 +60,8 @@ import System.IO (hPutStrLn, stderr)
 data ApiConfig = ApiConfig { jobsDir :: FilePath
                            , zookeeperHosts :: ZKURI
                            , bindAddress :: String
-                           , bindPort :: Word16 }
+                           , bindPort :: Word16
+                           , subexecutorUser :: TL.Text }
 
 $(deriveJSON defaultOptions ''ApiConfig)
 
@@ -125,7 +127,7 @@ corsPolicy = CorsResourcePolicy { corsOrigins = Nothing
                                 , corsIgnoreFailures = False }
 
 advertisedData :: ApiConfig -> BSS.ByteString
-advertisedData (ApiConfig _ _ host port) = BSL.toStrict $ encode (host, port)
+advertisedData (ApiConfig _ _ host port _) = BSL.toStrict $ encode (host, port)
 
 withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
 withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
@@ -145,7 +147,7 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
             (newStatusesRes, aJobs) <- do
                 state <- atomically $ readTVar stateV
                 let aJobs = activeJobs state
-                    sconf = ScheduleConf jdir uri
+                    sconf = ScheduleConf jdir uri $ subexecutorUser apiConf
                 newStatusesRes <- try . runExceptT . getSchedulerStatuses sconf $ keys aJobs
                 pure (newStatusesRes, aJobs)
             case newStatusesRes of
@@ -160,7 +162,7 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
         enacter = forever . atomically $ do -- TODO: catch run error and reschedule
             cmd <- readTChan schedV
             auri <- requireAurora conf
-            let sconf = ScheduleConf jdir auri
+            let sconf = ScheduleConf jdir auri $ subexecutorUser apiConf
             onCommit . throwExc $ runScheduleCommand sconf cmd
 
     hPutStrLn stderr "Starting server on port 8000"

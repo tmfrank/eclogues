@@ -17,7 +17,7 @@ import Api_Types2 (ResponseCode (OK))
 import qualified AuroraSchedulerManager_Client as AClient
 import qualified ReadOnlyScheduler_Client as ROClient
 
-import Eclogues.Scheduling.AuroraConfig (auroraJobConfig, lockKey, defaultJobKey)
+import Eclogues.Scheduling.AuroraConfig (Role, auroraJobConfig, lockKey, defaultJobKey)
 import Eclogues.TaskSpec (TaskSpec, Name)
 
 import Control.Applicative ((<$>), pure)
@@ -53,33 +53,33 @@ getJobs client = do
     res <- ExceptT $ onlyRes <$> ROClient.getJobs client ""
     pure . getJobsResult_configs $ result_getJobsResult res
 
-taskQuery :: [Name] -> TaskQuery
-taskQuery names = default_TaskQuery { taskQuery_jobKeys = Just . HashSet.fromList $ defaultJobKey <$> names }
+taskQuery :: Role -> [Name] -> TaskQuery
+taskQuery role names = default_TaskQuery { taskQuery_jobKeys = Just . HashSet.fromList $ defaultJobKey role <$> names }
 
-getTasksWithoutConfigs :: Client -> [Name] -> Result [ScheduledTask]
-getTasksWithoutConfigs client names = do
+getTasksWithoutConfigs :: Client -> Role -> [Name] -> Result [ScheduledTask]
+getTasksWithoutConfigs client role names = do
     res <- ExceptT $ onlyRes <$> ROClient.getTasksWithoutConfigs client q
     pure $ tasks res
     where
-        q = taskQuery names
+        q = taskQuery role names
         tasks = toList . scheduleStatusResult_tasks . result_scheduleStatusResult
 
 unauthenticated :: SessionKey
 unauthenticated = SessionKey (Just "UNAUTHENTICATED") (Just "UNAUTHENTICATED")
 
-acquireLock :: Client -> Name -> Result Lock
-acquireLock client name = do
-    res <- ExceptT $ onlyRes <$> AClient.acquireLock client (lockKey name) unauthenticated
+acquireLock :: Client -> Role -> Name -> Result Lock
+acquireLock client role name = do
+    res <- ExceptT $ onlyRes <$> AClient.acquireLock client (lockKey role name) unauthenticated
     pure . acquireLockResult_lock $ result_acquireLockResult res
 
 releaseLock :: Client -> Lock -> Result ()
 releaseLock client lock = void . ExceptT $ onlyOK <$> AClient.releaseLock client lock UNCHECKED unauthenticated
 
-createJob :: Client -> TaskSpec -> Result ()
-createJob client spec = void . ExceptT $ onlyOK <$> AClient.createJob client (auroraJobConfig spec) Nothing unauthenticated
+createJob :: Client -> Role -> TaskSpec -> Result ()
+createJob client role spec = void . ExceptT $ onlyOK <$> AClient.createJob client (auroraJobConfig role spec) Nothing unauthenticated
 
-killTasks :: Client -> [Name] -> Result ()
-killTasks client names = void . ExceptT $ onlyOK <$> AClient.killTasks client (taskQuery names) Nothing unauthenticated
+killTasks :: Client -> Role -> [Name] -> Result ()
+killTasks client role names = void . ExceptT $ onlyOK <$> AClient.killTasks client (taskQuery role names) Nothing unauthenticated
 
 thriftClient :: URI -> IO Client
 thriftClient uri = do

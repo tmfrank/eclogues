@@ -20,7 +20,7 @@ spec = do
 
     describe "ATaskExecConf" $
         it "is embedded in a JobConfiguration" $ do
-            let Just ec = taskConfig_executorConfig . jobConfiguration_taskConfig $ auroraJobConfig task
+            let Just ec = taskConfig_executorConfig . jobConfiguration_taskConfig $ auroraJobConfig "default" task
             let text = executorConfig_data ec
             let encoded = encodeUtf8 text
             (decode encoded :: Maybe ATaskExecConf) `shouldSatisfy` isJust
