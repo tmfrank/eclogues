@@ -36,6 +36,7 @@ import Control.Exception (Exception, IOException, throwIO, try)
 import Control.Monad (forever)
 import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Either (EitherT (EitherT))
 import Control.Monad.Trans.Except (Except, ExceptT, runExceptT, withExceptT, mapExceptT, throwE)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
@@ -51,9 +52,8 @@ import Network.Wai (responseLBS)
 import Network.Wai.Handler.Warp (run)
 import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), cors)
 import Servant.API ((:<|>) ((:<|>)), Raw)
-import Servant.Server (Server, ServerT, ServantErr (..), (:~>) (..)
-                      , enter, fromExceptT
-                      , serve, err404, err409)
+import Servant.Server ( Server, ServerT, ServantErr (..), (:~>) (..)
+                      , enter, serve, err404, err409 )
 import System.Directory (createDirectoryIfMissing)
 import System.IO (hPutStrLn, stderr)
 
@@ -67,6 +67,9 @@ $(deriveJSON defaultOptions ''ApiConfig)
 
 bool :: a -> a -> Bool -> a
 bool a b p = if p then b else a
+
+fromExceptT :: ExceptT e m :~> EitherT e m
+fromExceptT = Nat $ \x -> EitherT $ runExceptT x
 
 throwExc :: (Exception e) => ExceptT e IO a -> IO a
 throwExc act = runExceptT act >>= \case
