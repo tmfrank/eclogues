@@ -14,11 +14,12 @@ import Eclogues.ApiDocs (apiDocsHtml)
 import Eclogues.AppConfig (AppConfig (AppConfig, schedChan), requireAurora)
 import Eclogues.Instances ()
 import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
-import Eclogues.Scheduling.Command ( ScheduleConf (ScheduleConf), ScheduleCommand
+import Eclogues.Scheduling.Command ( ScheduleConf (ScheduleConf)
                                    , runScheduleCommand, getSchedulerStatuses )
 import Eclogues.State ( AppState, JobStatus (jobState), JobError (..), newAppState
                       , getJobs, activeJobs
                       , createJob, killJob, deleteJob, getJob, updateJobs )
+import Eclogues.State.Monad (EState, runEState)
 import Eclogues.TaskSpec (JobState (..), FailureReason (..))
 import Eclogues.Util (readJSON, orError)
 import Units
@@ -37,7 +38,7 @@ import Control.Monad (forever)
 import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Either (EitherT (EitherT))
-import Control.Monad.Trans.Except (Except, ExceptT, runExceptT, withExceptT, mapExceptT, throwE)
+import Control.Monad.Trans.Except (ExceptT, runExceptT, withExceptT, mapExceptT, throwE)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import qualified Data.ByteString as BSS
@@ -76,14 +77,16 @@ throwExc act = runExceptT act >>= \case
     Left e  -> throwIO e
     Right a -> pure a
 
-type Scheduler = AppState -> Except JobError (AppState, [ScheduleCommand])
+type Scheduler = ExceptT JobError EState ()
 
 runScheduler :: AppConfig -> TVar AppState -> Scheduler -> ExceptT JobError IO ()
 runScheduler conf stateV f = mapExceptT atomically $ do
     state <- lift $ readTVar stateV
-    (state', cmds) <- hoist generalize $ f state
-    lift $ mapM_ (writeTChan $ schedChan conf) cmds
-    lift $ writeTVar stateV state'
+    case runEState state $ runExceptT f of
+        (Left  e, _, _)         -> throwE e
+        (Right _, state', cmds) -> do
+            lift $ mapM_ (writeTChan $ schedChan conf) cmds
+            lift $ writeTVar stateV state'
 
 mainServer :: AppConfig -> TVar AppState -> Server VAPI
 mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server where
@@ -96,7 +99,7 @@ mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server 
     createJobH = runScheduler' . createJob
     deleteJobH = runScheduler' . deleteJob
 
-    killJobH jid (Failed UserKilled) = runScheduler' $ \st -> (st,) <$> killJob jid st
+    killJobH jid (Failed UserKilled) = runScheduler' $ killJob jid
     killJobH jid _                   = throwE (InvalidStateTransition "Can only set state to Failed UserKilled") <* getJobH jid
 
     onError :: JobError -> ServantErr

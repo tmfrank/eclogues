@@ -9,6 +9,9 @@ module Eclogues.State (
 
 import Eclogues.API (JobError (..))
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
+import Eclogues.State.Monad (EState, insertJob, schedule, addRevDep, getDependents)
+import qualified Eclogues.State.Monad as ES
+import Eclogues.State.Types (AppState (..), Jobs, newAppState)
 import Eclogues.TaskSpec ( TaskSpec (..), Name, FailureReason (..), RunErrorReason (..)
                          , JobState (..), isActiveState, isTerminationState
                                         , isExpectedTransition, isOnScheduler
@@ -16,73 +19,68 @@ import Eclogues.TaskSpec ( TaskSpec (..), Name, FailureReason (..), RunErrorReas
 
 import Control.Applicative ((<$>), (*>), pure)
 import Control.Monad (when, foldM)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (Except, throwE)
-import Control.Monad.Trans.Writer.Lazy (Writer, WriterT, runWriterT, runWriter, tell)
-import Data.HashMap.Lazy ( HashMap, empty, insert, insertWith, adjust
-                         , elems, union, member, traverseWithKey )
+import Control.Monad.Trans.Class (MonadTrans, lift)
+import Control.Monad.Trans.Except (ExceptT, Except, throwE)
+import Control.Monad.Trans.Writer.Lazy (Writer, WriterT, runWriter, tell, execWriterT)
+import Data.HashMap.Lazy (HashMap, adjust, elems, union, traverseWithKey)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.List (foldl')
 import qualified Data.List as List
-import Data.Maybe (fromMaybe, catMaybes)
+import Data.Maybe (fromMaybe, catMaybes, isJust)
 import Data.Monoid (Sum (Sum))
 
-data AppState = AppState { jobs      :: HashMap Name JobStatus
-                         , revDeps   :: HashMap Name [Name] }
 
-type JSS = HashMap Name JobStatus
-type RevDeps = HashMap Name [Name]
-
-newAppState :: AppState
-newAppState = AppState empty empty
+lift2 :: (MonadTrans m1, MonadTrans m2, Monad m, Monad (m1 m)) => m a -> m2 (m1 m) a
+lift2 = lift . lift
 
 jobName :: JobStatus -> Name
 jobName = taskName . jobSpec
 
-createJob :: TaskSpec -> AppState -> Except JobError (AppState, [ScheduleCommand])
-createJob spec state = do
+createJob :: TaskSpec -> ExceptT JobError EState ()
+createJob spec = do
     let name = taskName spec
         deps = taskDependsOn spec
-        jss  = jobs state
-    when (member name jss) $ throwE JobNameUsed
-    (rdeps', Sum activeDepCount) <- runWriterT $ foldM (checkDep name jss) (revDeps state) deps
+    existing <- lift $ ES.getJob name
+    when (isJust existing) $ throwE JobNameUsed
+    Sum activeDepCount <- execWriterT $ mapM_ (checkDep name) deps
     let jstate = if activeDepCount == 0
             then Queued LocalQueue
             else Waiting activeDepCount
-        jss' = insert name (JobStatus spec jstate) jss
-        state' = AppState jss' rdeps'
+    lift $ insertJob spec jstate
     if jstate == Queued LocalQueue
-        then pure (state', [QueueJob spec])
-        else pure (state', [])
+        then lift . schedule $ QueueJob spec
+        else pure ()
     where
-        checkDep :: Name -> JSS -> RevDeps -> Name -> WriterT (Sum Integer) (Except JobError) RevDeps
-        checkDep name jss rdeps depName
-            | Just ds <- HashMap.lookup depName jss = case jobState ds of
-                Finished            -> pure $ addRdep name depName rdeps
-                s | isActiveState s -> tell 1 *> pure (addRdep name depName rdeps)
+        checkDep :: Name -> Name -> WriterT (Sum Integer) (ExceptT JobError EState) ()
+        checkDep name depName = lift2 (ES.getJob depName) >>= \case
+            Just ds -> case jobState ds of
+                Finished            -> lift2 $ addRevDep depName name
+                s | isActiveState s -> tell 1 *> lift2 (addRevDep depName name)
                   | otherwise       -> lift . throwE $ JobCannotHaveFailed depName
-            | otherwise = lift . throwE $ JobMustExist depName
-        addRdep :: Name -> Name -> RevDeps -> RevDeps
-        addRdep name depName = insertWith (++) depName [name]
+            Nothing -> lift . throwE $ JobMustExist depName
 
-killJob :: Name -> AppState -> Except JobError [ScheduleCommand]
-killJob name state = do
-    js <- getJob name state
+existingJob :: Name -> ExceptT JobError EState JobStatus
+existingJob name = lift (ES.getJob name) >>= \case
+    Just js -> pure js
+    Nothing -> throwE NoSuchJob
+
+killJob :: Name -> ExceptT JobError EState ()
+killJob name = existingJob name >>= \js ->
     if isTerminationState (jobState js)
         then throwE $ JobMustBeTerminated False
-        else pure [KillJob name]
+        else lift . schedule $ KillJob name
 
-deleteJob :: Name -> AppState -> Except JobError (AppState, [ScheduleCommand])
-deleteJob name state = do
-    js <- getJob name state
+deleteJob :: Name -> ExceptT JobError EState ()
+deleteJob name = existingJob name >>= \js -> do
     when (isActiveState $ jobState js) . throwE $ JobMustBeTerminated True
-    fromMaybe (return ()) $ (throwE . OutstandingDependants) <$> HashMap.lookup name (revDeps state)
-    let state' = state { jobs = HashMap.delete name (jobs state) }
-    pure (state', [CleanupJob name])
+    dependents <- lift $ getDependents name
+    when (not $ null dependents) . throwE $ OutstandingDependants dependents
+    lift $ ES.deleteJob name
+    lift . schedule $ CleanupJob name
 
 -- Only check on active jobs; terminated jobs shouldn't change status
 -- Also Waiting jobs aren't in Aurora so filter out those
-activeJobs :: AppState -> JSS
+activeJobs :: AppState -> Jobs
 activeJobs state = HashMap.filter (isNonWaitingActiveState . jobState) (jobs state) where
     isNonWaitingActiveState :: JobState -> Bool
     isNonWaitingActiveState (Waiting _) = False
@@ -90,7 +88,7 @@ activeJobs state = HashMap.filter (isNonWaitingActiveState . jobState) (jobs sta
 
 data StateTransition = Transition JobStatus JobState
 
-updateJobs :: AppState -> JSS -> [(Name, JobState)] -> (AppState, [ScheduleCommand])
+updateJobs :: AppState -> Jobs -> [(Name, JobState)] -> (AppState, [ScheduleCommand])
 updateJobs state activeStatuses newStates = (AppState statuses'' newRdeps, commands) where
     (activeStatuses', transitions) = runWriter $ traverseWithKey transition activeStatuses
     -- For union, first map has priority
@@ -111,7 +109,7 @@ updateJobs state activeStatuses newStates = (AppState statuses'' newRdeps, comma
             else if isExpectedTransition oldState newState
                 then chng newState
                 else chng $ RunError BadSchedulerTransition
-    handleDeps :: (JSS, HashMap Name [Name]) -> StateTransition -> Writer [ScheduleCommand] (JSS, HashMap Name [Name])
+    handleDeps :: (Jobs, HashMap Name [Name]) -> StateTransition -> Writer [ScheduleCommand] (Jobs, HashMap Name [Name])
     handleDeps (jss, allRdeps) (Transition pst newState) | isTerminationState newState = do
         let name = jobName pst
             rdepNames = fromMaybe [] $ HashMap.lookup name allRdeps
@@ -130,9 +128,9 @@ updateJobs state activeStatuses newStates = (AppState statuses'' newRdeps, comma
         l  -> HashMap.insert depName l allRdeps
         where
             rdeps' = fromMaybe [] $ List.delete name <$> HashMap.lookup depName allRdeps
-    cancelDep :: Name -> JSS -> Name -> JSS
+    cancelDep :: Name -> Jobs -> Name -> Jobs
     cancelDep name jss depName = adjust (setJobState . Failed $ DependencyFailed name) depName jss
-    triggerDep :: JSS -> JobStatus -> Writer [ScheduleCommand] JSS
+    triggerDep :: Jobs -> JobStatus -> Writer [ScheduleCommand] Jobs
     triggerDep jss depSt
         | Waiting 1 <- jobState depSt = do
             tell [QueueJob $ jobSpec depSt]
