@@ -1,5 +1,6 @@
 module Eclogues.AppConfig where
 
+import Eclogues.Persist (PersistContext)
 import Eclogues.Scheduling.Command (ScheduleCommand)
 
 import Control.Concurrent.AdvSTM (AdvSTM, retry)
@@ -8,7 +9,8 @@ import Network.URI (URI)
 
 data AppConfig = AppConfig { jobsDir   :: FilePath
                            , auroraURI :: AdvSTM (Maybe URI)
-                           , schedChan :: TChan ScheduleCommand }
+                           , schedChan :: TChan ScheduleCommand
+                           , pctx      :: PersistContext }
 
 requireAurora :: AppConfig -> AdvSTM URI
 requireAurora conf = do

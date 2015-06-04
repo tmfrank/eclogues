@@ -11,13 +11,15 @@ import Database.Zookeeper.Election (LeadershipError (..), whenLeader)
 import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
 import Eclogues.API (VAPI, JobError (..))
 import Eclogues.ApiDocs (apiDocsHtml)
-import Eclogues.AppConfig (AppConfig (AppConfig, schedChan), requireAurora)
+import Eclogues.AppConfig (AppConfig (AppConfig, schedChan, pctx), requireAurora)
 import Eclogues.Instances ()
+import Eclogues.Persist (PersistContext)
+import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
 import Eclogues.Scheduling.Command ( ScheduleConf (ScheduleConf)
                                    , runScheduleCommand, getSchedulerStatuses )
 import Eclogues.State (getJobs, activeJobs, createJob, killJob, deleteJob, getJob, updateJobs)
-import Eclogues.State.Monad (EState, runEState)
+import Eclogues.State.Monad (EState, runEState, scheduleCommands, appState, persist)
 import Eclogues.State.Types (AppState, newAppState)
 import Eclogues.TaskSpec (JobState (..), FailureReason (..), jobState)
 import Eclogues.Util (readJSON, orError)
@@ -26,14 +28,14 @@ import Units
 import Control.Applicative ((<$>), (<*), pure)
 import Control.Category ((.))
 import Control.Concurrent (threadDelay)
-import Control.Concurrent.AdvSTM (atomically, onCommit)
+import Control.Concurrent.AdvSTM (AdvSTM, atomically, onCommit)
 import Control.Concurrent.AdvSTM.TVar (TVar, newTVarIO, readTVar, writeTVar)
 import Control.Concurrent.AdvSTM.TChan (newTChanIO, readTChan, writeTChan)
 import Control.Concurrent.Async (waitAny, withAsync)
 import Control.Concurrent.Lock (Lock)
 import qualified Control.Concurrent.Lock as Lock
 import Control.Exception (Exception, IOException, throwIO, try)
-import Control.Lens (view)
+import Control.Lens ((^.), view)
 import Control.Monad (forever)
 import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
@@ -79,14 +81,19 @@ throwExc act = runExceptT act >>= \case
 
 type Scheduler = ExceptT JobError EState ()
 
+runPersist :: PersistContext -> Maybe (Persist.PersistAction ()) -> AdvSTM ()
+runPersist _   Nothing  = return ()
+runPersist ctx (Just p) = onCommit $ Persist.atomically ctx p
+
 runScheduler :: AppConfig -> TVar AppState -> Scheduler -> ExceptT JobError IO ()
 runScheduler conf stateV f = mapExceptT atomically $ do
     state <- lift $ readTVar stateV
     case runEState state $ runExceptT f of
-        (Left  e, _, _)         -> throwE e
-        (Right _, state', cmds) -> do
-            lift $ mapM_ (writeTChan $ schedChan conf) cmds
-            lift $ writeTVar stateV state'
+        (Left  e, _ ) -> throwE e
+        (Right _, ts) -> do
+            lift . mapM_ (writeTChan $ schedChan conf) $ ts ^. scheduleCommands
+            lift . writeTVar stateV $ ts ^. appState
+            lift . runPersist (pctx conf) $ ts ^. persist
 
 mainServer :: AppConfig -> TVar AppState -> Server VAPI
 mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server where
@@ -135,15 +142,15 @@ corsPolicy = CorsResourcePolicy { corsOrigins = Nothing
 advertisedData :: ApiConfig -> BSS.ByteString
 advertisedData (ApiConfig _ _ host port _) = BSL.toStrict $ encode (host, port)
 
-withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
-withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
+withZK :: ApiConfig -> PersistContext -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
+withZK apiConf pctx' webLock zk = whileLeader zk (advertisedData apiConf) $ do
     let jdir = jobsDir apiConf
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
     stateV <- newTVarIO newAppState
     schedV <- newTChanIO
     createDirectoryIfMissing False jdir
 
-    let conf = AppConfig jdir getURI schedV
+    let conf = AppConfig jdir getURI schedV pctx'
 
     let web = Lock.with webLock $ run 8000 . myCors . serve (Proxy :: (Proxy VAPIWithDocs)) . docsServer $ mainServer conf stateV
         myCors = cors . const $ Just corsPolicy
@@ -159,9 +166,10 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
             case newStatusesRes of
                 Right (Right newStatuses) -> atomically $ do
                     state <- readTVar stateV
-                    let (_, state', cmds) = runEState state $ updateJobs aJobs newStatuses
-                    mapM_ (writeTChan schedV) cmds
-                    writeTVar stateV state'
+                    let (_, ts) = runEState state $ updateJobs aJobs newStatuses
+                    mapM_ (writeTChan schedV) $ ts ^. scheduleCommands
+                    writeTVar stateV $ ts ^. appState
+                    runPersist pctx' $ ts ^. persist
                 Left (ex :: IOException)  ->
                     hPutStrLn stderr $ "Error connecting to Aurora at " ++ show uri ++ "; retrying: " ++ show ex
                 Right (Left resp)         -> throwIO resp
@@ -169,7 +177,9 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
             cmd <- readTChan schedV
             auri <- requireAurora conf
             let sconf = ScheduleConf jdir auri $ subexecutorUser apiConf
-            onCommit . throwExc $ runScheduleCommand sconf cmd
+            onCommit . throwExc $ do
+                runScheduleCommand sconf cmd
+                lift . Persist.atomically pctx' $ Persist.deleteIntent cmd
 
     hPutStrLn stderr "Starting server on port 8000"
     withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA ->
@@ -179,7 +189,9 @@ main :: IO ()
 main = do
     apiConf <- orError =<< readJSON "/etc/xdg/eclogues/api.json"
     webLock <- Lock.new
-    res <- withZookeeper (zookeeperHosts apiConf) $ runExceptT . withZK apiConf webLock
+    res <- Persist.withPersistDir (jobsDir apiConf) $ \pctx' ->
+        lift . withZookeeper (zookeeperHosts apiConf) $
+        runExceptT . withZK apiConf pctx' webLock
     case res of
         Left (LZKError e)         -> error $ "Zookeeper coordination error: " ++ show e
         Left (ActionException ex) -> throwIO ex

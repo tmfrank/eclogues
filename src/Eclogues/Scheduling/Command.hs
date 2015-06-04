@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
 module Eclogues.Scheduling.Command where
@@ -21,6 +22,7 @@ import Control.Monad (guard, void)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..))
 import Data.Aeson (encode)
+import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Data.ByteString.Lazy (writeFile)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
@@ -36,6 +38,8 @@ import Text.Read.HT (maybeRead)
 data ScheduleCommand = QueueJob TaskSpec
                      | KillJob Name
                      | CleanupJob Name
+
+$(deriveJSON defaultOptions ''ScheduleCommand)
 
 data ScheduleConf = ScheduleConf { jobsDir :: FilePath, auroraURI :: URI, auroraRole :: Role }
 
