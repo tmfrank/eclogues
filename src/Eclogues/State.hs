@@ -8,10 +8,11 @@ import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.State.Monad (EState)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState, Jobs, jobs)
-import Eclogues.TaskSpec ( TaskSpec (..), Name, FailureReason (..), RunErrorReason (..)
+import Eclogues.TaskSpec ( Name, FailureReason (..), RunErrorReason (..)
+                         , TaskSpec, taskName, taskDependsOn
                          , JobState (..), isActiveState, isTerminationState
                                         , isExpectedTransition, isOnScheduler
-                         , JobStatus (JobStatus), jobState, jobSpec
+                         , JobStatus (JobStatus), jobState
                          , QueueStage (LocalQueue) )
 
 import Control.Applicative ((*>), pure)
@@ -31,8 +32,8 @@ lift2 = lift . lift
 
 createJob :: TaskSpec -> ExceptT JobError EState ()
 createJob spec = do
-    let name = taskName spec
-        deps = taskDependsOn spec
+    let name = spec ^. taskName
+        deps = spec ^. taskDependsOn
     existing <- lift $ ES.getJob name
     when (isJust existing) $ throwE JobNameUsed
     Sum activeDepCount <- execWriterT $ mapM_ (checkDep name) deps
@@ -97,10 +98,10 @@ updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeSt
     handleDeps :: JobStatus -> JobState -> EState ()
     handleDeps pst newState
         | isTerminationState newState = do
-            let name = taskName $ pst ^. jobSpec
+            let name = pst ^. taskName
             rdepNames <- ES.getDependents name
             -- Remove this job from the rev deps of its dependencies
-            mapM_ (flip ES.removeRevDep name) . taskDependsOn $ pst ^. jobSpec
+            mapM_ (flip ES.removeRevDep name) $ pst ^. taskDependsOn
             case newState of
                 Finished -> mapM_ triggerDep rdepNames
                 _        -> mapM_ (flip ES.setJobState . Failed $ DependencyFailed name) rdepNames

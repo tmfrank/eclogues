@@ -2,13 +2,15 @@
 
 module Main where
 
-import Eclogues.TaskSpec (Command, TaskSpec (..), Resources (..), RunResult (..))
+import Eclogues.TaskSpec ( Command, RunResult (..)
+                         , TaskSpec, taskDependsOn, taskCommand, taskOutputFiles, taskCaptureStdout, time )
 import Eclogues.Util (readJSON, orError)
 import Units
 
 import Control.Applicative ((*>), pure)
 import Control.Arrow ((&&&))
 import Control.Conditional (condM, otherwiseM)
+import Control.Lens ((^.))
 import Control.Monad (when)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import qualified Data.Text.Lazy as L
@@ -43,18 +45,18 @@ copyFileOrDir from to = go where
 
 runTask :: FilePath -> String -> IO ()
 runTask path name = do
-    spec <- orError =<< readJSON (specDir </> "spec.json")
+    spec <- orError =<< readJSON (specDir </> "spec.json") :: IO TaskSpec
 
     copyDirContents (specDir </> "workspace") "."
     createDirectoryIfMissing False depsDir
-    mapM_ copyDep $ taskDependsOn spec
+    mapM_ copyDep $ spec ^. taskDependsOn
 
-    runRes <- runCommand (time $ taskResources spec) (taskCommand spec)
+    runRes <- runCommand (spec ^. time) (spec ^. taskCommand)
 
     -- TODO: Trigger Failed state when output doesn't exist
-    mapM_ (flip copyFileOrDir (specDir </> "output/")) $ taskOutputFiles spec
+    mapM_ (flip copyFileOrDir (specDir </> "output/")) $ spec ^. taskOutputFiles
     writeFile (specDir </> "runresult") (show runRes)
-    when (taskCaptureStdout spec) $ copyFile stdout $ specDir </> "output/stdout"
+    when (spec ^. taskCaptureStdout) $ copyFile stdout $ specDir </> "output/stdout"
     where
         specDir = path </> name
         stdout = ".logs" </> name </> "0/stdout"

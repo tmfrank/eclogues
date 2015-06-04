@@ -6,7 +6,7 @@
 module Eclogues.TaskSpec where
 
 import Control.Applicative ((<$>), (<*>), pure)
-import Control.Lens.TH (makeLenses)
+import Control.Lens.TH (makeClassy)
 import Control.Monad ((<=<))
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
 import qualified Data.Aeson as Aeson
@@ -23,18 +23,18 @@ default (Data.Text.Text)
 type Name = L.Text
 type Command = L.Text
 
-data Resources = Resources { disk :: Value Double MB
-                           , ram  :: Value Double MiB
-                           , cpu  :: Value Double Core
-                           , time :: Value Int Second }
+data Resources = Resources { _disk :: Value Double MB
+                           , _ram  :: Value Double MiB
+                           , _cpu  :: Value Double Core
+                           , _time :: Value Int Second }
                            deriving (Show, Eq)
 
-data TaskSpec = TaskSpec { taskName          :: Name
-                         , taskCommand       :: Command
-                         , taskResources     :: Resources
-                         , taskOutputFiles   :: [FilePath]
-                         , taskCaptureStdout :: Bool
-                         , taskDependsOn     :: [Name] }
+data TaskSpec = TaskSpec { _taskName          :: Name
+                         , _taskCommand       :: Command
+                         , _taskResources     :: Resources
+                         , _taskOutputFiles   :: [FilePath]
+                         , _taskCaptureStdout :: Bool
+                         , _taskDependsOn     :: [Name] }
                          deriving (Show, Eq)
 
 data RunResult = Ended ExitCode | Overtime deriving (Show, Read)
@@ -61,7 +61,12 @@ data JobStatus = JobStatus { _jobSpec  :: TaskSpec
                            , _jobState :: JobState }
                            deriving (Show)
 
-$(makeLenses ''JobStatus)
+$(makeClassy ''JobStatus)
+$(makeClassy ''TaskSpec)
+$(makeClassy ''Resources)
+
+instance HasTaskSpec JobStatus where taskSpec = jobSpec
+instance HasResources TaskSpec where resources = taskResources
 
 isQueueState :: JobState -> Bool
 isQueueState (Queued _) = True
@@ -147,6 +152,6 @@ instance FromJSON Resources where
                 then fail "Negative resource value"
                 else pure res
 
-$(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 4} ''TaskSpec)
-$(deriveToJSON defaultOptions ''Resources)
+$(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 5} ''TaskSpec)
+$(deriveToJSON defaultOptions{fieldLabelModifier = drop 1} ''Resources)
 $(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 4} ''JobStatus)

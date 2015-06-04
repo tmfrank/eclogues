@@ -9,12 +9,14 @@ import Prelude hiding (writeFile)
 import qualified Eclogues.Scheduling.AuroraAPI as A
 import Eclogues.Scheduling.AuroraConfig (Role, getJobName, getJobState)
 import Eclogues.TaskSpec (
-      TaskSpec (..), JobState (..), Name
-    , FailureReason (..), RunErrorReason (..), RunResult (..))
+      TaskSpec, JobState (..), Name
+    , FailureReason (..), RunErrorReason (..), RunResult (..)
+    , taskCommand, taskName)
 
 import Control.Applicative ((<$>), pure)
 import Control.Arrow ((&&&))
 import Control.Exception (IOException, try, tryJust)
+import Control.Lens ((^.), (&), (.~))
 import Control.Monad (guard, void)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..))
@@ -42,8 +44,8 @@ jobDir conf n = jobsDir conf ++ "/" ++ L.unpack n
 
 runScheduleCommand :: ScheduleConf -> ScheduleCommand -> ExceptT A.UnexpectedResponse IO ()
 runScheduleCommand conf (QueueJob spec) = do
-    let dir = jobDir conf $ taskName spec
-        subspec = spec { taskCommand = "eclogues-subexecutor " <> taskName spec }
+    let dir = jobDir conf $ spec ^. taskName
+        subspec = spec & taskCommand .~ "eclogues-subexecutor " <> spec ^. taskName
     lift $ do
         createDirectoryIfMissing False dir
         createDirectoryIfMissing False $ dir ++ "/workspace"

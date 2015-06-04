@@ -4,10 +4,10 @@ module Eclogues.State.Monad where
 
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.State.Types (AppState (..), jobs, revDeps)
-import Eclogues.TaskSpec (Name, TaskSpec (..), JobState, JobStatus (JobStatus), jobState)
+import Eclogues.TaskSpec (Name, TaskSpec (..), JobState, JobStatus (JobStatus), jobState, taskName)
 
 import Control.Applicative (Applicative, pure)
-import Control.Lens ((%~), (?=), (%=), at, ix, sans, use, non)
+import Control.Lens ((%~), (?=), (%=), (^.), at, ix, sans, use, non)
 import Control.Monad (void)
 import Control.Monad.Morph (MFunctor, hoist)
 import Control.Monad.Trans.Class (MonadTrans, lift)
@@ -40,7 +40,7 @@ schedule :: (Monad m) => ScheduleCommand -> EStateT m ()
 schedule = EStateT . tell . (:[])
 
 insertJob :: (Monad m) => TaskSpec -> JobState -> EStateT m ()
-insertJob spec st = EStateT . lift $ jobs . at (taskName spec) ?= JobStatus spec st
+insertJob spec st = EStateT . lift $ jobs . at (spec ^. taskName) ?= JobStatus spec st
 
 deleteJob :: (Monad m) => Name -> EStateT m ()
 deleteJob name = EStateT . lift $ jobs %= sans name

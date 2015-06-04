@@ -7,9 +7,10 @@
 module Eclogues.ApiDocs (apiDocs, apiDocsMd, apiDocsHtml) where
 
 import Eclogues.API (VAPI)
-import Eclogues.TaskSpec (TaskSpec (..), Resources (..), JobState (..), JobStatus (..), FailureReason (..), Name)
+import Eclogues.TaskSpec (TaskSpec (..), Resources (..), JobState (..), JobStatus (..), FailureReason (..), Name, taskCommand)
 import Units
 
+import Control.Lens ((.~), (&))
 import qualified Data.ByteString.Lazy as L
 import Data.Proxy (Proxy (..))
 import Data.Text.Lazy (pack)
@@ -47,7 +48,7 @@ instance ToSample JobStatus JobStatus where
     toSample _ = Just $ failedSpec
 
 instance ToSample [JobStatus] [JobStatus] where
-    toSample _ = Just [ JobStatus spec{ taskCommand = "cat /dev/zero > hello.txt" } (Failed TimeExceeded)
+    toSample _ = Just [ JobStatus (spec & taskCommand .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded)
                       , JobStatus depSpec (Failed $ DependencyFailed "hello")]
 
 instance ToSample () () where
