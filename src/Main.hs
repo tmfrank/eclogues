@@ -9,18 +9,17 @@ import Prelude hiding ((.))
 
 import Database.Zookeeper.Election (LeadershipError (..), whenLeader)
 import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
-import Eclogues.API (VAPI)
+import Eclogues.API (VAPI, JobError (..))
 import Eclogues.ApiDocs (apiDocsHtml)
 import Eclogues.AppConfig (AppConfig (AppConfig, schedChan), requireAurora)
 import Eclogues.Instances ()
 import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
 import Eclogues.Scheduling.Command ( ScheduleConf (ScheduleConf)
                                    , runScheduleCommand, getSchedulerStatuses )
-import Eclogues.State ( AppState, JobStatus (jobState), JobError (..), newAppState
-                      , getJobs, activeJobs
-                      , createJob, killJob, deleteJob, getJob, updateJobs )
+import Eclogues.State (getJobs, activeJobs, createJob, killJob, deleteJob, getJob, updateJobs)
 import Eclogues.State.Monad (EState, runEState)
-import Eclogues.TaskSpec (JobState (..), FailureReason (..))
+import Eclogues.State.Types (AppState, newAppState)
+import Eclogues.TaskSpec (JobState (..), FailureReason (..), jobState)
 import Eclogues.Util (readJSON, orError)
 import Units
 
@@ -34,6 +33,7 @@ import Control.Concurrent.Async (waitAny, withAsync)
 import Control.Concurrent.Lock (Lock)
 import qualified Control.Concurrent.Lock as Lock
 import Control.Exception (Exception, IOException, throwIO, try)
+import Control.Lens (view)
 import Control.Monad (forever)
 import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
@@ -95,7 +95,7 @@ mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server 
 
     getJobsH = lift $ getJobs <$> atomically (readTVar stateV)
     getJobH jid = (hoist generalize . getJob jid) =<< lift (atomically $ readTVar stateV)
-    getJobStateH = fmap jobState . getJobH
+    getJobStateH = fmap (view jobState) . getJobH
     createJobH = runScheduler' . createJob
     deleteJobH = runScheduler' . deleteJob
 
@@ -159,7 +159,7 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
             case newStatusesRes of
                 Right (Right newStatuses) -> atomically $ do
                     state <- readTVar stateV
-                    let (state', cmds) = updateJobs state aJobs newStatuses
+                    let (_, state', cmds) = runEState state $ updateJobs aJobs newStatuses
                     mapM_ (writeTChan schedV) cmds
                     writeTVar stateV state'
                 Left (ex :: IOException)  ->

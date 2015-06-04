@@ -6,6 +6,7 @@
 module Eclogues.TaskSpec where
 
 import Control.Applicative ((<$>), (<*>), pure)
+import Control.Lens.TH (makeLenses)
 import Control.Monad ((<=<))
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
 import qualified Data.Aeson as Aeson
@@ -56,9 +57,11 @@ data QueueStage = LocalQueue | SchedulerQueue deriving (Show, Eq)
 data JobState = Queued QueueStage | Waiting Integer | Running | Finished | Failed FailureReason | RunError RunErrorReason
                 deriving (Show, Eq)
 
-data JobStatus = JobStatus { jobSpec  :: TaskSpec
-                           , jobState :: JobState }
+data JobStatus = JobStatus { _jobSpec  :: TaskSpec
+                           , _jobState :: JobState }
                            deriving (Show)
+
+$(makeLenses ''JobStatus)
 
 isQueueState :: JobState -> Bool
 isQueueState (Queued _) = True
@@ -146,4 +149,4 @@ instance FromJSON Resources where
 
 $(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 4} ''TaskSpec)
 $(deriveToJSON defaultOptions ''Resources)
-$(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 3} ''JobStatus)
+$(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 4} ''JobStatus)
