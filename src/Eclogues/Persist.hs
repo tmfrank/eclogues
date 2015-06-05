@@ -51,7 +51,7 @@ instance Monoid (PersistAction ()) where
     mappend = (*>)
 
 withPersistDir :: FilePath -> (PersistContext -> LoggingT IO a) -> IO a
-withPersistDir path f = runStderrLoggingT $ withSqlitePool ((T.pack path) <> "/eclogues.db3") 5 act where
+withPersistDir path f = runStderrLoggingT $ withSqlitePool ("WAL=off " <> (T.pack path) <> "/eclogues.db3") 5 act where
     act pool = do
         PSql.runSqlPool (PSql.runMigration migrateAll) pool
         f (PersistContext pool)
