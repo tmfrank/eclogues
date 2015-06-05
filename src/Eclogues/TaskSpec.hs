@@ -14,6 +14,8 @@ import Data.Aeson.TH (deriveJSON, deriveToJSON, defaultOptions, fieldLabelModifi
 import Data.Char (toLower)
 import qualified Data.Text
 import qualified Data.Text.Lazy as L
+import Data.UUID (UUID)
+import Data.UUID.Aeson ()
 import System.Exit (ExitCode)
 
 import Units
@@ -58,7 +60,8 @@ data JobState = Queued QueueStage | Waiting Integer | Running | Finished | Faile
                 deriving (Show, Eq)
 
 data JobStatus = JobStatus { _jobSpec  :: TaskSpec
-                           , _jobState :: JobState }
+                           , _jobState :: JobState
+                           , _jobUuid  :: UUID }
                            deriving (Show)
 
 $(makeClassy ''JobStatus)

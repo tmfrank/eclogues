@@ -47,7 +47,7 @@ import Data.Aeson.TH (deriveJSON, defaultOptions)
 import qualified Data.ByteString as BSS
 import qualified Data.ByteString.Lazy as BSL
 import Data.Default.Generics (def)
-import Data.HashMap.Lazy (keys)
+import qualified Data.HashMap.Lazy as HashMap
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Lazy as TL
 import Data.Word (Word16)
@@ -62,6 +62,7 @@ import Servant.Server ( Server, ServerT, ServantErr (..), (:~>) (..)
                       , enter, serve, err404, err409 )
 import System.Directory (createDirectoryIfMissing)
 import System.IO (hPutStrLn, stderr)
+import System.Random (randomIO)
 
 data ApiConfig = ApiConfig { jobsDir :: FilePath
                            , zookeeperHosts :: ZKURI
@@ -106,7 +107,7 @@ mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server 
     getJobsH = lift $ getJobs <$> atomically (readTVar stateV)
     getJobH jid = (hoist generalize . getJob jid) =<< lift (atomically $ readTVar stateV)
     getJobStateH = fmap (view jobState) . getJobH
-    createJobH = runScheduler' . createJob
+    createJobH spec = lift randomIO >>= runScheduler' . flip createJob spec
     deleteJobH = runScheduler' . deleteJob
 
     killJobH jid (Failed UserKilled) = runScheduler' $ killJob jid
@@ -174,7 +175,7 @@ withPersist mkConf conf webLock followAuroraFailure = do
             (newStatusesRes, aJobs) <- do
                 state <- atomically $ readTVar stateV
                 let aJobs = activeJobs state
-                newStatusesRes <- try . runExceptT . getSchedulerStatuses (mkConf auri) $ keys aJobs
+                newStatusesRes <- try . runExceptT . getSchedulerStatuses (mkConf auri) $ HashMap.elems aJobs
                 pure (newStatusesRes, aJobs)
             case newStatusesRes of
                 Right (Right newStatuses) -> atomically $ do

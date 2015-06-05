@@ -25,6 +25,7 @@ import Control.Monad.Logger (LoggingT, runStderrLoggingT)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Monoid (Monoid (..), (<>))
 import qualified Data.Text as T
+import Data.UUID (UUID)
 import Database.Persist.TH (mkPersist, sqlSettings, mkMigrate, share, persistLowerCase)
 import Database.Persist ((==.), (=.))
 import qualified Database.Persist as P
@@ -36,6 +37,7 @@ Job
     name Name
     spec TaskSpec
     state J.JobState
+    uuid UUID
     UniqueName name
 ScheduleIntent
     command ScheduleCommand
@@ -60,10 +62,11 @@ atomically :: PersistContext -> PersistAction r -> IO r
 atomically (PersistContext pool) (PersistAction a) = PSql.runSqlPool a pool
 
 insert :: JobStatus -> PersistAction ()
-insert (JobStatus spec st) = PersistAction $ P.insert_ job where
+insert (JobStatus spec st uuid) = PersistAction $ P.insert_ job where
     job = Job { jobName = spec ^. J.taskName
               , jobSpec = spec
-              , jobState = st }
+              , jobState = st
+              , jobUuid = uuid }
 
 updateState :: Name -> J.JobState -> PersistAction ()
 updateState name st = PersistAction $ P.updateWhere [JobName ==. name] [JobState =. st]
@@ -85,4 +88,4 @@ allIntents = getAll scheduleIntentCommand
 
 allJobs :: PersistAction [JobStatus]
 allJobs = getAll toStatus where
-    toStatus (Job _ spec st) = JobStatus spec st
+    toStatus (Job _ spec st uuid) = JobStatus spec st uuid

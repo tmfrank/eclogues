@@ -25,13 +25,13 @@ import Data.HashMap.Lazy (elems, traverseWithKey)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe (fromMaybe, isJust)
 import Data.Monoid (Sum (Sum))
-
+import Data.UUID (UUID)
 
 lift2 :: (MonadTrans m1, MonadTrans m2, Monad m, Monad (m1 m)) => m a -> m2 (m1 m) a
 lift2 = lift . lift
 
-createJob :: TaskSpec -> ExceptT JobError EState ()
-createJob spec = do
+createJob :: UUID -> TaskSpec -> ExceptT JobError EState ()
+createJob uuid spec = do
     let name = spec ^. taskName
         deps = spec ^. taskDependsOn
     existing <- lift $ ES.getJob name
@@ -40,9 +40,9 @@ createJob spec = do
     let jstate = if activeDepCount == 0
             then Queued LocalQueue
             else Waiting activeDepCount
-    lift $ ES.insertJob spec jstate
+    lift . ES.insertJob $ JobStatus spec jstate uuid
     if jstate == Queued LocalQueue
-        then lift . ES.schedule $ QueueJob spec
+        then lift . ES.schedule $ QueueJob spec uuid
         else pure ()
     where
         checkDep :: Name -> Name -> WriterT (Sum Integer) (ExceptT JobError EState) ()
@@ -108,10 +108,10 @@ updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeSt
         | otherwise                  = pure ()
     triggerDep :: Name -> EState ()
     triggerDep rdepName = ES.getJob rdepName >>= \case
-        Just (JobStatus spec (Waiting 1)) -> do
-            ES.schedule $ QueueJob spec
+        Just (JobStatus spec (Waiting 1) uuid) -> do
+            ES.schedule $ QueueJob spec uuid
             ES.setJobState rdepName $ Queued LocalQueue
-        Just (JobStatus _    (Waiting n)) ->
+        Just (JobStatus _    (Waiting n) _   ) ->
             ES.setJobState rdepName $ Waiting $ n - 1
         _         -> pure ()
 

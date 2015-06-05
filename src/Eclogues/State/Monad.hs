@@ -8,7 +8,7 @@ import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.State.Types (AppState (..), jobs, revDeps)
 import qualified Eclogues.State.Types as EST
-import Eclogues.TaskSpec ( Name, TaskSpec (..), JobState, JobStatus (JobStatus)
+import Eclogues.TaskSpec ( Name, JobState, JobStatus
                          , jobState, taskName, taskDependsOn )
 
 import Control.Applicative (Applicative)
@@ -55,11 +55,10 @@ schedule cmd = EStateT $ do
     scheduleCommands %= (cmd :)
     persist <>= Just (Persist.scheduleIntent cmd)
 
-insertJob :: (Monad m) => TaskSpec -> JobState -> EStateT m ()
-insertJob spec st = EStateT $ do
-    let status = JobStatus spec st
-    jobs . at (spec ^. taskName) ?= status
-    persist <>= Just (Persist.insert status)
+insertJob :: (Monad m) => JobStatus -> EStateT m ()
+insertJob st = EStateT $ do
+    jobs . at (st ^. taskName) ?= st
+    persist <>= Just (Persist.insert st)
 
 deleteJob :: (Monad m) => Name -> EStateT m ()
 deleteJob name = EStateT $ do

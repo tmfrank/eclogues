@@ -15,6 +15,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.Proxy (Proxy (..))
 import Data.Text.Lazy (pack)
 import Data.Text.Lazy.Encoding (encodeUtf8)
+import Data.UUID (nil)
 import Text.Pandoc (writeHtmlString, def)
 import Servant.API (Capture)
 import Servant.Docs (API, ToCapture (..), ToSample (..), DocCapture (..), docs, markdown)
@@ -41,15 +42,15 @@ instance ToSample TaskSpec TaskSpec where
                   ,("A job depending on previous output", depSpec)]
 
 failedSpec :: JobStatus
-failedSpec = JobStatus deadSpec . Failed $ NonZeroExitCode 1 where
+failedSpec = JobStatus deadSpec (Failed $ NonZeroExitCode 1) nil where
     deadSpec = TaskSpec "i-fail" "exit 1" res [] False []
 
 instance ToSample JobStatus JobStatus where
     toSample _ = Just $ failedSpec
 
 instance ToSample [JobStatus] [JobStatus] where
-    toSample _ = Just [ JobStatus (spec & taskCommand .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded)
-                      , JobStatus depSpec (Failed $ DependencyFailed "hello")]
+    toSample _ = Just [ JobStatus (spec & taskCommand .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) nil
+                      , JobStatus depSpec (Failed $ DependencyFailed "hello") nil]
 
 instance ToSample () () where
     toSample _ = Nothing

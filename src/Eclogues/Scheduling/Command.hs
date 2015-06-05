@@ -10,23 +10,24 @@ import Prelude hiding (writeFile)
 import qualified Eclogues.Scheduling.AuroraAPI as A
 import Eclogues.Scheduling.AuroraConfig (Role, getJobName, getJobState)
 import Eclogues.TaskSpec (
-      TaskSpec, JobState (..), Name
+      TaskSpec, JobState (..), JobStatus, Name
     , FailureReason (..), RunErrorReason (..), RunResult (..)
-    , taskCommand, taskName)
+    , taskCommand, taskName, jobUuid)
 
 import Control.Applicative ((<$>), pure)
 import Control.Arrow ((&&&))
 import Control.Exception (IOException, try, tryJust)
-import Control.Lens ((^.), (&), (.~))
+import Control.Lens ((^.), (&), (.~), view)
 import Control.Monad (guard, void)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..))
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Data.ByteString.Lazy (writeFile)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as L
+import Data.UUID (UUID)
 import Network.URI (URI)
 import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
 import System.Exit (ExitCode (..))
@@ -35,7 +36,7 @@ import Text.Read.HT (maybeRead)
 
 -- TODO: split up
 
-data ScheduleCommand = QueueJob TaskSpec
+data ScheduleCommand = QueueJob TaskSpec UUID
                      | KillJob Name
                      | CleanupJob Name
 
@@ -47,9 +48,10 @@ jobDir :: ScheduleConf -> Name -> FilePath
 jobDir conf n = jobsDir conf ++ "/" ++ L.unpack n
 
 runScheduleCommand :: ScheduleConf -> ScheduleCommand -> ExceptT A.UnexpectedResponse IO ()
-runScheduleCommand conf (QueueJob spec) = do
+runScheduleCommand conf (QueueJob spec uuid) = do
     let dir = jobDir conf $ spec ^. taskName
         subspec = spec & taskCommand .~ "eclogues-subexecutor " <> spec ^. taskName
+                       & taskName    .~ L.pack (show uuid)
     lift $ do
         createDirectoryIfMissing False dir
         createDirectoryIfMissing False $ dir ++ "/workspace"
@@ -63,11 +65,12 @@ runScheduleCommand conf (KillJob name) = do
 runScheduleCommand conf (CleanupJob name) = lift . void $
     tryJust (guard . isDoesNotExistError) . removeDirectoryRecursive $ jobDir conf name
 
-getSchedulerStatuses :: ScheduleConf -> [Name] -> ExceptT A.UnexpectedResponse IO [(Name, JobState)]
-getSchedulerStatuses conf names = do
+getSchedulerStatuses :: ScheduleConf -> [JobStatus] -> ExceptT A.UnexpectedResponse IO [(Name, JobState)]
+getSchedulerStatuses conf jss = do
     client <- lift $ A.thriftClient $ auroraURI conf
-    auroraTasks <- A.getTasksWithoutConfigs client (auroraRole conf) names
-    let newUncheckedStates = (getJobName &&& getJobState) <$> auroraTasks
+    let uuids = map (L.pack . show . view jobUuid &&& view taskName) jss
+    auroraTasks <- A.getTasksWithoutConfigs client (auroraRole conf) (map fst uuids)
+    let newUncheckedStates = ((fromJust . flip lookup uuids . getJobName) &&& getJobState) <$> auroraTasks
     lift $ mapM checkFinState newUncheckedStates
     where
         checkFinState :: (Name, JobState) -> IO (Name, JobState)

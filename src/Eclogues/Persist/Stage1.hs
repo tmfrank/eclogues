@@ -11,6 +11,7 @@ import qualified Data.ByteString.Lazy as BSL
 import Data.Either.Combinators (mapLeft)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
+import Data.UUID (UUID, toASCIIBytes, fromASCIIBytes)
 import qualified Database.Persist as P
 import qualified Database.Persist.Sql as PSql
 
@@ -40,4 +41,14 @@ instance P.PersistField ScheduleCommand where
     fromPersistValue = jsonPersistParse "ScheduleCommand"
 
 instance PSql.PersistFieldSql ScheduleCommand where
+    sqlType _ = PSql.SqlBlob
+
+instance P.PersistField UUID where
+    toPersistValue = P.PersistByteString . toASCIIBytes
+    fromPersistValue (P.PersistByteString bs)
+        | Just res <- fromASCIIBytes bs = Right res
+        | otherwise                     = Left "Invalid UUID persist bytestring"
+    fromPersistValue _                  = Left "Invalid UUID persist value"
+
+instance PSql.PersistFieldSql UUID where
     sqlType _ = PSql.SqlBlob
