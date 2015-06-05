@@ -41,7 +41,7 @@ data ScheduleCommand = QueueJob TaskSpec
 
 $(deriveJSON defaultOptions ''ScheduleCommand)
 
-data ScheduleConf = ScheduleConf { jobsDir :: FilePath, auroraURI :: URI, auroraRole :: Role }
+data ScheduleConf = ScheduleConf { jobsDir :: FilePath, auroraRole :: Role, auroraURI :: URI }
 
 jobDir :: ScheduleConf -> Name -> FilePath
 jobDir conf n = jobsDir conf ++ "/" ++ L.unpack n

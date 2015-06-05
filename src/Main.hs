@@ -19,7 +19,8 @@ import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
 import Eclogues.Scheduling.Command ( ScheduleConf (ScheduleConf)
                                    , runScheduleCommand, getSchedulerStatuses )
 import Eclogues.State (getJobs, activeJobs, createJob, killJob, deleteJob, getJob, updateJobs)
-import Eclogues.State.Monad (EState, runEState, scheduleCommands, appState, persist)
+import Eclogues.State.Monad (EState)
+import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState, newAppState)
 import Eclogues.TaskSpec (JobState (..), FailureReason (..), jobState)
 import Eclogues.Util (readJSON, orError)
@@ -31,7 +32,7 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.AdvSTM (AdvSTM, atomically, onCommit)
 import Control.Concurrent.AdvSTM.TVar (TVar, newTVarIO, readTVar, writeTVar)
 import Control.Concurrent.AdvSTM.TChan (newTChanIO, readTChan, writeTChan)
-import Control.Concurrent.Async (waitAny, withAsync)
+import Control.Concurrent.Async (Async, waitAny, withAsync)
 import Control.Concurrent.Lock (Lock)
 import qualified Control.Concurrent.Lock as Lock
 import Control.Exception (Exception, IOException, throwIO, try)
@@ -51,6 +52,7 @@ import qualified Data.Text.Lazy as TL
 import Data.Word (Word16)
 import Database.Zookeeper (ZKError)
 import Network.HTTP.Types (ok200, methodGet, methodPost, methodDelete, methodPut)
+import Network.URI (URI)
 import Network.Wai (responseLBS)
 import Network.Wai.Handler.Warp (run)
 import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), cors)
@@ -88,12 +90,12 @@ runPersist ctx (Just p) = onCommit $ Persist.atomically ctx p
 runScheduler :: AppConfig -> TVar AppState -> Scheduler -> ExceptT JobError IO ()
 runScheduler conf stateV f = mapExceptT atomically $ do
     state <- lift $ readTVar stateV
-    case runEState state $ runExceptT f of
+    case ES.runEState state $ runExceptT f of
         (Left  e, _ ) -> throwE e
         (Right _, ts) -> do
-            lift . mapM_ (writeTChan $ schedChan conf) $ ts ^. scheduleCommands
-            lift . writeTVar stateV $ ts ^. appState
-            lift . runPersist (pctx conf) $ ts ^. persist
+            lift . mapM_ (writeTChan $ schedChan conf) $ ts ^. ES.scheduleCommands
+            lift . writeTVar stateV $ ts ^. ES.appState
+            lift . runPersist (pctx conf) $ ts ^. ES.persist
 
 mainServer :: AppConfig -> TVar AppState -> Server VAPI
 mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server where
@@ -142,44 +144,53 @@ corsPolicy = CorsResourcePolicy { corsOrigins = Nothing
 advertisedData :: ApiConfig -> BSS.ByteString
 advertisedData (ApiConfig _ _ host port _) = BSL.toStrict $ encode (host, port)
 
-withZK :: ApiConfig -> PersistContext -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
-withZK apiConf pctx' webLock zk = whileLeader zk (advertisedData apiConf) $ do
+withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
+withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
     let jdir = jobsDir apiConf
-    (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
-    stateV <- newTVarIO newAppState
     schedV <- newTChanIO
+    (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
     createDirectoryIfMissing False jdir
+    Persist.withPersistDir jdir $ \pctx' -> do
+        let conf = AppConfig jdir getURI schedV pctx'
+            mkConf = ScheduleConf jdir $ subexecutorUser apiConf
+        lift $ withPersist mkConf conf webLock followAuroraFailure
 
-    let conf = AppConfig jdir getURI schedV pctx'
-
+withPersist :: (URI -> ScheduleConf) -> AppConfig -> Lock -> Async ZKError -> IO ZKError
+withPersist mkConf conf webLock followAuroraFailure = do
+    (_, st) <- ES.runEStateT newAppState $ do
+        (js, cmds) <- lift . Persist.atomically (pctx conf) $ do
+            js <- Persist.allJobs
+            cmds <- Persist.allIntents
+            pure (js, cmds)
+        ES.loadJobs js
+        lift . atomically $ mapM_ (writeTChan $ schedChan conf) cmds
+    stateV <- newTVarIO $ st ^. ES.appState
     let web = Lock.with webLock $ run 8000 . myCors . serve (Proxy :: (Proxy VAPIWithDocs)) . docsServer $ mainServer conf stateV
         myCors = cors . const $ Just corsPolicy
         updater = forever $ goUpdate >> threadDelay (floor $ second (1 :: Double) `asVal` micro second)
         goUpdate = do
-            uri <- atomically $ requireAurora conf
+            auri <- atomically $ requireAurora conf
             (newStatusesRes, aJobs) <- do
                 state <- atomically $ readTVar stateV
                 let aJobs = activeJobs state
-                    sconf = ScheduleConf jdir uri $ subexecutorUser apiConf
-                newStatusesRes <- try . runExceptT . getSchedulerStatuses sconf $ keys aJobs
+                newStatusesRes <- try . runExceptT . getSchedulerStatuses (mkConf auri) $ keys aJobs
                 pure (newStatusesRes, aJobs)
             case newStatusesRes of
                 Right (Right newStatuses) -> atomically $ do
                     state <- readTVar stateV
-                    let (_, ts) = runEState state $ updateJobs aJobs newStatuses
-                    mapM_ (writeTChan schedV) $ ts ^. scheduleCommands
-                    writeTVar stateV $ ts ^. appState
-                    runPersist pctx' $ ts ^. persist
+                    let (_, ts) = ES.runEState state $ updateJobs aJobs newStatuses
+                    mapM_ (writeTChan $ schedChan conf) $ ts ^. ES.scheduleCommands
+                    writeTVar stateV $ ts ^. ES.appState
+                    runPersist (pctx conf) $ ts ^. ES.persist
                 Left (ex :: IOException)  ->
-                    hPutStrLn stderr $ "Error connecting to Aurora at " ++ show uri ++ "; retrying: " ++ show ex
+                    hPutStrLn stderr $ "Error connecting to Aurora at " ++ show auri ++ "; retrying: " ++ show ex
                 Right (Left resp)         -> throwIO resp
         enacter = forever . atomically $ do -- TODO: catch run error and reschedule
-            cmd <- readTChan schedV
+            cmd <- readTChan $ schedChan conf
             auri <- requireAurora conf
-            let sconf = ScheduleConf jdir auri $ subexecutorUser apiConf
             onCommit . throwExc $ do
-                runScheduleCommand sconf cmd
-                lift . Persist.atomically pctx' $ Persist.deleteIntent cmd
+                runScheduleCommand (mkConf auri) cmd
+                lift . Persist.atomically (pctx conf) $ Persist.deleteIntent cmd
 
     hPutStrLn stderr "Starting server on port 8000"
     withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA ->
@@ -189,9 +200,7 @@ main :: IO ()
 main = do
     apiConf <- orError =<< readJSON "/etc/xdg/eclogues/api.json"
     webLock <- Lock.new
-    res <- Persist.withPersistDir (jobsDir apiConf) $ \pctx' ->
-        lift . withZookeeper (zookeeperHosts apiConf) $
-        runExceptT . withZK apiConf pctx' webLock
+    res <- withZookeeper (zookeeperHosts apiConf) $ runExceptT . withZK apiConf webLock
     case res of
         Left (LZKError e)         -> error $ "Zookeeper coordination error: " ++ show e
         Left (ActionException ex) -> throwIO ex

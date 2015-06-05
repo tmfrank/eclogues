@@ -7,7 +7,8 @@ import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.State.Types (AppState (..), jobs, revDeps)
 import qualified Eclogues.State.Types as EST
-import Eclogues.TaskSpec (Name, TaskSpec (..), JobState, JobStatus (JobStatus), jobState, taskName)
+import Eclogues.TaskSpec ( Name, TaskSpec (..), JobState, JobStatus (JobStatus)
+                         , jobState, taskName, taskDependsOn )
 
 import Control.Applicative (Applicative)
 import Control.Lens ((%~), (.~), (?=), (%=), (^.), (<>=), at, ix, sans, use, non)
@@ -81,3 +82,11 @@ removeRevDep on by = EStateT $ revDeps . at on %= (>>= removed) where
 
 getDependents :: (Functor m, Monad m) => Name -> EStateT m [Name]
 getDependents name = EStateT . use $ revDeps . at name . non []
+
+loadJobs :: forall m. (Monad m) => [JobStatus] -> EStateT m ()
+loadJobs js = mapM_ go js where
+    go :: JobStatus -> EStateT m ()
+    go j = do
+        let name = j ^. taskName
+        EStateT $ jobs . at name ?= j
+        mapM_ (flip addRevDep name) $ j ^. taskDependsOn
