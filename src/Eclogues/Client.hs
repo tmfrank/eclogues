@@ -44,6 +44,7 @@ ecloguesClient = mkClient <=< getEcloguesLeader where
              :<|> jobState'
              :<|> sJobState'
              :<|> deleteJob'
+             :<|> _  -- scheduler redirect
              :<|> createJob') = client (Proxy :: Proxy VAPI) (BaseUrl Http host $ fromIntegral port)
         in EcloguesClient
             (err getJobs')

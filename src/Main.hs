@@ -11,18 +11,18 @@ import Database.Zookeeper.Election (LeadershipError (..), whenLeader)
 import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
 import Eclogues.API (VAPI, JobError (..))
 import Eclogues.ApiDocs (apiDocsHtml)
-import Eclogues.AppConfig (AppConfig (AppConfig, schedChan, pctx), requireAurora)
+import Eclogues.AppConfig (AppConfig (AppConfig, schedChan, pctx, auroraURI, schedJobURI), requireAurora)
 import Eclogues.Instances ()
 import Eclogues.Persist (PersistContext)
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
 import Eclogues.Scheduling.Command ( ScheduleConf (ScheduleConf)
-                                   , runScheduleCommand, getSchedulerStatuses )
+                                   , runScheduleCommand, getSchedulerStatuses, schedulerJobUI )
 import Eclogues.State (getJobs, activeJobs, createJob, killJob, deleteJob, getJob, updateJobs)
 import Eclogues.State.Monad (EState)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState)
-import Eclogues.TaskSpec (JobState (..), FailureReason (..), jobState)
+import Eclogues.TaskSpec (JobStatus, JobState (..), FailureReason (..), jobState, jobUuid)
 import Eclogues.Util (readJSON, orError)
 import Units
 
@@ -37,7 +37,7 @@ import Control.Concurrent.Lock (Lock)
 import qualified Control.Concurrent.Lock as Lock
 import Control.Exception (Exception, IOException, throwIO, try)
 import Control.Lens ((^.), view)
-import Control.Monad (forever)
+import Control.Monad ((<=<), forever)
 import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Either (EitherT (EitherT))
@@ -45,6 +45,7 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT, withExceptT, mapExceptT,
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import qualified Data.ByteString as BSS
+import qualified Data.ByteString.Char8 as BSSC
 import qualified Data.ByteString.Lazy as BSL
 import Data.Default.Generics (def)
 import qualified Data.HashMap.Lazy as HashMap
@@ -59,7 +60,7 @@ import Network.Wai.Handler.Warp (run)
 import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), cors)
 import Servant.API ((:<|>) ((:<|>)), Raw)
 import Servant.Server ( Server, ServerT, ServantErr (..), (:~>) (..)
-                      , enter, serve, err404, err409 )
+                      , enter, serve, err404, err409, err503, err303 )
 import System.Directory (createDirectoryIfMissing)
 import System.IO (hPutStrLn, stderr)
 import System.Random (randomIO)
@@ -102,21 +103,28 @@ runScheduler conf stateV f = mapExceptT atomically $ do
 mainServer :: AppConfig -> TVar AppState -> Server VAPI
 mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server where
     server :: ServerT VAPI (ExceptT JobError IO)
-    server = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> deleteJobH :<|> createJobH
+    server = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> mesosJob :<|> deleteJobH :<|> createJobH
 
     getJobsH = lift $ getJobs <$> atomically (readTVar stateV)
     getJobH jid = (hoist generalize . getJob jid) =<< lift (atomically $ readTVar stateV)
     getJobStateH = fmap (view jobState) . getJobH
     createJobH spec = lift randomIO >>= runScheduler' . flip createJob spec
     deleteJobH = runScheduler' . deleteJob
+    mesosJob = toMesos <=< getJobH where
+        toMesos :: JobStatus -> ExceptT JobError IO ()
+        toMesos js = (lift . atomically $ auroraURI conf) >>= \case
+            Nothing  -> throwE SchedulerInaccessible
+            Just uri -> throwE . SchedulerRedirect . schedJobURI conf uri $ js ^. jobUuid
 
     killJobH jid (Failed UserKilled) = runScheduler' $ killJob jid
     killJobH jid _                   = throwE (InvalidStateTransition "Can only set state to Failed UserKilled") <* getJobH jid
 
     onError :: JobError -> ServantErr
     onError e = case e of
-        NoSuchJob -> err404 { errBody = encode NoSuchJob }
-        other     -> err409 { errBody = encode other }
+        NoSuchJob             -> err404 { errBody = encode NoSuchJob }
+        SchedulerInaccessible -> err503 { errBody = encode SchedulerInaccessible }
+        SchedulerRedirect uri -> err303 { errHeaders = [("Location", BSSC.pack uri)] }
+        other                 -> err409 { errBody = encode other }
     runScheduler' = runScheduler conf stateV
 
 type VAPIWithDocs = VAPI :<|> Raw
@@ -153,7 +161,7 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
     createDirectoryIfMissing False jdir
     Persist.withPersistDir jdir $ \pctx' -> do
-        let conf = AppConfig jdir getURI schedV pctx'
+        let conf = AppConfig jdir getURI schedV pctx' . schedulerJobUI . TL.unpack $ subexecutorUser apiConf
             mkConf = ScheduleConf jdir $ subexecutorUser apiConf
         lift $ withPersist mkConf conf webLock followAuroraFailure
 

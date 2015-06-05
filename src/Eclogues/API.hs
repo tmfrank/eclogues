@@ -15,6 +15,7 @@ type VAPI =  "jobs"   :> Get' [JobStatus]
         :<|> "job"    :> Capture "name" Name :> Get' JobStatus
         :<|> "job"    :> Capture "name" Name :> "state" :> Get' JobState
         :<|> "job"    :> Capture "name" Name :> "state" :> ReqBody '[JSON] JobState :> Put '[JSON] ()
+        :<|> "job"    :> Capture "name" Name :> "scheduler" :> Get' ()
         :<|> "job"    :> Capture "name" Name :> Delete '[JSON] ()
         :<|> "create" :> ReqBody '[JSON] TaskSpec  :> Post '[JSON] ()
 
@@ -25,6 +26,8 @@ data JobError = JobNameUsed
               | JobMustBeTerminated Bool
               | OutstandingDependants [Name]
               | InvalidStateTransition String
+              | SchedulerRedirect String
+              | SchedulerInaccessible
                 deriving (Show)
 
 $(deriveJSON defaultOptions ''JobError)

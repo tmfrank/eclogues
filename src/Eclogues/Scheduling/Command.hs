@@ -85,3 +85,6 @@ getSchedulerStatuses conf jss = do
             Ended ExitSuccess     -> Finished
             Ended (ExitFailure c) -> Failed (NonZeroExitCode c)
             Overtime              -> Failed TimeExceeded
+
+schedulerJobUI :: String -> URI -> UUID -> String
+schedulerJobUI user uri uuid = show uri ++ "/../scheduler/" ++ user ++ "/devel/" ++ show uuid
