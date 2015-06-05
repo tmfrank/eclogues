@@ -21,7 +21,7 @@ import Eclogues.Scheduling.Command ( ScheduleConf (ScheduleConf)
 import Eclogues.State (getJobs, activeJobs, createJob, killJob, deleteJob, getJob, updateJobs)
 import Eclogues.State.Monad (EState)
 import qualified Eclogues.State.Monad as ES
-import Eclogues.State.Types (AppState, newAppState)
+import Eclogues.State.Types (AppState)
 import Eclogues.TaskSpec (JobState (..), FailureReason (..), jobState)
 import Eclogues.Util (readJSON, orError)
 import Units
@@ -46,6 +46,7 @@ import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import qualified Data.ByteString as BSS
 import qualified Data.ByteString.Lazy as BSL
+import Data.Default.Generics (def)
 import Data.HashMap.Lazy (keys)
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Lazy as TL
@@ -157,7 +158,7 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
 
 withPersist :: (URI -> ScheduleConf) -> AppConfig -> Lock -> Async ZKError -> IO ZKError
 withPersist mkConf conf webLock followAuroraFailure = do
-    (_, st) <- ES.runEStateT newAppState $ do
+    (_, st) <- ES.runEStateT def $ do
         (js, cmds) <- lift . Persist.atomically (pctx conf) $ do
             js <- Persist.allJobs
             cmds <- Persist.allIntents

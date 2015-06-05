@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -16,13 +17,18 @@ import Control.Lens.TH (makeClassy)
 import Control.Monad.Morph (MFunctor, hoist)
 import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad.Trans.State (StateT, runStateT)
+import Data.Default.Generics (Default)
 import Data.Functor.Identity (Identity, runIdentity)
 import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.List as List
+import GHC.Generics (Generic)
 
 data TransitionaryState = TransitionaryState { _appState :: AppState
                                              , _scheduleCommands :: [ScheduleCommand]
                                              , _persist  :: Maybe (Persist.PersistAction ()) }
+                          deriving (Generic)
+
+instance Default TransitionaryState
 
 $(makeClassy ''TransitionaryState)
 instance EST.HasAppState TransitionaryState where appState = appState
