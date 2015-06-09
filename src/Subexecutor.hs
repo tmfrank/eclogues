@@ -18,6 +18,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, doesDirectoryE
 import System.Environment (getArgs)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
+import System.FilePath.Glob (glob)
 import System.Process (callProcess, spawnProcess, waitForProcess)
 
 data SubexecutorConfig = SubexecutorConfig { jobsDir :: FilePath }
@@ -56,10 +57,11 @@ runTask path name = do
     -- TODO: Trigger Failed state when output doesn't exist
     mapM_ (flip copyFileOrDir (specDir </> "output/")) $ spec ^. taskOutputFiles
     writeFile (specDir </> "runresult") (show runRes)
-    when (spec ^. taskCaptureStdout) $ copyFile stdout $ specDir </> "output/stdout"
+    when (spec ^. taskCaptureStdout) $ glob ".logs/*/0/stdout" >>= \case
+        [fn] -> copyFile fn $ specDir </> "output/stdout"
+        _    -> error "Stdout log file missing"
     where
         specDir = path </> name
-        stdout = ".logs" </> name </> "0/stdout"
         depsDir = "./yb-dependencies/"
         depOutput n = path </> n </> "output"
         copyDep = uncurry copyDirContents . (depOutput &&& (depsDir ++)) . L.unpack
