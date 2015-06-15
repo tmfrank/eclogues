@@ -13,9 +13,10 @@ import Control.Applicative ((<$>), (<*>), pure, optional)
 import Control.Monad ((<=<), when)
 import Control.Monad.Loops (firstM)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
-import Data.Aeson (eitherDecode)
+import Data.Aeson (encode, eitherDecode)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Data.ByteString.Lazy (readFile)
+import qualified Data.ByteString.Lazy.Char8 as BSLC
 import Data.Maybe (isNothing)
 import Data.Monoid ((<>))
 import Data.Text.Lazy (pack)
@@ -33,6 +34,7 @@ data Command = ListJobs
              | JobState Name
              | CreateJob FilePath
              | GetMaster
+             | GetHealth
 
 data ClientConfig = ClientConfig { zookeeperHosts :: ZKURI }
 
@@ -59,16 +61,17 @@ go opts = do
     let Just client = clientM
     case optCommand opts of
         GetMaster     -> let (h,p) = masterHost client in putStrLn (h ++ ':':show p)
-        ListJobs      -> runClient $ getJobs client
-        JobState name -> runClient $ getJobState client name
+        GetHealth     -> runClient (BSLC.putStrLn . encode) $ getHealth client
+        ListJobs      -> runClient print $ getJobs client
+        JobState name -> runClient print $ getJobState client name
         CreateJob sf  -> do
             cts <- readFile sf
             case eitherDecode cts of
                 Right spec -> (orShowError =<<) . runExceptT $ createJob client spec
                 Left  err  -> error $ "Invalid spec file: " ++ err
     where
-        runClient :: forall a e. (Show a, Show e) => ExceptT e IO a -> IO ()
-        runClient = ((print <=< orShowError) =<<) . runExceptT
+        runClient :: forall a e. (Show e) => (a -> IO ()) -> ExceptT e IO a -> IO ()
+        runClient f = ((f <=< orShowError) =<<) . runExceptT
 
 main :: IO ()
 main = execParser opts >>= go where
@@ -86,6 +89,7 @@ main = execParser opts >>= go where
         ( command "list"   (info (pure ListJobs)         (progDesc "List all jobs"))
        <> command "state"  (info (JobState  <$> nameArg) (progDesc "Get the state of a job"))
        <> command "create" (info (CreateJob <$> specArg) (progDesc "Schedule a job"))
-       <> command "master" (info (pure GetMaster)        (progDesc "Print Eclogues master host")) )
+       <> command "master" (info (pure GetMaster)        (progDesc "Print Eclogues master host"))
+       <> command "health" (info (pure GetHealth)        (progDesc "Get service health")) )
     nameArg = pack <$> strArgument (metavar "JOB_NAME")
     specArg = strArgument (metavar "SPEC_FILE")

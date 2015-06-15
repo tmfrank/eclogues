@@ -18,6 +18,7 @@ type VAPI =  "jobs"   :> Get' [JobStatus]
         :<|> "job"    :> Capture "name" Name :> "scheduler" :> Get' ()
         :<|> "job"    :> Capture "name" Name :> Delete '[JSON] ()
         :<|> "create" :> ReqBody '[JSON] TaskSpec  :> Post '[JSON] ()
+        :<|> "health" :> Get' Health
 
 data JobError = JobNameUsed
               | NoSuchJob
@@ -30,4 +31,7 @@ data JobError = JobNameUsed
               | SchedulerInaccessible
                 deriving (Show)
 
+data Health = Health { schedulerAccessible :: Bool }
+
 $(deriveJSON defaultOptions ''JobError)
+$(deriveJSON defaultOptions ''Health)

@@ -6,7 +6,7 @@
 
 module Eclogues.ApiDocs (apiDocs, apiDocsMd, apiDocsHtml) where
 
-import Eclogues.API (VAPI)
+import Eclogues.API (VAPI, Health (Health))
 import Eclogues.TaskSpec (TaskSpec (..), Resources (..), JobState (..), JobStatus (..), FailureReason (..), Name, taskCommand)
 import Units
 
@@ -54,6 +54,8 @@ instance ToSample [JobStatus] [JobStatus] where
 
 instance ToSample () () where
     toSample _ = Nothing
+
+instance ToSample Health Health where toSample _ = Just $ Health True
 
 apiDocs :: API
 apiDocs = docs (Proxy :: Proxy VAPI)

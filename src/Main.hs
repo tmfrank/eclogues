@@ -9,7 +9,7 @@ import Prelude hiding ((.))
 
 import Database.Zookeeper.Election (LeadershipError (..), whenLeader)
 import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
-import Eclogues.API (VAPI, JobError (..))
+import Eclogues.API (VAPI, JobError (..), Health (Health))
 import Eclogues.ApiDocs (apiDocsHtml)
 import Eclogues.AppConfig (AppConfig (AppConfig, schedChan, pctx, auroraURI, schedJobURI), requireAurora)
 import Eclogues.Instances ()
@@ -49,6 +49,7 @@ import qualified Data.ByteString.Char8 as BSSC
 import qualified Data.ByteString.Lazy as BSL
 import Data.Default.Generics (def)
 import qualified Data.HashMap.Lazy as HashMap
+import Data.Maybe (isJust)
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Lazy as TL
 import Data.Word (Word16)
@@ -103,8 +104,10 @@ runScheduler conf stateV f = mapExceptT atomically $ do
 mainServer :: AppConfig -> TVar AppState -> Server VAPI
 mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server where
     server :: ServerT VAPI (ExceptT JobError IO)
-    server = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|> mesosJob :<|> deleteJobH :<|> createJobH
+    server = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|>
+             mesosJob :<|> deleteJobH :<|> createJobH :<|> healthH
 
+    healthH = lift $ Health . isJust <$> atomically (auroraURI conf)
     getJobsH = lift $ getJobs <$> atomically (readTVar stateV)
     getJobH jid = (hoist generalize . getJob jid) =<< lift (atomically $ readTVar stateV)
     getJobStateH = fmap (view jobState) . getJobH

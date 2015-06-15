@@ -4,12 +4,13 @@ module Eclogues.Client ( EcloguesClient ( getJobs
                                         , setJobState
                                         , deleteJob
                                         , createJob
+                                        , getHealth
                                         , masterHost )
                        , Result, getEcloguesLeader, ecloguesClient ) where
 
 import Database.Zookeeper.Election (ZookeeperError, getLeaderInfo)
 import Database.Zookeeper.ManagedEvents (ManagedZK)
-import Eclogues.API (VAPI, JobError)
+import Eclogues.API (VAPI, JobError, Health)
 import Eclogues.Client.Instances ()
 import Eclogues.Instances ()
 import Eclogues.TaskSpec (JobStatus, JobState, Name, TaskSpec)
@@ -33,6 +34,7 @@ data EcloguesClient = EcloguesClient { getJobs      ::             Result [JobSt
                                      , setJobState  :: Name     -> JobState -> Result ()
                                      , deleteJob    :: Name     -> Result ()
                                      , createJob    :: TaskSpec -> Result ()
+                                     , getHealth    ::             Result Health
                                      , masterHost   :: (String, Word16) }
 
 ecloguesClient :: ManagedZK -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
@@ -45,7 +47,8 @@ ecloguesClient = mkClient <=< getEcloguesLeader where
              :<|> sJobState'
              :<|> deleteJob'
              :<|> _  -- scheduler redirect
-             :<|> createJob') = client (Proxy :: Proxy VAPI) (BaseUrl Http host $ fromIntegral port)
+             :<|> createJob'
+             :<|> getHealth') = client (Proxy :: Proxy VAPI) (BaseUrl Http host $ fromIntegral port)
         in EcloguesClient
             (err getJobs')
             (err . jobStatus')
@@ -53,6 +56,7 @@ ecloguesClient = mkClient <=< getEcloguesLeader where
             (fmap err . sJobState')
             (err . deleteJob')
             (err . createJob')
+            (err getHealth')
             (host, port)
     err = withExceptT tryParseErr . ExceptT . runEitherT
     tryParseErr :: ServantError -> Either ServantError JobError
