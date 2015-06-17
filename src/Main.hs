@@ -52,6 +52,7 @@ import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe (isJust)
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text.Lazy as TL
+import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Word (Word16)
 import Database.Zookeeper (ZKError)
 import Network.HTTP.Types (ok200, methodGet, methodPost, methodDelete, methodPut)
@@ -64,7 +65,7 @@ import Servant.Server ( Server, ServerT, ServantErr (..), (:~>) (..)
                       , enter, serve, err404, err409, err503, err303 )
 import System.Directory (createDirectoryIfMissing)
 import System.IO (hPutStrLn, stderr)
-import System.Random (randomIO)
+import System.Random (randomIO, mkStdGen, setStdGen)
 
 data ApiConfig = ApiConfig { jobsDir :: FilePath
                            , zookeeperHosts :: ZKURI
@@ -209,8 +210,16 @@ withPersist mkConf conf webLock followAuroraFailure = do
     withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA ->
         snd <$> waitAny [followAuroraFailure, const undefined <$> webA, updaterA, enacterA]
 
+seedStdGen :: IO ()
+seedStdGen = do
+    curTime <- getPOSIXTime
+    -- Unlikely to start twice within a millisecond
+    let pico = floor (curTime * 1e3) :: Int
+    setStdGen $ mkStdGen pico
+
 main :: IO ()
 main = do
+    seedStdGen
     apiConf <- orError =<< readJSON "/etc/xdg/eclogues/api.json"
     webLock <- Lock.new
     res <- withZookeeper (zookeeperHosts apiConf) $ runExceptT . withZK apiConf webLock
