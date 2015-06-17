@@ -34,23 +34,23 @@ API
 ### GET `/jobs`
 List all jobs.
 
-### GET `/job/:name`
+### GET `/jobs/:name`
 Information about a particular job.
 
-### GET `/job/:name/state`
+### GET `/jobs/:name/state`
 Get only the state of a particular job.
 
-### PUT `/job/:name/state`
+### PUT `/jobs/:name/state`
 Kill a job, by putting the following state:
 
 ```
 {"type":"Failed","reason":"UserKilled"}
 ```
 
-### DELETE `/job/:name`
+### DELETE `/jobs/:name`
 Clean up a terminated job.
 
-### POST `/create`
+### POST `/jobs`
 Post a task spec of the form:
 
 ```

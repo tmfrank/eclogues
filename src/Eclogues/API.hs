@@ -12,12 +12,12 @@ import Servant.API ((:>), (:<|>), Get, Post, Put, Delete, ReqBody, Capture, JSON
 type Get' = Get '[JSON]
 
 type VAPI =  "jobs"   :> Get' [JobStatus]
-        :<|> "job"    :> Capture "name" Name :> Get' JobStatus
-        :<|> "job"    :> Capture "name" Name :> "state" :> Get' JobState
-        :<|> "job"    :> Capture "name" Name :> "state" :> ReqBody '[JSON] JobState :> Put '[JSON] ()
-        :<|> "job"    :> Capture "name" Name :> "scheduler" :> Get' ()
-        :<|> "job"    :> Capture "name" Name :> Delete '[JSON] ()
-        :<|> "create" :> ReqBody '[JSON] TaskSpec  :> Post '[JSON] ()
+        :<|> "jobs"   :> Capture "name" Name :> Get' JobStatus
+        :<|> "jobs"   :> Capture "name" Name :> "state" :> Get' JobState
+        :<|> "jobs"   :> Capture "name" Name :> "state" :> ReqBody '[JSON] JobState :> Put '[JSON] ()
+        :<|> "jobs"   :> Capture "name" Name :> "scheduler" :> Get' ()
+        :<|> "jobs"   :> Capture "name" Name :> Delete '[JSON] ()
+        :<|> "jobs"   :> ReqBody '[JSON] TaskSpec  :> Post '[JSON] ()
         :<|> "health" :> Get' Health
 
 data JobError = JobNameUsed
