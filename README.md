@@ -47,6 +47,9 @@ Kill a job, by putting the following state:
 {"type":"Failed","reason":"UserKilled"}
 ```
 
+### GET `/jobs/:name/scheduler`
+Redirect to the job page on Aurora.
+
 ### DELETE `/jobs/:name`
 Clean up a terminated job.
 
@@ -68,7 +71,3 @@ Post a task spec of the form:
     "dependson": []
 }
 ```
-
-Known Issues
-------------
-Job names need to be unique, or statuses may not update correctly.
