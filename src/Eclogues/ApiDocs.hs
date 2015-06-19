@@ -17,12 +17,17 @@ import Data.Text.Lazy (pack)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import Data.UUID (nil)
 import Text.Pandoc (writeHtmlString, def)
-import Servant.API (Capture)
-import Servant.Docs (API, ToCapture (..), ToSample (..), DocCapture (..), docs, markdown)
+import Servant.API (Capture, QueryParam)
+import Servant.Docs ( API, ToCapture (..), ToSample (..), ToParam (..),
+                      DocCapture (..), DocQueryParam (..), ParamKind (Normal),
+                      docs, markdown )
 import Servant.Docs.Pandoc (pandoc)
 
 instance ToCapture (Capture "name" Name) where
     toCapture _ = DocCapture "name" "job name"
+
+instance ToParam (QueryParam "path" FilePath) where
+    toParam _ = DocQueryParam "path" [] "output file path" Normal
 
 instance ToSample JobState JobState where
     toSamples _ = [("A running task", Running)

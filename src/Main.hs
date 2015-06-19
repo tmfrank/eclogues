@@ -11,7 +11,7 @@ import Database.Zookeeper.Election (LeadershipError (..), whenLeader)
 import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
 import Eclogues.API (VAPI, JobError (..), Health (Health))
 import Eclogues.ApiDocs (apiDocsHtml)
-import Eclogues.AppConfig (AppConfig (AppConfig, schedChan, pctx, auroraURI, schedJobURI), requireAurora)
+import Eclogues.AppConfig (AppConfig (AppConfig, schedChan, pctx, auroraURI, schedJobURI, outputURI), requireAurora)
 import Eclogues.Instances ()
 import Eclogues.Persist (PersistContext)
 import qualified Eclogues.Persist as Persist
@@ -22,11 +22,11 @@ import Eclogues.State (getJobs, activeJobs, createJob, killJob, deleteJob, getJo
 import Eclogues.State.Monad (EState)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState)
-import Eclogues.TaskSpec (JobStatus, JobState (..), FailureReason (..), jobState, jobUuid)
+import Eclogues.TaskSpec (Name, JobStatus, JobState (..), FailureReason (..), jobState, jobUuid)
 import Eclogues.Util (readJSON, orError)
 import Units
 
-import Control.Applicative ((<$>), (<*), pure)
+import Control.Applicative ((<$>), (<*), (*>), pure)
 import Control.Category ((.))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.AdvSTM (AdvSTM, atomically, onCommit)
@@ -71,7 +71,8 @@ data ApiConfig = ApiConfig { jobsDir :: FilePath
                            , zookeeperHosts :: ZKURI
                            , bindAddress :: String
                            , bindPort :: Word16
-                           , subexecutorUser :: TL.Text }
+                           , subexecutorUser :: TL.Text
+                           , outputUrlPrefix :: String }
 
 $(deriveJSON defaultOptions ''ApiConfig)
 
@@ -106,7 +107,7 @@ mainServer :: AppConfig -> TVar AppState -> Server VAPI
 mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server where
     server :: ServerT VAPI (ExceptT JobError IO)
     server = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|>
-             mesosJob :<|> deleteJobH :<|> createJobH :<|> healthH
+             mesosJob :<|> outputH :<|> deleteJobH :<|> createJobH :<|> healthH
 
     healthH = lift $ Health . isJust <$> atomically (auroraURI conf)
     getJobsH = lift $ getJobs <$> atomically (readTVar stateV)
@@ -119,6 +120,7 @@ mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server 
         toMesos js = (lift . atomically $ auroraURI conf) >>= \case
             Nothing  -> throwE SchedulerInaccessible
             Just uri -> throwE . SchedulerRedirect . schedJobURI conf uri $ js ^. jobUuid
+    outputH name pathM = getJobH name *> throwE (SchedulerRedirect . outputURI conf name $ maybe "stdout" id pathM)
 
     killJobH jid (Failed UserKilled) = runScheduler' $ killJob jid
     killJobH jid _                   = throwE (InvalidStateTransition "Can only set state to Failed UserKilled") <* getJobH jid
@@ -156,7 +158,10 @@ corsPolicy = CorsResourcePolicy { corsOrigins = Nothing
                                 , corsIgnoreFailures = False }
 
 advertisedData :: ApiConfig -> BSS.ByteString
-advertisedData (ApiConfig _ _ host port _) = BSL.toStrict $ encode (host, port)
+advertisedData (ApiConfig _ _ host port _ _) = BSL.toStrict $ encode (host, port)
+
+mkOutputURI :: ApiConfig -> Name -> FilePath -> String
+mkOutputURI conf name path = (outputUrlPrefix conf) ++ TL.unpack name ++ "/" ++ path
 
 withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
 withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
@@ -165,7 +170,7 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
     createDirectoryIfMissing False jdir
     Persist.withPersistDir jdir $ \pctx' -> do
-        let conf = AppConfig jdir getURI schedV pctx' . schedulerJobUI . TL.unpack $ subexecutorUser apiConf
+        let conf = AppConfig jdir getURI schedV pctx' (schedulerJobUI . TL.unpack $ subexecutorUser apiConf) (mkOutputURI apiConf)
             mkConf = ScheduleConf jdir $ subexecutorUser apiConf
         lift $ withPersist mkConf conf webLock followAuroraFailure
 
