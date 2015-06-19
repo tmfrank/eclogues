@@ -2,9 +2,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Eclogues.ApiDocs (apiDocs, apiDocsMd, apiDocsHtml) where
+module Eclogues.ApiDocs (VAPIWithDocs, apiDocs, apiDocsMd, apiDocsHtml) where
 
 import Eclogues.API (VAPI, Health (Health))
 import Eclogues.TaskSpec (TaskSpec (..), Resources (..), JobState (..), JobStatus (..), FailureReason (..), Name, taskCommand)
@@ -16,8 +17,9 @@ import Data.Proxy (Proxy (..))
 import Data.Text.Lazy (pack)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import Data.UUID (nil)
+import Network.HTTP.Media ((//), (/:))
 import Text.Pandoc (writeHtmlString, def)
-import Servant.API (Capture, QueryParam)
+import Servant.API (Capture, QueryParam, Get, Accept (..), MimeRender (..), (:>), (:<|>))
 import Servant.Docs ( API, ToCapture (..), ToSample (..), ToParam (..),
                       DocCapture (..), DocQueryParam (..), ParamKind (Normal),
                       docs, markdown )
@@ -27,7 +29,7 @@ instance ToCapture (Capture "name" Name) where
     toCapture _ = DocCapture "name" "job name"
 
 instance ToParam (QueryParam "path" FilePath) where
-    toParam _ = DocQueryParam "path" [] "output file path" Normal
+    toParam _ = DocQueryParam "path" ["stdout", "JOB_SPECIFIC_PATH"] "output file path" Normal
 
 instance ToSample JobState JobState where
     toSamples _ = [("A running task", Running)
@@ -70,3 +72,11 @@ apiDocsMd = encodeUtf8 . pack $ markdown apiDocs
 
 apiDocsHtml :: L.ByteString
 apiDocsHtml = encodeUtf8 . pack . writeHtmlString def $ pandoc apiDocs
+
+type VAPIWithDocs = VAPI :<|> "api" :> Get '[HTML] L.ByteString
+
+data HTML
+
+instance Accept HTML where contentType _ = "text" // "html" /: ("charset", "utf-8")
+
+instance MimeRender HTML L.ByteString where mimeRender _ html = html

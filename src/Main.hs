@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
@@ -10,7 +11,7 @@ import Prelude hiding ((.))
 import Database.Zookeeper.Election (LeadershipError (..), whenLeader)
 import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
 import Eclogues.API (VAPI, JobError (..), Health (Health))
-import Eclogues.ApiDocs (apiDocsHtml)
+import Eclogues.ApiDocs (VAPIWithDocs, apiDocsHtml)
 import Eclogues.AppConfig (AppConfig (AppConfig, schedChan, pctx, auroraURI, schedJobURI, outputURI), requireAurora)
 import Eclogues.Instances ()
 import Eclogues.Persist (PersistContext)
@@ -55,12 +56,11 @@ import qualified Data.Text.Lazy as TL
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Word (Word16)
 import Database.Zookeeper (ZKError)
-import Network.HTTP.Types (ok200, methodGet, methodPost, methodDelete, methodPut)
+import Network.HTTP.Types (methodGet, methodPost, methodDelete, methodPut)
 import Network.URI (URI)
-import Network.Wai (responseLBS)
 import Network.Wai.Handler.Warp (run)
 import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), cors)
-import Servant.API ((:<|>) ((:<|>)), Raw)
+import Servant.API ((:<|>) ((:<|>)))
 import Servant.Server ( Server, ServerT, ServantErr (..), (:~>) (..)
                       , enter, serve, err404, err409, err503, err303 )
 import System.Directory (createDirectoryIfMissing)
@@ -133,12 +133,9 @@ mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server 
         other                 -> err409 { errBody = encode other }
     runScheduler' = runScheduler conf stateV
 
-type VAPIWithDocs = VAPI :<|> Raw
-
 docsServer :: Server VAPI -> Server VAPIWithDocs
 docsServer = (:<|> serveDocs) where
-    serveDocs _ respond = respond $ responseLBS ok200 [plain] apiDocsHtml
-    plain = ("Content-Type", "text/html")
+    serveDocs = lift $ pure apiDocsHtml
 
 whileLeader :: ManagedZK -> BSS.ByteString -> IO a -> ExceptT LeadershipError IO a
 whileLeader zk advertisedHost act =
