@@ -14,17 +14,38 @@ and has some [interop issues](https://issues.apache.org/jira/browse/THRIFT-3145)
 Clone it from [the GitHub mirror](https://github.com/apache/thrift) and apply the
 included `thrift-fixes.patch` before `cabal install`.
 
-Requires the master branch of [servant-pandoc](https://github.com/mpickering/servant-pandoc)
-until that's published to Hackage.
+Configuration
+-------------
+
+```
+# cat MASTER_MACHINE/etc/xdg/eclogues/api.json
+{
+    "jobsDir": "SHARED_JOBS_DIR",
+    "zookeeperHosts": "ZOOKEEPER:2181,ADDRESSES:2181",
+    "bindAddress": "0.0.0.0",
+    "bindPort": 8000,
+    "subexecutorUser": "vagrant",
+    "outputUrlPrefix": "http://localhost:9000/"
+}
+```
+
+```
+# cat SLAVE_MACHINE/etc/xdg/eclogues/subexecutor.json
+{"jobsDir":"SHARED_JOBS_DIR"}
+```
+
+```
+# cat SLAVE_MACHINE/$XDG_DATA_HOME/eclogues/client.json
+{"zookeeperHosts":"ZOOKEEPER:2181,ADDRESSES:2181"}
+```
 
 Running
 -------
 
 ```
 cabal build
-cp dist/build/eclogues-subexecutor/eclogues-subexecutor SLAVE_PATH
-echo '{"jobsDir":"SHARED_JOBS_DIR"}' > SLAVE_MACHINE/etc/eclogues/subexecutor.json
-dist/build/eclogues-api/eclogues-api SHARED_JOBS_DIR ZOOKEEPER:2181,ADDRESSES:2181 THIS_HOST
+cp dist/build/eclogues-subexecutor/eclogues-subexecutor dist/build/eclogues-client/eclogues-client SLAVE_PATH
+dist/build/eclogues-api/eclogues-api &
 xdg-open http://localhost:8000
 ```
 
@@ -49,6 +70,9 @@ Kill a job, by putting the following state:
 
 ### GET `/jobs/:name/scheduler`
 Redirect to the job page on Aurora.
+
+### GET `/jobs/:name/output?path=`
+Redirect to job output.
 
 ### DELETE `/jobs/:name`
 Clean up a terminated job.
