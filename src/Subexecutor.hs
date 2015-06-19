@@ -62,7 +62,7 @@ runTask path name = do
         _    -> error "Stdout log file missing"
     where
         specDir = path </> name
-        depsDir = "./yb-dependencies/"
+        depsDir = "./virgil-dependencies/"
         depOutput n = path </> n </> "output"
         copyDep = uncurry copyDirContents . (depOutput &&& (depsDir ++)) . L.unpack
 

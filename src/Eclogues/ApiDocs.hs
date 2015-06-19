@@ -42,7 +42,7 @@ spec :: TaskSpec
 spec = TaskSpec "hello" "echo hello world > hello.txt" res ["hello.txt"] False []
 
 depSpec :: TaskSpec
-depSpec = TaskSpec "cat-hello" "cat yb-dependencies/hello/hello.txt" res [] True ["hello"]
+depSpec = TaskSpec "cat-hello" "cat virgil-dependencies/hello/hello.txt" res [] True ["hello"]
 
 instance ToSample TaskSpec TaskSpec where
     toSamples _ = [("A job with output", spec)

@@ -3,8 +3,8 @@ Eclogues
 
 *The Eclogues (/ˈɛklɒɡz/; Latin: Eclogae [ˈɛklɔɡaj]), also called the Bucolics, is the first of the three major works of the Latin poet Virgil.*
 
-Dependencies
-------------
+Project Dependencies
+--------------------
 
 Requires Apache [Mesos](http://mesos.apache.org) and [Aurora](http://aurora.apache.org/) 0.7.0.
 
@@ -78,7 +78,7 @@ Redirect to job output.
 Clean up a terminated job.
 
 ### POST `/jobs`
-Post a task spec of the form:
+Post a job spec of the form:
 
 ```
 {
@@ -95,3 +95,11 @@ Post a task spec of the form:
     "dependson": []
 }
 ```
+
+Job Dependencies
+----------------
+
+The `dependson` key in the job spec contains a list of already existing jobs.
+The created job will not run until each of the specified jobs have successfully
+finished. The output files from dependencies are available under the
+`./virgil-dependencies/JOB_NAME/` directory when a job runs.
