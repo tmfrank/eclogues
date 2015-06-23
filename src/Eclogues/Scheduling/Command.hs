@@ -37,8 +37,8 @@ import Text.Read.HT (maybeRead)
 -- TODO: split up
 
 data ScheduleCommand = QueueJob TaskSpec UUID
-                     | KillJob Name
-                     | CleanupJob Name
+                     | KillJob Name UUID
+                     | CleanupJob Name UUID
 
 $(deriveJSON defaultOptions ''ScheduleCommand)
 
@@ -59,10 +59,10 @@ runScheduleCommand conf (QueueJob spec uuid) = do
         writeFile (dir ++ "/spec.json") (encode spec)
     client <- lift $ A.thriftClient $ auroraURI conf
     A.createJob client (auroraRole conf) subspec
-runScheduleCommand conf (KillJob name) = do
+runScheduleCommand conf (KillJob _name uuid) = do
     client <- lift $ A.thriftClient $ auroraURI conf
-    A.killTasks client (auroraRole conf) [name]
-runScheduleCommand conf (CleanupJob name) = lift . void $
+    A.killTasks client (auroraRole conf) [L.pack (show uuid)]
+runScheduleCommand conf (CleanupJob name _uuid) = lift . void $
     tryJust (guard . isDoesNotExistError) . removeDirectoryRecursive $ jobDir conf name
 
 getSchedulerStatuses :: ScheduleConf -> [JobStatus] -> ExceptT A.UnexpectedResponse IO [(Name, JobState)]

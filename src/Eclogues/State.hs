@@ -12,7 +12,7 @@ import Eclogues.TaskSpec ( Name, FailureReason (..), RunErrorReason (..)
                          , TaskSpec, taskName, taskDependsOn
                          , JobState (..), isActiveState, isTerminationState
                                         , isExpectedTransition, isOnScheduler
-                         , JobStatus (JobStatus), jobState
+                         , JobStatus (JobStatus), jobState, jobUuid
                          , QueueStage (LocalQueue) )
 
 import Control.Applicative ((*>), pure)
@@ -62,7 +62,7 @@ killJob :: Name -> ExceptT JobError EState ()
 killJob name = existingJob name >>= \js ->
     if isTerminationState (js ^. jobState)
         then throwE $ JobMustBeTerminated False
-        else lift . ES.schedule $ KillJob name
+        else lift . ES.schedule $ KillJob name (js ^. jobUuid)
 
 deleteJob :: Name -> ExceptT JobError EState ()
 deleteJob name = existingJob name >>= \js -> do
@@ -70,7 +70,7 @@ deleteJob name = existingJob name >>= \js -> do
     dependents <- lift $ ES.getDependents name
     when (not $ null dependents) . throwE $ OutstandingDependants dependents
     lift $ ES.deleteJob name
-    lift . ES.schedule $ CleanupJob name
+    lift . ES.schedule $ CleanupJob name (js ^. jobUuid)
 
 -- Only check on active jobs; terminated jobs shouldn't change status
 -- Also Waiting jobs aren't in Aurora so filter out those
