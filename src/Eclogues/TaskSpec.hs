@@ -56,7 +56,13 @@ data RunErrorReason = BadSchedulerTransition
 
 data QueueStage = LocalQueue | SchedulerQueue deriving (Show, Eq)
 
-data JobState = Queued QueueStage | Waiting Integer | Running | Finished | Failed FailureReason | RunError RunErrorReason
+data JobState = Queued QueueStage
+              | Waiting Integer
+              | Running
+              | Killing
+              | Finished
+              | Failed FailureReason
+              | RunError RunErrorReason
                 deriving (Show, Eq)
 
 data JobStatus = JobStatus { _jobSpec  :: TaskSpec
@@ -76,9 +82,10 @@ isQueueState (Queued _) = True
 isQueueState _          = False
 
 isTerminationState :: JobState -> Bool
-isTerminationState (Queued _)    = False
+isTerminationState (Queued _)   = False
 isTerminationState (Waiting _)  = False
 isTerminationState Running      = False
+isTerminationState Killing      = False
 isTerminationState Finished     = True
 isTerminationState (Failed _)   = True
 isTerminationState (RunError _) = True
@@ -96,6 +103,7 @@ isExpectedTransition (Queued LocalQueue) (Queued SchedulerQueue) = True
 isExpectedTransition (Queued _)   Running       = True
 isExpectedTransition (Waiting 0)  Running       = True
 isExpectedTransition Running      (Queued SchedulerQueue) = True
+isExpectedTransition Killing      (Failed UserKilled) = True
 isExpectedTransition o n | isQueueState o || o == Running = case n of
                                   Finished     -> True
                                   (Failed _)   -> True
@@ -108,6 +116,7 @@ instance ToJSON JobState where
     toJSON (Queued SchedulerQueue) = object ["type" .= "Queued", "stage" .= "scheduler"]
     toJSON (Waiting n) = object ["type" .= "Waiting", "for" .= n]
     toJSON Running     = object ["type" .= "Running"]
+    toJSON Killing     = object ["type" .= "Killing"]
     toJSON Finished    = object ["type" .= "Finished"]
     toJSON (RunError BadSchedulerTransition) = object ["type" .= "RunError", "reason" .= "BadSchedulerTransition"]
     toJSON (RunError SubexecutorFailure) = object ["type" .= "RunError", "reason" .= "SubexecutorFailure"]
@@ -129,6 +138,7 @@ instance FromJSON JobState where
                 _           -> fail "Invalid queue stage"
             "Waiting"  -> Waiting <$> v .: "for"
             "Running"  -> pure Running
+            "Killing"  -> pure Killing
             "Finished" -> pure Finished
             "RunError" -> v .: "reason" >>= \case
                 "BadSchedulerTransition" -> pure $ RunError BadSchedulerTransition

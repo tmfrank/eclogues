@@ -23,7 +23,7 @@ import Control.Monad.Trans.Except (ExceptT, Except, throwE)
 import Control.Monad.Trans.Writer.Lazy (WriterT, tell, execWriterT)
 import Data.HashMap.Lazy (elems, traverseWithKey)
 import qualified Data.HashMap.Lazy as HashMap
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (isJust)
 import Data.Monoid (Sum (Sum))
 import Data.UUID (UUID)
 
@@ -62,7 +62,9 @@ killJob :: Name -> ExceptT JobError EState ()
 killJob name = existingJob name >>= \js ->
     if isTerminationState (js ^. jobState)
         then throwE $ JobMustBeTerminated False
-        else lift . ES.schedule $ KillJob name (js ^. jobUuid)
+        else lift $ do
+            ES.setJobState name Killing
+            ES.schedule $ KillJob name (js ^. jobUuid)
 
 deleteJob :: Name -> ExceptT JobError EState ()
 deleteJob name = existingJob name >>= \js -> do
@@ -85,16 +87,23 @@ updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeSt
     transition :: Name -> JobStatus -> EState ()
     transition name pst =
         let oldState = pst ^. jobState
-            gotState = fromMaybe whenMissing $ lookup name gotStates
-            whenMissing = if isOnScheduler oldState
-                then RunError SchedulerLost
-                else oldState
-        in when (gotState /= oldState) $ do
-            let newState = checkTransition oldState gotState
+            newState = checkTransition oldState $ lookup name gotStates
+        in when (newState /= oldState) $ do
             ES.setJobState name newState
             handleDeps pst newState
-    checkTransition :: JobState -> JobState -> JobState
-    checkTransition old new = if isExpectedTransition old new then new else RunError BadSchedulerTransition
+    checkTransition :: JobState -> Maybe JobState -> JobState
+    checkTransition Killing Nothing    = Failed UserKilled
+    checkTransition Killing (Just new)
+        | Finished <- new              = Failed UserKilled
+        | isTerminationState new       = new
+        | otherwise                    = Killing
+    checkTransition old     Nothing
+        | isOnScheduler old            = RunError SchedulerLost
+        | otherwise                    = old
+    checkTransition old     (Just new)
+        | old == new                   = old
+        | isExpectedTransition old new = new
+        | otherwise                    = RunError BadSchedulerTransition
     handleDeps :: JobStatus -> JobState -> EState ()
     handleDeps pst newState
         | isTerminationState newState = do
