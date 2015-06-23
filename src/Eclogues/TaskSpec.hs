@@ -131,7 +131,7 @@ instance FromJSON JobState where
             "Running"  -> pure Running
             "Finished" -> pure Finished
             "RunError" -> v .: "reason" >>= \case
-                "BasSchedulerTransition" -> pure $ RunError BadSchedulerTransition
+                "BadSchedulerTransition" -> pure $ RunError BadSchedulerTransition
                 "SubexecutorFailure"     -> pure $ RunError SubexecutorFailure
                 "SchedulerLost"          -> pure $ RunError SchedulerLost
                 _                        -> fail "Invalid run error reason"
