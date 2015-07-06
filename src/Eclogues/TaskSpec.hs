@@ -65,6 +65,18 @@ data JobState = Queued QueueStage
               | RunError RunErrorReason
                 deriving (Show, Eq)
 
+majorJobStates :: [String]
+majorJobStates = ["Queued", "Waiting", "Running", "Killing", "Finished", "Failed", "RunError"]
+
+majorState :: JobState -> String
+majorState (Queued _)   = "Queued"
+majorState (Waiting _)  = "Waiting"
+majorState Running      = "Running"
+majorState Killing      = "Killing"
+majorState Finished     = "Finished"
+majorState (Failed _)   = "Failed"
+majorState (RunError _) = "RunError"
+
 data JobStatus = JobStatus { _jobSpec  :: TaskSpec
                            , _jobState :: JobState
                            , _jobUuid  :: UUID }

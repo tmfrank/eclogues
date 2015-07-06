@@ -7,7 +7,7 @@ import Prelude hiding (readFile)
 import Database.Zookeeper.ManagedEvents (ZKURI, withZookeeper)
 import Eclogues.Util (orShowError)
 import Eclogues.Client (EcloguesClient (..), ecloguesClient)
-import Eclogues.TaskSpec (Name)
+import Eclogues.TaskSpec (JobStatus, Name, majorState, majorJobStates, _jobState)
 
 import Control.Applicative ((<$>), (<*>), pure, optional)
 import Control.Monad ((<=<), when)
@@ -15,13 +15,18 @@ import Control.Monad.Loops (firstM)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Data.Aeson (encode, eitherDecode)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
+import Data.Bifoldable (biList)
+import Data.Bifunctor (second)
 import Data.ByteString.Lazy (readFile)
 import qualified Data.ByteString.Lazy.Char8 as BSLC
+import Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as HashMap
+import Data.List (foldl', intercalate)
 import Data.Maybe (isNothing)
 import Data.Monoid ((<>))
 import Data.Text.Lazy (pack)
 import Database.Zookeeper (ZLogLevel (ZLogWarn), setDebugLevel)
-import Options.Applicative ( Parser, strOption, strArgument, long, metavar, help
+import Options.Applicative ( Parser, strOption, strArgument, switch, long, metavar, help
                            , subparser, command, progDesc
                            , execParser, info, helper, fullDesc, header )
 import System.Directory (doesFileExist)
@@ -35,6 +40,7 @@ data Command = ListJobs
              | CreateJob FilePath
              | GetMaster
              | GetHealth
+             | JobStats Bool
 
 data ClientConfig = ClientConfig { zookeeperHosts :: ZKURI }
 
@@ -63,6 +69,7 @@ go opts = do
         GetMaster     -> let (h,p) = masterHost client in putStrLn (h ++ ':':show p)
         GetHealth     -> runClient (BSLC.putStrLn . encode) $ getHealth client
         ListJobs      -> runClient print $ getJobs client
+        JobStats as   -> runClient (printStats as) $ getJobs client
         JobState name -> runClient print $ getJobState client name
         CreateJob sf  -> do
             cts <- readFile sf
@@ -72,6 +79,13 @@ go opts = do
     where
         runClient :: forall a e. (Show e) => (a -> IO ()) -> ExceptT e IO a -> IO ()
         runClient f = ((f <=< orShowError) =<<) . runExceptT
+        printStats :: Bool -> [JobStatus] -> IO ()
+        printStats as = mapM_ (putStrLn . intercalate "\t" . biList . second show) . HashMap.toList . getStats (statStart as)
+        statStart :: Bool -> HashMap String Integer
+        statStart False = HashMap.empty
+        statStart True  = foldl' (flip (flip HashMap.insert 0)) HashMap.empty majorJobStates
+        getStats :: HashMap String Integer -> [JobStatus] -> HashMap String Integer
+        getStats = foldl' (\m j -> HashMap.insertWith (+) (majorState $ _jobState j) 1 m)
 
 main :: IO ()
 main = execParser opts >>= go where
@@ -90,6 +104,8 @@ main = execParser opts >>= go where
        <> command "state"  (info (JobState  <$> nameArg) (progDesc "Get the state of a job"))
        <> command "create" (info (CreateJob <$> specArg) (progDesc "Schedule a job"))
        <> command "master" (info (pure GetMaster)        (progDesc "Print Eclogues master host"))
+       <> command "stats"  (info (JobStats <$> allArg)   (progDesc "Get running job stats"))
        <> command "health" (info (pure GetHealth)        (progDesc "Get service health")) )
     nameArg = pack <$> strArgument (metavar "JOB_NAME")
     specArg = strArgument (metavar "SPEC_FILE")
+    allArg  = switch (long "all-states" <> help "List states with no associated jobs")
