@@ -20,7 +20,6 @@ import qualified ReadOnlyScheduler_Client as ROClient
 import Eclogues.Scheduling.AuroraConfig (Role, auroraJobConfig, lockKey, defaultJobKey)
 import Eclogues.TaskSpec (TaskSpec, Name)
 
-import Control.Applicative ((<$>), pure)
 import Control.Exception (Exception)
 import Control.Monad (void)
 import Control.Monad.Trans.Except (ExceptT (..))

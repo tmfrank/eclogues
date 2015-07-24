@@ -27,7 +27,6 @@ import Eclogues.TaskSpec (Name, JobStatus, JobState (..), FailureReason (..), jo
 import Eclogues.Util (readJSON, orError)
 import Units
 
-import Control.Applicative ((<$>), (<*), (*>), pure)
 import Control.Category ((.))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.AdvSTM (AdvSTM, atomically, onCommit)

@@ -19,11 +19,10 @@ import Eclogues.Scheduling.Command (ScheduleCommand)
 import Eclogues.TaskSpec (Name, TaskSpec, JobStatus (JobStatus))
 import qualified Eclogues.TaskSpec as J
 
-import Control.Applicative (Applicative, (<$>), (*>), pure)
 import Control.Lens ((^.))
 import Control.Monad.Logger (LoggingT, runStderrLoggingT)
 import Control.Monad.Trans.Reader (ReaderT)
-import Data.Monoid (Monoid (..), (<>))
+import Data.Monoid ((<>))
 import qualified Data.Text as T
 import Data.UUID (UUID)
 import Database.Persist.TH (mkPersist, sqlSettings, mkMigrate, share, persistLowerCase)

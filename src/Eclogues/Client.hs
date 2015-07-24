@@ -15,7 +15,6 @@ import Eclogues.Client.Instances ()
 import Eclogues.Instances ()
 import Eclogues.TaskSpec (JobStatus, JobState, Name, TaskSpec)
 
-import Control.Applicative (pure)
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Either (runEitherT)
 import Control.Monad.Trans.Except (ExceptT (..), withExceptT)

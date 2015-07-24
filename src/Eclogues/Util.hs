@@ -2,7 +2,6 @@ module Eclogues.Util where
 
 import Prelude hiding (readFile)
 
-import Control.Applicative (pure)
 import Data.Aeson (FromJSON, eitherDecode)
 import Data.ByteString.Lazy (readFile)
 

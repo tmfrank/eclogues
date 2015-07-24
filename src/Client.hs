@@ -9,7 +9,7 @@ import Eclogues.Util (orShowError)
 import Eclogues.Client (EcloguesClient (..), ecloguesClient)
 import Eclogues.TaskSpec (JobStatus, Name, majorState, majorJobStates, _jobState)
 
-import Control.Applicative ((<$>), (<*>), pure, optional)
+import Control.Applicative (optional)
 import Control.Monad ((<=<), when)
 import Control.Monad.Loops (firstM)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)

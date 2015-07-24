@@ -6,7 +6,6 @@ module Database.Zookeeper.Election ( ZookeeperError, LeadershipError (..)
 
 import Database.Zookeeper.ManagedEvents (ZNode, ManagedZK (ManagedZK), ZKEvent (..))
 
-import Control.Applicative ((<$>), (*>), pure)
 import Control.Concurrent (MVar, newEmptyMVar, putMVar, takeMVar, tryPutMVar, tryTakeMVar)
 import Control.Concurrent.AdvSTM (atomically)
 import Control.Concurrent.AdvSTM.TVar (TVar, writeTVar, readTVar)

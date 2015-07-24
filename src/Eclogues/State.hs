@@ -15,7 +15,6 @@ import Eclogues.TaskSpec ( Name, FailureReason (..), RunErrorReason (..)
                          , JobStatus (JobStatus), jobState, jobUuid
                          , QueueStage (LocalQueue) )
 
-import Control.Applicative ((*>), pure)
 import Control.Lens ((^.), view)
 import Control.Monad (when, void)
 import Control.Monad.Trans.Class (MonadTrans, lift)

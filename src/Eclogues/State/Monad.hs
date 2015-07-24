@@ -11,7 +11,6 @@ import qualified Eclogues.State.Types as EST
 import Eclogues.TaskSpec ( Name, JobState, JobStatus
                          , jobState, taskName, taskDependsOn )
 
-import Control.Applicative (Applicative)
 import Control.Lens ((%~), (.~), (?=), (%=), (^.), (<>=), at, ix, sans, use, non)
 import Control.Lens.TH (makeClassy)
 import Control.Monad.Morph (MFunctor, hoist)

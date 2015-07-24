@@ -5,7 +5,6 @@
 
 module Eclogues.TaskSpec where
 
-import Control.Applicative ((<$>), (<*>), pure)
 import Control.Lens.TH (makeClassy)
 import Control.Monad ((<=<))
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)

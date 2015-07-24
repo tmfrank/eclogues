@@ -7,7 +7,6 @@ import Eclogues.TaskSpec ( Command, RunResult (..)
 import Eclogues.Util (readJSON, orError)
 import Units
 
-import Control.Applicative ((*>), pure)
 import Control.Arrow ((&&&))
 import Control.Conditional (condM, otherwiseM)
 import Control.Lens ((^.))

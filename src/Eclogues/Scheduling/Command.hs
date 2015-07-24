@@ -14,7 +14,6 @@ import Eclogues.TaskSpec (
     , FailureReason (..), RunErrorReason (..), RunResult (..)
     , taskCommand, taskName, jobUuid)
 
-import Control.Applicative ((<$>), pure)
 import Control.Arrow ((&&&))
 import Control.Exception (IOException, try, tryJust)
 import Control.Lens ((^.), (&), (.~), view)

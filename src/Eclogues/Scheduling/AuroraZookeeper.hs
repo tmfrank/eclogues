@@ -6,7 +6,6 @@ module Eclogues.Scheduling.AuroraZookeeper (getAuroraMaster, followAuroraMaster)
 import Database.Zookeeper.Election (ZookeeperError, followLeaderInfo, getLeaderInfo)
 import Database.Zookeeper.ManagedEvents (ZNode, ManagedZK)
 
-import Control.Applicative ((<$>))
 import Control.Arrow ((&&&))
 import Control.Concurrent.Async (Async, async)
 import Control.Concurrent.AdvSTM (AdvSTM, atomically, newTVar, readTVar)

@@ -14,7 +14,6 @@ import Eclogues.TaskSpec ( TaskSpec (TaskSpec), Resources (Resources), JobState 
                          , FailureReason (..), RunErrorReason (..), QueueStage (SchedulerQueue))
 import Units
 
-import Control.Applicative ((<$>))
 import Data.Aeson (ToJSON (toJSON))
 import Data.Aeson.Encode (encodeToTextBuilder)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)

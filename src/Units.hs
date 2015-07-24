@@ -5,7 +5,6 @@
 
 module Units where
 
-import Control.Applicative (pure)
 import Control.Monad (mzero)
 import Data.Aeson (ToJSON (..), FromJSON (..))
 import qualified Data.Aeson as Aeson
