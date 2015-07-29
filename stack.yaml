@@ -3,9 +3,6 @@ packages:
 - '.'
 - thrift-hs/
 - location:
-    git: git@github.com:rimmington/servant-pandoc
-    commit: d2ef74e5237fa400edaf8a7e7559bba05dffa099
-- location:
     git: git@github.com:thaldyron/stm-io-hooks
     commit: 8f467d0970e62aa02cc87837b9189649725fe2dd
 extra-deps:
@@ -14,7 +11,7 @@ extra-deps:
 - servant-0.4.2
 - servant-client-0.4.2
 - servant-docs-0.4.2
-- servant-pandoc-0.4.1
+- servant-pandoc-0.4.1.1
 - servant-server-0.4.2
 - utility-ht-0.0.10
 - uuid-aeson-0.1.0.0
