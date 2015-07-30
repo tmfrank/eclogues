@@ -7,6 +7,7 @@ import Api_Types
 import Eclogues.Scheduling.AuroraConfig
 import Eclogues.JobSpec
 import Units
+import StateSpec
 
 import Test.Hspec
 
@@ -14,17 +15,19 @@ import Data.Aeson (decode)
 import Data.Maybe (isJust)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 
-spec :: Spec
-spec = do
+testThrift :: Spec
+testThrift = do
     let task = JobSpec "hello" "/bin/echo" (Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)) [] False []
 
     describe "ATaskExecConf" $
         it "is embedded in a JobConfiguration" $ do
-            let Just ec = taskConfig_executorConfig . jobConfiguration_taskConfig $ auroraJobConfig "default" task
+            let Just ec = taskConfig_executorConfig . jobConfiguration_taskConfig $ auroraJobConfig "default" $ task
             let text = executorConfig_data ec
             let encoded = encodeUtf8 text
             (decode encoded :: Maybe ATaskExecConf) `shouldSatisfy` isJust
 
+testUnits :: Spec
+testUnits = do
     describe "Units" $ do
         it "keeps val" $
             val (mega byte 10) `shouldBe` (10 :: Double)
@@ -43,4 +46,7 @@ spec = do
             second 15 `asVal` micro second `shouldBe` (15e6 :: Double)
 
 main :: IO ()
-main = hspec spec
+main = hspec $ do
+    testThrift
+    testUnits
+    testState

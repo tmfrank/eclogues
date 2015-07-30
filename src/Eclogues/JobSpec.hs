@@ -75,7 +75,7 @@ data JobState = Queued QueueStage
 data JobStatus = JobStatus { _job_spec :: JobSpec
                            , _jobState :: JobState
                            , _uuid     :: UUID }
-                           deriving (Show)
+                           deriving (Show, Eq)
 
 $(deriveJSON defaultOptions{fieldLabelModifier = statusJName} ''JobStatus)
 $(makeClassy ''JobStatus)

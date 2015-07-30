@@ -30,7 +30,7 @@ data JobError = JobNameUsed
               | InvalidStateTransition String
               | SchedulerRedirect String
               | SchedulerInaccessible
-                deriving (Show)
+                deriving (Show, Eq)
 
 data Health = Health { schedulerAccessible :: Bool }
 
