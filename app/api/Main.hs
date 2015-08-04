@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
@@ -22,7 +23,6 @@ import Eclogues.Scheduling.Command ( ScheduleConf (ScheduleConf)
                                    , runScheduleCommand, getSchedulerStatuses, schedulerJobUI )
 import Eclogues.ServantInstances ()
 import Eclogues.State (getJobs, activeJobs, createJob, killJob, deleteJob, getJob, updateJobs)
-import Eclogues.State.Monad (EState)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState)
 import Eclogues.Util (readJSON, orError)
@@ -39,10 +39,10 @@ import qualified Control.Concurrent.Lock as Lock
 import Control.Exception (Exception, IOException, throwIO, try)
 import Control.Lens ((^.))
 import Control.Monad ((<=<), forever)
-import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Either (EitherT (EitherT))
 import Control.Monad.Trans.Except (ExceptT, runExceptT, withExceptT, mapExceptT, throwE)
+import Control.Monad.State.Lazy (State)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import qualified Data.ByteString as BSS
@@ -87,7 +87,7 @@ throwExc act = runExceptT act >>= \case
     Left e  -> throwIO e
     Right a -> pure a
 
-type Scheduler = ExceptT JobError EState ()
+type Scheduler = ExceptT JobError (State ES.TransitionaryState) ()
 
 runPersist :: PersistContext -> Maybe (Persist.PersistAction ()) -> AdvSTM ()
 runPersist _   Nothing  = return ()
@@ -96,12 +96,12 @@ runPersist ctx (Just p) = onCommit $ Persist.atomically ctx p
 runScheduler :: AppConfig -> TVar AppState -> Scheduler -> ExceptT JobError IO ()
 runScheduler conf stateV f = mapExceptT atomically $ do
     state <- lift $ readTVar stateV
-    case ES.runEState state $ runExceptT f of
+    case ES.runState state $ runExceptT f of
         (Left  e, _ ) -> throwE e
-        (Right _, ts) -> do
-            lift . mapM_ (writeTChan $ schedChan conf) $ ts ^. ES.scheduleCommands
-            lift . writeTVar stateV $ ts ^. ES.appState
-            lift . runPersist (pctx conf) $ ts ^. ES.persist
+        (Right _, ts) -> lift $ do
+            mapM_ (writeTChan $ schedChan conf) $ ts ^. ES.scheduleCommands
+            writeTVar stateV $ ts ^. ES.appState
+            runPersist (pctx conf) $ ts ^. ES.persist
 
 mainServer :: AppConfig -> TVar AppState -> Server VAPI
 mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server where
@@ -111,7 +111,7 @@ mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server 
 
     healthH = lift $ Health . isJust <$> atomically (auroraURI conf)
     getJobsH = lift $ getJobs <$> atomically (readTVar stateV)
-    getJobH jid = (hoist generalize . getJob jid) =<< lift (atomically $ readTVar stateV)
+    getJobH jid = getJob jid =<< lift (atomically $ readTVar stateV)
     getJobStateH = fmap (^. Job.jobState) . getJobH
     createJobH spec = lift randomIO >>= runScheduler' . flip createJob spec
     deleteJobH = runScheduler' . deleteJob
@@ -173,7 +173,7 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
 
 withPersist :: (URI -> ScheduleConf) -> AppConfig -> Lock -> Async ZKError -> IO ZKError
 withPersist mkConf conf webLock followAuroraFailure = do
-    (_, st) <- ES.runEStateT def $ do
+    (_, st) <- ES.runStateTS def $ do
         (js, cmds) <- lift . Persist.atomically (pctx conf) $ do
             js <- Persist.allJobs
             cmds <- Persist.allIntents
@@ -194,7 +194,7 @@ withPersist mkConf conf webLock followAuroraFailure = do
             case newStatusesRes of
                 Right (Right newStatuses) -> atomically $ do
                     state <- readTVar stateV
-                    let (_, ts) = ES.runEState state $ updateJobs aJobs newStatuses
+                    let (_, ts) = ES.runState state $ updateJobs aJobs newStatuses
                     mapM_ (writeTChan $ schedChan conf) $ ts ^. ES.scheduleCommands
                     writeTVar stateV $ ts ^. ES.appState
                     runPersist (pctx conf) $ ts ^. ES.persist

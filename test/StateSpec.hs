@@ -11,6 +11,7 @@ import Units
 
 import Test.Hspec
 import Data.Default.Generics (def)
+import Control.Monad.State (State)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Data.Either (isRight, isLeft)
@@ -18,7 +19,7 @@ import Data.UUID (nil)
 import Control.Lens (view, at, (^.), (.~))
 import Data.Maybe (isNothing)
 
-type Scheduler = ExceptT JobError ES.EState ()
+type Scheduler = ExceptT JobError (State ES.TransitionaryState) ()
 
 data TestError = EncounteredError JobError
                | JobNotFound Name
@@ -39,7 +40,7 @@ scheduler' :: Scheduler -> EitherError AppState
 scheduler' = scheduler defAppState
 
 scheduler :: AppState -> Scheduler -> EitherError AppState
-scheduler aState = packageResult . fmap (^. appState) . ES.runEState aState . runExceptT
+scheduler aState = packageResult . fmap (^. appState) . ES.runState aState . runExceptT
 
 packageResult :: (Either JobError (), AppState) -> EitherError AppState
 packageResult (Left jError, _) = Left (EncounteredError jError)

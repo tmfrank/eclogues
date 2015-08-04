@@ -72,7 +72,6 @@ executable eclogues-api
         stm-io-hooks >=1.1.0,
         async >=2.0.1.5 && <2.1,
         utility-ht >=0.0.10 && <0.1,
-        mmorph >=1.0.4 && <1.1,
         hzk >=2.1.0 && <2.2,
         concurrent-extra >=0.7.0.9 && <0.8,
         wai-cors >=0.2.2 && <0.3,
@@ -86,14 +85,15 @@ executable eclogues-api
         random >=1.0.1.1 && <1.2,
         time >= 1.4.2,
         http-media >= 0.6.2,
+        mtl >=2.2,
         eclogues ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
-    other-extensions: DataKinds DeriveDataTypeable DeriveGeneric
-                      FlexibleInstances GADTs GeneralizedNewtypeDeriving
-                      MultiParamTypeClasses OverloadedStrings RankNTypes
-                      QuasiQuotes TemplateHaskell TupleSections TypeFamilies
-                      TypeOperators
+    other-extensions: ConstraintKinds DataKinds DeriveDataTypeable DeriveGeneric
+                      FlexibleContexts FlexibleInstances GADTs
+                      GeneralizedNewtypeDeriving MultiParamTypeClasses
+                      OverloadedStrings RankNTypes QuasiQuotes TemplateHaskell
+                      TupleSections TypeFamilies TypeOperators
     hs-source-dirs: gen-hs app/api
     other-modules:
         Eclogues.ApiDocs,

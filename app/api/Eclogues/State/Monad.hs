@@ -1,4 +1,6 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -13,9 +15,7 @@ import qualified Eclogues.JobSpec as Job
 
 import Control.Lens ((%~), (.~), (?=), (%=), (^.), (<>=), at, ix, sans, use, non)
 import Control.Lens.TH (makeClassy)
-import Control.Monad.Morph (MFunctor, hoist)
-import Control.Monad.Trans.Class (MonadTrans, lift)
-import Control.Monad.Trans.State (StateT, runStateT)
+import Control.Monad.State (MonadState, StateT, runStateT)
 import Data.Default.Generics (Default)
 import Data.Functor.Identity (Identity, runIdentity)
 import qualified Data.HashMap.Lazy as HashMap
@@ -32,65 +32,56 @@ instance Default TransitionaryState
 $(makeClassy ''TransitionaryState)
 instance EST.HasAppState TransitionaryState where appState = appState
 
-newtype EStateT m a = EStateT { unEStateT :: StateT TransitionaryState m a }
-                      deriving (Functor, Applicative, Monad)
+type TS m = (MonadState TransitionaryState m)
 
-instance MonadTrans EStateT where
-    lift = EStateT . lift
+runStateTS :: (Monad m) => AppState -> StateT TransitionaryState m a -> m (a, TransitionaryState)
+runStateTS i m = runStateT m $ TransitionaryState i [] Nothing
 
-instance MFunctor EStateT where
-    hoist nat (EStateT m) = EStateT $ (hoist nat) m
+runState :: AppState -> StateT TransitionaryState Identity a -> (a, TransitionaryState)
+runState st = runIdentity . runStateTS st
 
-type EState = EStateT Identity
-
-runEStateT :: (Applicative m, Monad m) => AppState -> EStateT m a -> m (a, TransitionaryState)
-runEStateT i (EStateT m) = runStateT m $ TransitionaryState i [] Nothing
-
-runEState :: AppState -> EState a -> (a, TransitionaryState)
-runEState st = runIdentity . runEStateT st
-
-schedule :: (Monad m) => ScheduleCommand -> EStateT m ()
-schedule cmd = EStateT $ do
+schedule :: (TS m) => ScheduleCommand -> m ()
+schedule cmd = do
     scheduleCommands %= (cmd :)
     persist <>= Just (Persist.scheduleIntent cmd)
 
-insertJob :: (Monad m) => JobStatus -> EStateT m ()
-insertJob st = EStateT $ do
+insertJob :: (TS m) => JobStatus -> m ()
+insertJob st = do
     jobs . at (st ^. Job.name) ?= st
     persist <>= Just (Persist.insert st)
 
-deleteJob :: (Monad m) => Name -> EStateT m ()
-deleteJob name = EStateT $ do
+deleteJob :: (TS m) => Name -> m ()
+deleteJob name = do
     jobs %= sans name
     persist <>= Just (Persist.delete name)
 
-getJob :: (Functor m, Monad m) => Name -> EStateT m (Maybe JobStatus)
-getJob name = EStateT . use $ jobs . at name
+getJob :: (TS m) => Name -> m (Maybe JobStatus)
+getJob name = use $ jobs . at name
 
-modifyJobState :: (Monad m) => (JobState -> JobState) -> Name -> EStateT m ()
-modifyJobState f name = EStateT $ jobs . ix name %= (Job.jobState %~ f)
+modifyJobState :: (TS m) => (JobState -> JobState) -> Name -> m ()
+modifyJobState f name = jobs . ix name %= (Job.jobState %~ f)
 
-setJobState :: (Functor m, Monad m) => Name -> JobState -> EStateT m ()
-setJobState name st = EStateT $ do
+setJobState :: (TS m) => Name -> JobState -> m ()
+setJobState name st = do
     jobs . ix name %= (Job.jobState .~ st)
     persist <>= Just (Persist.updateState name st)
 
-addRevDep :: (Monad m) => Name -> Name -> EStateT m ()
-addRevDep on by = EStateT $ revDeps %= HashMap.insertWith (++) on [by]
+addRevDep :: (TS m) => Name -> Name -> m ()
+addRevDep on by = revDeps %= HashMap.insertWith (++) on [by]
 
-removeRevDep :: (Monad m) => Name -> Name -> EStateT m ()
-removeRevDep on by = EStateT $ revDeps . at on %= (>>= removed) where
+removeRevDep :: (TS m) => Name -> Name -> m ()
+removeRevDep on by = revDeps . at on %= (>>= removed) where
     removed lst = case List.delete by lst of
         [] -> Nothing
         a  -> Just a
 
-getDependents :: (Functor m, Monad m) => Name -> EStateT m [Name]
-getDependents name = EStateT . use $ revDeps . at name . non []
+getDependents :: (TS m) => Name -> m [Name]
+getDependents name = use $ revDeps . at name . non []
 
-loadJobs :: forall m. (Monad m) => [JobStatus] -> EStateT m ()
+loadJobs :: forall m. (TS m) => [JobStatus] -> m ()
 loadJobs js = mapM_ go js where
-    go :: JobStatus -> EStateT m ()
+    go :: JobStatus -> m ()
     go j = do
         let name = j ^. Job.name
-        EStateT $ jobs . at name ?= j
+        jobs . at name ?= j
         mapM_ (flip addRevDep name) $ j ^. Job.dependsOn
