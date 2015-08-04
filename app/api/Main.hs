@@ -13,12 +13,12 @@ import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
 import Eclogues.API (VAPI, JobError (..), Health (Health))
 import Eclogues.ApiDocs (VAPIWithDocs, apiDocsHtml)
 import Eclogues.AppConfig (AppConfig (AppConfig, schedChan, pctx, auroraURI, schedJobURI, outputURI), requireAurora)
-import Eclogues.Instances ()
 import Eclogues.Persist (PersistContext)
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
 import Eclogues.Scheduling.Command ( ScheduleConf (ScheduleConf)
                                    , runScheduleCommand, getSchedulerStatuses, schedulerJobUI )
+import Eclogues.ServantInstances ()
 import Eclogues.State (getJobs, activeJobs, createJob, killJob, deleteJob, getJob, updateJobs)
 import Eclogues.State.Monad (EState)
 import qualified Eclogues.State.Monad as ES

@@ -4,10 +4,44 @@ cabal-version: >=1.10
 build-type: Simple
 license: BSD3
 license-file: LICENSE
-copyright: Copyright SSIL 2015
-maintainer: rimmington@gmail.com
-synopsis: Interface to Aurora scheduler via Thrift.
-author: Rhys !
+copyright: (c) 2015 Swinburne Software Innovation Lab
+maintainer: Rhys Adams <rhysadams@swin.edu.au>
+synopsis: API and controller for Apache Aurora.
+
+library
+    exposed-modules:
+        Database.Zookeeper.Election,
+        Database.Zookeeper.ManagedEvents,
+        Eclogues.API,
+        Eclogues.TaskSpec,
+        Eclogues.ServantInstances,
+        Eclogues.Util
+        Units
+    build-depends:
+        base >=4.7.0.1 && <4.9,
+        text >=1.1.0.0 && <1.3,
+        unordered-containers >=0.2.4.0 && <0.3,
+        bytestring >=0.10.4.0 && <0.11,
+        aeson >=0.8 && <0.10,
+        servant >=0.4.1 && <0.5,
+        transformers >=0.4.0.0 && <0.5,
+        async >=2.0.1.5 && <2.1,
+        hzk >=2.1.0 && <2.2,
+        uuid >=1.3.10 && <1.4,
+        uuid-aeson >=0.1 && <0.2,
+        stm-io-hooks == 0.7.6,
+        concurrent-extra >=0.7.0.9 && <0.8,
+        lifted-base >=0.2.3.6 && <0.3,
+        lens >=4.7.0.1 && <4.12,
+        either >=4.3.4.1 && <4.5,
+        mmorph >=1.0.4 && <1.1
+    default-language: Haskell2010
+    default-extensions: LambdaCase ScopedTypeVariables
+    other-extensions: CPP DataKinds EmptyDataDecls ExtendedDefaultRules
+                      FlexibleInstances KindSignatures MultiParamTypeClasses
+                      OverloadedStrings TemplateHaskell TypeOperators
+    hs-source-dirs: src
+    ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
 executable eclogues-api
     main-is: Main.hs
@@ -22,7 +56,6 @@ executable eclogues-api
         network-uri >=2.6.0.3 && <2.7,
         thrift >=0.9.2 && <0.10,
         aeson >=0.8 && <0.10,
-        void ==0.7.*,
         servant >=0.4.1 && <0.5,
         servant-server ==0.4.*,
         servant-docs >=0.4.1 && <0.5,
@@ -30,8 +63,7 @@ executable eclogues-api
         pandoc >=1.13.2.1 && <1.16,
         wai >=3.0.2.3 && <3.1,
         http-types >=0.8.6 && <0.9,
-        transformers >=0.3.0.0 && <0.5,
-        transformers-compat >=0.4.0.3 && <0.5,
+        transformers >=0.4.0.0 && <0.5,
         warp >=3.0.13.1 && <3.1,
         either >=4.3.4.1 && <4.5,
         directory >=1.2.1.0 && <1.3,
@@ -41,7 +73,6 @@ executable eclogues-api
         mmorph >=1.0.4 && <1.1,
         hzk >=2.1.0 && <2.2,
         concurrent-extra >=0.7.0.9 && <0.8,
-        lifted-base >=0.2.3.6 && <0.3,
         wai-cors >=0.2.2 && <0.3,
         persistent >=2.1.6 && <2.3,
         persistent-template >=2.1.3.3 && <2.2,
@@ -50,53 +81,49 @@ executable eclogues-api
         lens >=4.7.0.1 && <4.12,
         data-default-generics >=0.3 && <0.4,
         uuid >=1.3.10 && <1.4,
-        uuid-aeson >=0.1 && <0.2,
         random >=1.0.1.1 && <1.2,
         time >= 1.4.2,
-        http-media >= 0.6.2
+        http-media >= 0.6.2,
+        eclogues ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
-    other-extensions: DeriveDataTypeable OverloadedStrings RankNTypes
-                      MultiParamTypeClasses ScopedTypeVariables CPP FlexibleInstances
-                      TypeSynonymInstances ExistentialQuantification TupleSections
-                      TemplateHaskell DataKinds TypeOperators LambdaCase EmptyDataDecls
-                      KindSignatures
-    hs-source-dirs: src gen-hs
+    other-extensions: DataKinds DeriveDataTypeable DeriveGeneric
+                      FlexibleInstances GADTs GeneralizedNewtypeDeriving
+                      MultiParamTypeClasses OverloadedStrings RankNTypes
+                      QuasiQuotes TemplateHaskell TupleSections TypeFamilies
+                      TypeOperators
+    hs-source-dirs: gen-hs app/api
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
 executable eclogues-subexecutor
-    main-is: Subexecutor.hs
+    main-is: Main.hs
     build-depends:
         base >=4.7.0.1 && <4.9,
         text >=1.1.0.0 && <1.3,
         aeson >=0.8 && <0.10,
-        void ==0.7.*,
         bytestring >=0.10.4.0 && <0.11,
         process >=1.2.0.0 && <1.3,
         directory >=1.2.1.0 && <1.3,
         filepath >=1.3.0.2 && <1.5,
         cond >=0.4.1.1 && <0.5,
         lens >=4.7.0.1 && <4.12,
-        uuid >=1.3.10 && <1.4,
-        uuid-aeson >=0.1 && <0.2,
-        Glob >=0.7.5 && <0.8
+        Glob >=0.7.5 && <0.8,
+        eclogues ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
-    hs-source-dirs: src
+    other-extensions: TemplateHaskell
+    hs-source-dirs: app/subexecutor
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
 executable eclogues-client
-    main-is: Client.hs
+    main-is: Main.hs
     build-depends:
         base >=4.7.0.1 && <4.9,
         text >=1.1.0.0 && <1.3,
-        void ==0.7.*,
         bytestring >=0.10.4.0 && <0.11,
-        transformers >=0.3.0.0 && <0.5,
-        transformers-compat >=0.4.0.3 && <0.5,
+        transformers >=0.4.0.0 && <0.5,
         aeson >=0.8 && <0.10,
         hzk >=2.1.0 && <2.2,
-        mmorph >=1.0.4 && <1.1,
         servant >=0.4.1 && <0.5,
         servant-client >=0.4.1 && <0.5,
         either >=4.3.4.1 && <4.5,
@@ -105,19 +132,14 @@ executable eclogues-client
         xdg-basedir >=0.2.2 && <0.3,
         monad-loops >=0.4.2.1 && <0.5,
         directory >=1.2.1.0 && <1.3,
-        stm-io-hooks ==0.7.6,
-        concurrent-extra >=0.7.0.9 && <0.8,
-        async >=2.0.1.5 && <2.1,
-        lifted-base >=0.2.3.6 && <0.3,
-        lens >=4.7.0.1 && <4.12,
-        uuid >=1.3.10 && <1.4,
-        uuid-aeson >=0.1 && <0.2,
         bifunctors >=4.1.1.1 && <6,
-        unordered-containers >=0.2.4.0 && <0.3
+        unordered-containers >=0.2.4.0 && <0.3,
+        eclogues ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
-    other-extensions: TemplateHaskell
-    hs-source-dirs: src
+    other-extensions: CPP DataKinds FlexibleInstances TemplateHaskell
+                      TypeFamilies TypeOperators
+    hs-source-dirs: app/client
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
 test-suite spec
@@ -131,13 +153,12 @@ test-suite spec
         hashable >=1.2.2.0 && <1.3,
         QuickCheck >=2.6 && <2.9,
         vector >=0.10.9.1 && <0.11,
-        network-uri >=2.6.0.3 && <2.7,
         thrift >=0.9.2 && <0.10,
         aeson >=0.8 && <0.10,
-        void ==0.7.*,
-        lens >=4.7.0.1 && <4.12,
-        hspec <2.2
+        hspec <2.2,
+        eclogues ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
-    hs-source-dirs: src gen-hs test
+    other-extensions: OverloadedStrings
+    hs-source-dirs: gen-hs app/api test
     ghc-options: -Wall

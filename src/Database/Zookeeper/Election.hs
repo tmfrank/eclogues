@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Database.Zookeeper.Election ( ZookeeperError, LeadershipError (..)
                                    , whenLeader, getLeaderInfo, followLeaderInfo )
                                    where

@@ -12,7 +12,7 @@ import Database.Zookeeper.Election (ZookeeperError, getLeaderInfo)
 import Database.Zookeeper.ManagedEvents (ManagedZK)
 import Eclogues.API (VAPI, JobError, Health)
 import Eclogues.Client.Instances ()
-import Eclogues.Instances ()
+import Eclogues.ServantInstances ()
 import Eclogues.TaskSpec (JobStatus, JobState, Name, TaskSpec)
 
 import Control.Monad ((<=<))

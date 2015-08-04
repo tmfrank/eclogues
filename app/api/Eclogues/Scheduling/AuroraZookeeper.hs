@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Eclogues.Scheduling.AuroraZookeeper (getAuroraMaster, followAuroraMaster) where
