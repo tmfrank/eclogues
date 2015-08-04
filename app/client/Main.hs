@@ -7,7 +7,7 @@ import Prelude hiding (readFile)
 import Database.Zookeeper.ManagedEvents (ZKURI, withZookeeper)
 import Eclogues.Util (orShowError)
 import Eclogues.Client (EcloguesClient (..), ecloguesClient)
-import Eclogues.TaskSpec (JobStatus, Name, majorState, majorJobStates, _jobState)
+import Eclogues.JobSpec (JobStatus, Name, majorState, majorJobStates, _jobState)
 
 import Control.Applicative (optional)
 import Control.Monad ((<=<), when)

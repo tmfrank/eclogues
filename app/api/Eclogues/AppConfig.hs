@@ -2,7 +2,7 @@ module Eclogues.AppConfig where
 
 import Eclogues.Persist (PersistContext)
 import Eclogues.Scheduling.Command (ScheduleCommand)
-import Eclogues.TaskSpec (Name)
+import Eclogues.JobSpec (Name)
 
 import Control.Concurrent.AdvSTM (AdvSTM, retry)
 import Control.Concurrent.AdvSTM.TChan (TChan)

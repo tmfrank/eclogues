@@ -4,7 +4,7 @@
 
 module Eclogues.API where
 
-import Eclogues.TaskSpec (JobStatus, JobState, TaskSpec, Name)
+import Eclogues.JobSpec (JobStatus, JobState, JobSpec, Name)
 
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Servant.API ((:>), (:<|>), Get, Post, Put, Delete, ReqBody, Capture, QueryParam, JSON)
@@ -18,7 +18,7 @@ type VAPI =  "jobs"   :> Get' [JobStatus]
         :<|> "jobs"   :> Capture "name" Name :> "scheduler" :> Get' ()
         :<|> "jobs"   :> Capture "name" Name :> "output" :> QueryParam "path" FilePath :> Get' ()
         :<|> "jobs"   :> Capture "name" Name :> Delete '[JSON] ()
-        :<|> "jobs"   :> ReqBody '[JSON] TaskSpec  :> Post '[JSON] ()
+        :<|> "jobs"   :> ReqBody '[JSON] JobSpec :> Post '[JSON] ()
         :<|> "health" :> Get' Health
 
 data JobError = JobNameUsed

@@ -3,14 +3,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
-module Eclogues.TaskSpec where
+module Eclogues.JobSpec where
+
+import Eclogues.JobSpec.Aeson
 
 import Control.Lens.TH (makeClassy)
 import Control.Monad ((<=<))
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
 import qualified Data.Aeson as Aeson
 import Data.Aeson.TH (deriveJSON, deriveToJSON, defaultOptions, fieldLabelModifier)
-import Data.Char (toLower)
 import qualified Data.Text
 import qualified Data.Text.Lazy as L
 import Data.UUID (UUID)
@@ -30,13 +31,20 @@ data Resources = Resources { _disk :: Value Double MB
                            , _time :: Value Int Second }
                            deriving (Show, Eq)
 
-data TaskSpec = TaskSpec { _taskName          :: Name
-                         , _taskCommand       :: Command
-                         , _taskResources     :: Resources
-                         , _taskOutputFiles   :: [FilePath]
-                         , _taskCaptureStdout :: Bool
-                         , _taskDependsOn     :: [Name] }
+$(deriveToJSON defaultOptions{fieldLabelModifier = drop 1} ''Resources)
+$(makeClassy ''Resources)
+
+data JobSpec = JobSpec { _name          :: Name
+                       , _command       :: Command
+                       , _job_resources :: Resources
+                       , _outputFiles   :: [FilePath]
+                       , _captureStdout :: Bool
+                       , _dependsOn     :: [Name] }
                          deriving (Show, Eq)
+
+$(deriveJSON defaultOptions{fieldLabelModifier = specJName} ''JobSpec)
+$(makeClassy ''JobSpec)
+instance HasResources JobSpec where resources = job_resources
 
 data RunResult = Ended ExitCode | Overtime deriving (Show, Read)
 
@@ -64,6 +72,15 @@ data JobState = Queued QueueStage
               | RunError RunErrorReason
                 deriving (Show, Eq)
 
+data JobStatus = JobStatus { _job_spec :: JobSpec
+                           , _jobState :: JobState
+                           , _uuid     :: UUID }
+                           deriving (Show)
+
+$(deriveJSON defaultOptions{fieldLabelModifier = statusJName} ''JobStatus)
+$(makeClassy ''JobStatus)
+instance HasJobSpec JobStatus where jobSpec = job_spec
+
 majorJobStates :: [String]
 majorJobStates = ["Queued", "Waiting", "Running", "Killing", "Finished", "Failed", "RunError"]
 
@@ -75,18 +92,6 @@ majorState Killing      = "Killing"
 majorState Finished     = "Finished"
 majorState (Failed _)   = "Failed"
 majorState (RunError _) = "RunError"
-
-data JobStatus = JobStatus { _jobSpec  :: TaskSpec
-                           , _jobState :: JobState
-                           , _jobUuid  :: UUID }
-                           deriving (Show)
-
-$(makeClassy ''JobStatus)
-$(makeClassy ''TaskSpec)
-$(makeClassy ''Resources)
-
-instance HasTaskSpec JobStatus where taskSpec = jobSpec
-instance HasResources TaskSpec where resources = taskResources
 
 isQueueState :: JobState -> Bool
 isQueueState (Queued _) = True
@@ -175,7 +180,3 @@ instance FromJSON Resources where
             if any ((== -1) . signum) [val dsk, val rm, val cu, fromIntegral (val te)]
                 then fail "Negative resource value"
                 else pure res
-
-$(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 5} ''TaskSpec)
-$(deriveToJSON defaultOptions{fieldLabelModifier = drop 1} ''Resources)
-$(deriveJSON defaultOptions{fieldLabelModifier = map toLower . drop 4} ''JobStatus)

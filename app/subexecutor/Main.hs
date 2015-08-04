@@ -2,8 +2,8 @@
 
 module Main where
 
-import Eclogues.TaskSpec ( Command, RunResult (..)
-                         , TaskSpec, taskDependsOn, taskCommand, taskOutputFiles, taskCaptureStdout, time )
+import Eclogues.JobSpec (Command, RunResult (..), JobSpec)
+import qualified Eclogues.JobSpec as Job
 import Eclogues.Util (readJSON, orError)
 import Units
 
@@ -43,20 +43,20 @@ copyFileOrDir from to = go where
     to' = to ++ from
     copyDir = callProcess "mkdir" ["-p", to'] *> copyDirContents from to'
 
-runTask :: FilePath -> String -> IO ()
-runTask path name = do
-    spec <- orError =<< readJSON (specDir </> "spec.json") :: IO TaskSpec
+runJob :: FilePath -> String -> IO ()
+runJob path name = do
+    spec <- orError =<< readJSON (specDir </> "spec.json") :: IO JobSpec
 
     copyDirContents (specDir </> "workspace") "."
     createDirectoryIfMissing False depsDir
-    mapM_ copyDep $ spec ^. taskDependsOn
+    mapM_ copyDep $ spec ^. Job.dependsOn
 
-    runRes <- runCommand (spec ^. time) (spec ^. taskCommand)
+    runRes <- runCommand (spec ^. Job.time) (spec ^. Job.command)
 
     -- TODO: Trigger Failed state when output doesn't exist
-    mapM_ (flip copyFileOrDir (specDir </> "output/")) $ spec ^. taskOutputFiles
+    mapM_ (flip copyFileOrDir (specDir </> "output/")) $ spec ^. Job.outputFiles
     writeFile (specDir </> "runresult") (show runRes)
-    when (spec ^. taskCaptureStdout) $ glob ".logs/*/0/stdout" >>= \case
+    when (spec ^. Job.captureStdout) $ glob ".logs/*/0/stdout" >>= \case
         [fn] -> copyFile fn $ specDir </> "output/stdout"
         _    -> error "Stdout log file missing"
     where
@@ -69,4 +69,4 @@ main :: IO ()
 main = do
     conf <- orError =<< readJSON "/etc/xdg/eclogues/subexecutor.json"
     (name:_) <- getArgs
-    runTask (jobsDir conf) name
+    runJob (jobsDir conf) name

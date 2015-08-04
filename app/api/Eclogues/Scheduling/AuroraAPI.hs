@@ -18,7 +18,7 @@ import qualified AuroraSchedulerManager_Client as AClient
 import qualified ReadOnlyScheduler_Client as ROClient
 
 import Eclogues.Scheduling.AuroraConfig (Role, auroraJobConfig, lockKey, defaultJobKey)
-import Eclogues.TaskSpec (TaskSpec, Name)
+import Eclogues.JobSpec (JobSpec, Name)
 
 import Control.Exception (Exception)
 import Control.Monad (void)
@@ -74,7 +74,7 @@ acquireLock client role name = do
 releaseLock :: Client -> Lock -> Result ()
 releaseLock client lock = void . ExceptT $ onlyOK <$> AClient.releaseLock client lock UNCHECKED unauthenticated
 
-createJob :: Client -> Role -> TaskSpec -> Result ()
+createJob :: Client -> Role -> JobSpec -> Result ()
 createJob client role spec = void . ExceptT $ onlyOK <$> AClient.createJob client (auroraJobConfig role spec) Nothing unauthenticated
 
 killTasks :: Client -> Role -> [Name] -> Result ()

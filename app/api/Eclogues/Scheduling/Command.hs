@@ -9,10 +9,10 @@ import Prelude hiding (writeFile)
 
 import qualified Eclogues.Scheduling.AuroraAPI as A
 import Eclogues.Scheduling.AuroraConfig (Role, getJobName, getJobState)
-import Eclogues.TaskSpec (
-      TaskSpec, JobState (..), JobStatus, Name
-    , FailureReason (..), RunErrorReason (..), RunResult (..)
-    , taskCommand, taskName, jobUuid)
+import Eclogues.JobSpec (
+      JobSpec, JobState (..), JobStatus, Name
+    , FailureReason (..), RunErrorReason (..), RunResult (..))
+import qualified Eclogues.JobSpec as Job
 
 import Control.Arrow ((&&&))
 import Control.Exception (IOException, try, tryJust)
@@ -35,7 +35,7 @@ import Text.Read.HT (maybeRead)
 
 -- TODO: split up
 
-data ScheduleCommand = QueueJob TaskSpec UUID
+data ScheduleCommand = QueueJob JobSpec UUID
                      | KillJob Name UUID
                      | CleanupJob Name UUID
 
@@ -48,9 +48,9 @@ jobDir conf n = jobsDir conf ++ "/" ++ L.unpack n
 
 runScheduleCommand :: ScheduleConf -> ScheduleCommand -> ExceptT A.UnexpectedResponse IO ()
 runScheduleCommand conf (QueueJob spec uuid) = do
-    let dir = jobDir conf $ spec ^. taskName
-        subspec = spec & taskCommand .~ "eclogues-subexecutor " <> spec ^. taskName
-                       & taskName    .~ L.pack (show uuid)
+    let dir = jobDir conf $ spec ^. Job.name
+        subspec = spec & Job.command .~ "eclogues-subexecutor " <> spec ^. Job.name
+                       & Job.name    .~ L.pack (show uuid)
     lift $ do
         createDirectoryIfMissing False dir
         createDirectoryIfMissing False $ dir ++ "/workspace"
@@ -67,7 +67,7 @@ runScheduleCommand conf (CleanupJob name _uuid) = lift . void $
 getSchedulerStatuses :: ScheduleConf -> [JobStatus] -> ExceptT A.UnexpectedResponse IO [(Name, JobState)]
 getSchedulerStatuses conf jss = do
     client <- lift $ A.thriftClient $ auroraURI conf
-    let uuids = map (L.pack . show . view jobUuid &&& view taskName) jss
+    let uuids = map (L.pack . show . view Job.uuid &&& view Job.name) jss
     auroraTasks <- A.getTasksWithoutConfigs client (auroraRole conf) (map fst uuids)
     let newUncheckedStates = ((fromJust . flip lookup uuids . getJobName) &&& getJobState) <$> auroraTasks
     lift $ mapM checkFinState newUncheckedStates

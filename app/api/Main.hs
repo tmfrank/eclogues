@@ -13,6 +13,8 @@ import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
 import Eclogues.API (VAPI, JobError (..), Health (Health))
 import Eclogues.ApiDocs (VAPIWithDocs, apiDocsHtml)
 import Eclogues.AppConfig (AppConfig (AppConfig, schedChan, pctx, auroraURI, schedJobURI, outputURI), requireAurora)
+import Eclogues.JobSpec (Name, JobStatus, JobState (..), FailureReason (..))
+import qualified Eclogues.JobSpec as Job
 import Eclogues.Persist (PersistContext)
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
@@ -23,7 +25,6 @@ import Eclogues.State (getJobs, activeJobs, createJob, killJob, deleteJob, getJo
 import Eclogues.State.Monad (EState)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState)
-import Eclogues.TaskSpec (Name, JobStatus, JobState (..), FailureReason (..), jobState, jobUuid)
 import Eclogues.Util (readJSON, orError)
 import Units
 
@@ -36,7 +37,7 @@ import Control.Concurrent.Async (Async, waitAny, withAsync)
 import Control.Concurrent.Lock (Lock)
 import qualified Control.Concurrent.Lock as Lock
 import Control.Exception (Exception, IOException, throwIO, try)
-import Control.Lens ((^.), view)
+import Control.Lens ((^.))
 import Control.Monad ((<=<), forever)
 import Control.Monad.Morph (hoist, generalize)
 import Control.Monad.Trans.Class (lift)
@@ -111,14 +112,14 @@ mainServer conf stateV = enter (fromExceptT . Nat (withExceptT onError)) server 
     healthH = lift $ Health . isJust <$> atomically (auroraURI conf)
     getJobsH = lift $ getJobs <$> atomically (readTVar stateV)
     getJobH jid = (hoist generalize . getJob jid) =<< lift (atomically $ readTVar stateV)
-    getJobStateH = fmap (view jobState) . getJobH
+    getJobStateH = fmap (^. Job.jobState) . getJobH
     createJobH spec = lift randomIO >>= runScheduler' . flip createJob spec
     deleteJobH = runScheduler' . deleteJob
     mesosJob = toMesos <=< getJobH where
         toMesos :: JobStatus -> ExceptT JobError IO ()
         toMesos js = (lift . atomically $ auroraURI conf) >>= \case
             Nothing  -> throwE SchedulerInaccessible
-            Just uri -> throwE . SchedulerRedirect . schedJobURI conf uri $ js ^. jobUuid
+            Just uri -> throwE . SchedulerRedirect . schedJobURI conf uri $ js ^. Job.uuid
     outputH name pathM = getJobH name *> throwE (SchedulerRedirect . outputURI conf name $ maybe "stdout" id pathM)
 
     killJobH jid (Failed UserKilled) = runScheduler' $ killJob jid

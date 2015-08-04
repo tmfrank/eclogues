@@ -5,7 +5,7 @@ module Main where
 import Api_Types
 
 import Eclogues.Scheduling.AuroraConfig
-import Eclogues.TaskSpec
+import Eclogues.JobSpec
 import Units
 
 import Test.Hspec
@@ -16,7 +16,7 @@ import Data.Text.Lazy.Encoding (encodeUtf8)
 
 spec :: Spec
 spec = do
-    let task = TaskSpec "hello" "/bin/echo" (Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)) [] False []
+    let task = JobSpec "hello" "/bin/echo" (Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)) [] False []
 
     describe "ATaskExecConf" $
         it "is embedded in a JobConfiguration" $ do

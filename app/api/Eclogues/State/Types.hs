@@ -4,7 +4,7 @@
 
 module Eclogues.State.Types where
 
-import Eclogues.TaskSpec (Name, JobStatus)
+import Eclogues.JobSpec (Name, JobStatus)
 
 import Control.Lens.TH (makeClassy)
 import Data.Default.Generics (Default)

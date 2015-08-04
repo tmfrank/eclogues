@@ -8,7 +8,8 @@
 module Eclogues.ApiDocs (VAPIWithDocs, apiDocs, apiDocsMd, apiDocsHtml) where
 
 import Eclogues.API (VAPI, Health (Health))
-import Eclogues.TaskSpec (TaskSpec (..), Resources (..), JobState (..), JobStatus (..), FailureReason (..), Name, taskCommand)
+import Eclogues.JobSpec (JobSpec (..), Resources (..), JobState (..), JobStatus (..), FailureReason (..), Name)
+import qualified Eclogues.JobSpec as Job
 import Units
 
 import Control.Lens ((.~), (&))
@@ -38,25 +39,25 @@ instance ToSample JobState JobState where
 res :: Resources
 res = (Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5))
 
-spec :: TaskSpec
-spec = TaskSpec "hello" "echo hello world > hello.txt" res ["hello.txt"] False []
+spec :: JobSpec
+spec = JobSpec "hello" "echo hello world > hello.txt" res ["hello.txt"] False []
 
-depSpec :: TaskSpec
-depSpec = TaskSpec "cat-hello" "cat virgil-dependencies/hello/hello.txt" res [] True ["hello"]
+depSpec :: JobSpec
+depSpec = JobSpec "cat-hello" "cat virgil-dependencies/hello/hello.txt" res [] True ["hello"]
 
-instance ToSample TaskSpec TaskSpec where
+instance ToSample JobSpec JobSpec where
     toSamples _ = [("A job with output", spec)
                   ,("A job depending on previous output", depSpec)]
 
 failedSpec :: JobStatus
 failedSpec = JobStatus deadSpec (Failed $ NonZeroExitCode 1) nil where
-    deadSpec = TaskSpec "i-fail" "exit 1" res [] False []
+    deadSpec = JobSpec "i-fail" "exit 1" res [] False []
 
 instance ToSample JobStatus JobStatus where
     toSample _ = Just $ failedSpec
 
 instance ToSample [JobStatus] [JobStatus] where
-    toSample _ = Just [ JobStatus (spec & taskCommand .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) nil
+    toSample _ = Just [ JobStatus (spec & Job.command .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) nil
                       , JobStatus depSpec (Failed $ DependencyFailed "hello") nil]
 
 instance ToSample () () where

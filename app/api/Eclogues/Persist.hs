@@ -16,8 +16,8 @@ module Eclogues.Persist ( PersistAction, PersistContext
 
 import Eclogues.Persist.Stage1 ()
 import Eclogues.Scheduling.Command (ScheduleCommand)
-import Eclogues.TaskSpec (Name, TaskSpec, JobStatus (JobStatus))
-import qualified Eclogues.TaskSpec as J
+import Eclogues.JobSpec (Name, JobSpec, JobStatus (JobStatus))
+import qualified Eclogues.JobSpec as Job
 
 import Control.Lens ((^.))
 import Control.Monad.Logger (LoggingT, runStderrLoggingT)
@@ -34,8 +34,8 @@ import Database.Persist.Sqlite (withSqlitePool)
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Job
     name Name
-    spec TaskSpec
-    state J.JobState
+    spec JobSpec
+    state Job.JobState
     uuid UUID
     UniqueName name
 ScheduleIntent
@@ -62,12 +62,12 @@ atomically (PersistContext pool) (PersistAction a) = PSql.runSqlPool a pool
 
 insert :: JobStatus -> PersistAction ()
 insert (JobStatus spec st uuid) = PersistAction $ P.insert_ job where
-    job = Job { jobName = spec ^. J.taskName
+    job = Job { jobName = spec ^. Job.name
               , jobSpec = spec
               , jobState = st
               , jobUuid = uuid }
 
-updateState :: Name -> J.JobState -> PersistAction ()
+updateState :: Name -> Job.JobState -> PersistAction ()
 updateState name st = PersistAction $ P.updateWhere [JobName ==. name] [JobState =. st]
 
 delete :: Name -> PersistAction ()

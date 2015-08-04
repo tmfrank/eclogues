@@ -13,7 +13,7 @@ import Database.Zookeeper.ManagedEvents (ManagedZK)
 import Eclogues.API (VAPI, JobError, Health)
 import Eclogues.Client.Instances ()
 import Eclogues.ServantInstances ()
-import Eclogues.TaskSpec (JobStatus, JobState, Name, TaskSpec)
+import Eclogues.JobSpec (JobStatus, JobState, Name, JobSpec)
 
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Either (runEitherT)
@@ -27,13 +27,13 @@ import Servant.Client (BaseUrl (..), Scheme (Http), ServantError (..), client)
 
 type Result a = ExceptT (Either ServantError JobError) IO a
 
-data EcloguesClient = EcloguesClient { getJobs      ::             Result [JobStatus]
-                                     , getJobStatus :: Name     -> Result JobStatus
-                                     , getJobState  :: Name     -> Result JobState
-                                     , setJobState  :: Name     -> JobState -> Result ()
-                                     , deleteJob    :: Name     -> Result ()
-                                     , createJob    :: TaskSpec -> Result ()
-                                     , getHealth    ::             Result Health
+data EcloguesClient = EcloguesClient { getJobs      ::            Result [JobStatus]
+                                     , getJobStatus :: Name    -> Result JobStatus
+                                     , getJobState  :: Name    -> Result JobState
+                                     , setJobState  :: Name    -> JobState -> Result ()
+                                     , deleteJob    :: Name    -> Result ()
+                                     , createJob    :: JobSpec -> Result ()
+                                     , getHealth    ::            Result Health
                                      , masterHost   :: (String, Word16) }
 
 ecloguesClient :: ManagedZK -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)

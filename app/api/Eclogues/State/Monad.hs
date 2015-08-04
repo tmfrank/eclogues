@@ -8,8 +8,8 @@ import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.State.Types (AppState (..), jobs, revDeps)
 import qualified Eclogues.State.Types as EST
-import Eclogues.TaskSpec ( Name, JobState, JobStatus
-                         , jobState, taskName, taskDependsOn )
+import Eclogues.JobSpec (Name, JobState, JobStatus)
+import qualified Eclogues.JobSpec as Job
 
 import Control.Lens ((%~), (.~), (?=), (%=), (^.), (<>=), at, ix, sans, use, non)
 import Control.Lens.TH (makeClassy)
@@ -56,7 +56,7 @@ schedule cmd = EStateT $ do
 
 insertJob :: (Monad m) => JobStatus -> EStateT m ()
 insertJob st = EStateT $ do
-    jobs . at (st ^. taskName) ?= st
+    jobs . at (st ^. Job.name) ?= st
     persist <>= Just (Persist.insert st)
 
 deleteJob :: (Monad m) => Name -> EStateT m ()
@@ -68,11 +68,11 @@ getJob :: (Functor m, Monad m) => Name -> EStateT m (Maybe JobStatus)
 getJob name = EStateT . use $ jobs . at name
 
 modifyJobState :: (Monad m) => (JobState -> JobState) -> Name -> EStateT m ()
-modifyJobState f name = EStateT $ jobs . ix name %= (jobState %~ f)
+modifyJobState f name = EStateT $ jobs . ix name %= (Job.jobState %~ f)
 
 setJobState :: (Functor m, Monad m) => Name -> JobState -> EStateT m ()
 setJobState name st = EStateT $ do
-    jobs . ix name %= (jobState .~ st)
+    jobs . ix name %= (Job.jobState .~ st)
     persist <>= Just (Persist.updateState name st)
 
 addRevDep :: (Monad m) => Name -> Name -> EStateT m ()
@@ -91,6 +91,6 @@ loadJobs :: forall m. (Monad m) => [JobStatus] -> EStateT m ()
 loadJobs js = mapM_ go js where
     go :: JobStatus -> EStateT m ()
     go j = do
-        let name = j ^. taskName
+        let name = j ^. Job.name
         EStateT $ jobs . at name ?= j
-        mapM_ (flip addRevDep name) $ j ^. taskDependsOn
+        mapM_ (flip addRevDep name) $ j ^. Job.dependsOn

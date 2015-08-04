@@ -13,7 +13,7 @@ library
         Database.Zookeeper.Election,
         Database.Zookeeper.ManagedEvents,
         Eclogues.API,
-        Eclogues.TaskSpec,
+        Eclogues.JobSpec,
         Eclogues.ServantInstances,
         Eclogues.Util
         Units

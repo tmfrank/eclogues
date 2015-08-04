@@ -4,7 +4,7 @@
 module Eclogues.Persist.Stage1 where
 
 import Eclogues.Scheduling.Command (ScheduleCommand)
-import Eclogues.TaskSpec (TaskSpec, JobState)
+import Eclogues.JobSpec (JobSpec, JobState)
 
 import Data.Aeson (FromJSON, ToJSON, encode, eitherDecodeStrict)
 import qualified Data.ByteString.Lazy as BSL
@@ -29,11 +29,11 @@ instance P.PersistField JobState where
 instance PSql.PersistFieldSql JobState where
     sqlType _ = PSql.SqlBlob
 
-instance P.PersistField TaskSpec where
+instance P.PersistField JobSpec where
     toPersistValue = jsonPersistValue
-    fromPersistValue = jsonPersistParse "TaskSpec"
+    fromPersistValue = jsonPersistParse "JobSpec"
 
-instance PSql.PersistFieldSql TaskSpec where
+instance PSql.PersistFieldSql JobSpec where
     sqlType _ = PSql.SqlBlob
 
 instance P.PersistField ScheduleCommand where

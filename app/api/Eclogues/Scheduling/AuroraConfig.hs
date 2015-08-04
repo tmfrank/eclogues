@@ -10,8 +10,8 @@ module Eclogues.Scheduling.AuroraConfig (
 import Api_Types hiding (DRAINING, FAILED, FINISHED)
 import Api_Types2
 
-import Eclogues.TaskSpec ( TaskSpec (TaskSpec), Resources (Resources), JobState (..)
-                         , FailureReason (..), RunErrorReason (..), QueueStage (SchedulerQueue))
+import Eclogues.JobSpec ( JobSpec (JobSpec), Resources (Resources), JobState (..)
+                        , FailureReason (..), RunErrorReason (..), QueueStage (SchedulerQueue))
 import Units
 
 import Data.Aeson (ToJSON (toJSON))
@@ -142,8 +142,8 @@ defaultCronCollisionPolicy = KILL_EXISTING
 aResources :: Resources -> AResources
 aResources (Resources disk ram cpu _) = AResources (ceiling $ disk `asVal` byte) (ceiling $ ram `asVal` byte) (cpu `asVal` core)
 
-auroraJobConfig :: Role -> TaskSpec -> JobConfiguration
-auroraJobConfig role (TaskSpec name cmd resources@(Resources disk ram cpu _) _ _ _) = job where
+auroraJobConfig :: Role -> JobSpec -> JobConfiguration
+auroraJobConfig role (JobSpec name cmd resources@(Resources disk ram cpu _) _ _ _) = job where
     jobKey = defaultJobKey role name
     owner = Identity role role
     job = JobConfiguration  { jobConfiguration_key                 = jobKey
