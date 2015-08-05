@@ -106,7 +106,9 @@ executable eclogues-api
         Eclogues.Scheduling.Command,
         Eclogues.State,
         Eclogues.State.Monad,
-        Eclogues.State.Types
+        Eclogues.State.Types,
+        Eclogues.Threads.Server,
+        Eclogues.Threads.Update
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
 executable eclogues-subexecutor

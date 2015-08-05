@@ -3,7 +3,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
-module Eclogues.Scheduling.Command where
+module Eclogues.Scheduling.Command ( ScheduleCommand (..), ScheduleConf (..), AuroraURI
+                                   , runScheduleCommand, getSchedulerStatuses, schedulerJobUI ) where
 
 import Prelude hiding (writeFile)
 
@@ -41,7 +42,8 @@ data ScheduleCommand = QueueJob JobSpec UUID
 
 $(deriveJSON defaultOptions ''ScheduleCommand)
 
-data ScheduleConf = ScheduleConf { jobsDir :: FilePath, auroraRole :: Role, auroraURI :: URI }
+type AuroraURI = URI
+data ScheduleConf = ScheduleConf { jobsDir :: FilePath, auroraRole :: Role, auroraURI :: AuroraURI }
 
 jobDir :: ScheduleConf -> Name -> FilePath
 jobDir conf n = jobsDir conf ++ "/" ++ L.unpack n
