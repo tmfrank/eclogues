@@ -28,7 +28,7 @@ import Data.Maybe (fromMaybe, fromJust)
 import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as L
 import Data.UUID (UUID)
-import Network.URI (URI)
+import Network.URI (URI (uriPath))
 import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
 import System.Exit (ExitCode (..))
 import System.IO.Error (isDoesNotExistError)
@@ -87,5 +87,5 @@ getSchedulerStatuses conf jss = do
             Ended (ExitFailure c) -> Failed (NonZeroExitCode c)
             Overtime              -> Failed TimeExceeded
 
-schedulerJobUI :: String -> URI -> UUID -> String
-schedulerJobUI user uri uuid = show uri ++ "/../scheduler/" ++ user ++ "/devel/" ++ show uuid
+schedulerJobUI :: String -> URI -> UUID -> URI
+schedulerJobUI user uri uuid = uri { uriPath = "/scheduler/" ++ user ++ "/devel/" ++ show uuid }

@@ -7,7 +7,7 @@
 
 module Eclogues.ApiDocs (VAPIWithDocs, apiDocs, apiDocsMd, apiDocsHtml) where
 
-import Eclogues.API (VAPI, Health (Health))
+import Eclogues.API (VAPI, Health (Health), AbsFile)
 import Eclogues.JobSpec (JobSpec (..), Resources (..), JobState (..), JobStatus (..), FailureReason (..), Name)
 import qualified Eclogues.JobSpec as Job
 import Units
@@ -29,7 +29,7 @@ import Servant.Docs.Pandoc (pandoc)
 instance ToCapture (Capture "name" Name) where
     toCapture _ = DocCapture "name" "job name"
 
-instance ToParam (QueryParam "path" FilePath) where
+instance ToParam (QueryParam "path" AbsFile) where
     toParam _ = DocQueryParam "path" ["stdout", "JOB_SPECIFIC_PATH"] "output file path" Normal
 
 instance ToSample JobState JobState where

@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Eclogues.Threads.Server (serve) where
@@ -36,6 +37,7 @@ import Data.Proxy (Proxy (Proxy))
 import Network.HTTP.Types (methodGet, methodPost, methodDelete, methodPut)
 import qualified Network.Wai.Handler.Warp as Warp
 import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), cors)
+import Path (mkAbsFile)
 import Servant.API ((:<|>) ((:<|>)))
 import Servant.Server ( Server, ServerT, ServantErr (..), (:~>) (..)
                       , enter, err404, err409, err503, err303 )
@@ -69,7 +71,7 @@ mainServer conf stateV = handleExcept server' where
         getJobH name *>
         throwE (SchedulerRedirect $ Config.outputURI conf name path)
       where
-        path = maybe "stdout" id pathM
+        path = maybe $(mkAbsFile "/stdout") id pathM
 
     killJobH jid (Failed UserKilled) = runScheduler' $ killJob jid
     killJobH jid _                   = throwE (InvalidStateTransition "Can only set state to Failed UserKilled") <* getJobH jid
@@ -82,7 +84,7 @@ onError :: JobError -> ServantErr
 onError e = case e of
     NoSuchJob             -> err404 { errBody = encode NoSuchJob }
     SchedulerInaccessible -> err503 { errBody = encode SchedulerInaccessible }
-    SchedulerRedirect uri -> err303 { errHeaders = [("Location", BSSC.pack uri)] }
+    SchedulerRedirect uri -> err303 { errHeaders = [("Location", BSSC.pack (show uri))] }
     other                 -> err409 { errBody = encode other }
 
 type Scheduler = ExceptT JobError (State ES.TransitionaryState) ()

@@ -3,7 +3,7 @@ module Eclogues.Threads.Update (loadSchedulerState) where
 import Eclogues.AppConfig (AppConfig)
 import qualified Eclogues.AppConfig as Config
 import qualified Eclogues.Persist as Persist
-import Eclogues.Scheduling.Command (ScheduleConf, AuroraURI, getSchedulerStatuses)
+import Eclogues.Scheduling.Command (ScheduleConf (auroraURI), getSchedulerStatuses)
 import Eclogues.State (activeJobs, updateJobs)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState)
@@ -18,13 +18,13 @@ import Control.Monad.Trans.Except (runExceptT)
 import qualified Data.HashMap.Lazy as HashMap
 import System.IO (hPutStrLn, stderr)
 
-loadSchedulerState :: (AuroraURI -> ScheduleConf) -> AppConfig -> STM.TVar AppState -> IO ()
-loadSchedulerState mkConf conf stateV = do
-    auri <- STM.atomically $ Config.requireAurora conf
+loadSchedulerState :: AppConfig -> STM.TVar AppState -> IO ()
+loadSchedulerState conf stateV = do
+    schedConf <- STM.atomically $ Config.requireSchedConf conf
     (newStatusesRes, aJobs) <- do
         state <- STM.atomically $ STM.readTVar stateV
         let aJobs = activeJobs state
-        newStatusesRes <- try . runExceptT . getSchedulerStatuses (mkConf auri) $ HashMap.elems aJobs
+        newStatusesRes <- try . runExceptT . getSchedulerStatuses schedConf $ HashMap.elems aJobs
         pure (newStatusesRes, aJobs)
     case newStatusesRes of
         Right (Right newStatuses) -> STM.atomically $ do
@@ -34,5 +34,5 @@ loadSchedulerState mkConf conf stateV = do
             STM.writeTVar stateV $ ts ^. ES.appState
             maybeDo $ STM.onCommit . Persist.atomically (Config.pctx conf) <$> ts ^. ES.persist
         Left (ex :: IOException)  ->
-            hPutStrLn stderr $ "Error connecting to Aurora at " ++ show auri ++ "; retrying: " ++ show ex
+            hPutStrLn stderr $ "Error connecting to Aurora at " ++ show (auroraURI schedConf) ++ "; retrying: " ++ show ex
         Right (Left resp)         -> throwIO resp
