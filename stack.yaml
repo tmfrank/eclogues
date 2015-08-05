@@ -4,9 +4,6 @@ packages:
 - location:
     git: git@github.com:rimmington/thrift-hs
     commit: 6fe95c60d5085723fc49ed8e156cae8dd151456f
-- location:
-    git: git@github.com:thaldyron/stm-io-hooks
-    commit: 8f467d0970e62aa02cc87837b9189649725fe2dd
 extra-deps:
 - data-default-generics-0.3
 - hzk-2.1.0
@@ -15,6 +12,7 @@ extra-deps:
 - servant-docs-0.4.2
 - servant-pandoc-0.4.1.1
 - servant-server-0.4.2
+- stm-io-hooks-1.1.0
 - utility-ht-0.0.10
 - uuid-aeson-0.1.0.0
 - wai-cors-0.2.2
