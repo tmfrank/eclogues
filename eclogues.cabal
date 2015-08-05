@@ -41,6 +41,8 @@ library
                       FlexibleInstances KindSignatures MultiParamTypeClasses
                       OverloadedStrings TemplateHaskell TypeOperators
     hs-source-dirs: src
+    other-modules:
+        Eclogues.JobSpec.Aeson
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
 executable eclogues-api
@@ -93,6 +95,18 @@ executable eclogues-api
                       QuasiQuotes TemplateHaskell TupleSections TypeFamilies
                       TypeOperators
     hs-source-dirs: gen-hs app/api
+    other-modules:
+        Eclogues.ApiDocs,
+        Eclogues.AppConfig,
+        Eclogues.Persist,
+        Eclogues.Persist.Stage1,
+        Eclogues.Scheduling.AuroraAPI,
+        Eclogues.Scheduling.AuroraConfig,
+        Eclogues.Scheduling.AuroraZookeeper,
+        Eclogues.Scheduling.Command,
+        Eclogues.State,
+        Eclogues.State.Monad,
+        Eclogues.State.Types
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
 executable eclogues-subexecutor
@@ -140,6 +154,9 @@ executable eclogues-client
     other-extensions: CPP DataKinds FlexibleInstances TemplateHaskell
                       TypeFamilies TypeOperators
     hs-source-dirs: app/client
+    other-modules:
+        Eclogues.Client,
+        Eclogues.Client.Instances
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
 test-suite spec
