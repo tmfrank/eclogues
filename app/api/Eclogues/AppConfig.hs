@@ -1,7 +1,7 @@
 module Eclogues.AppConfig (AppConfig (..), requireSchedConf) where
 
 import Eclogues.API (AbsFile)
-import Eclogues.Persist (PersistContext)
+import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.Command (ScheduleCommand, ScheduleConf (ScheduleConf), AuroraURI)
 import Eclogues.JobSpec (Name)
 
@@ -15,7 +15,7 @@ import Network.URI (URI)
 data AppConfig = AppConfig { jobsDir         :: FilePath
                            , auroraURI       :: AdvSTM (Maybe URI)
                            , schedChan       :: TChan ScheduleCommand
-                           , pctx            :: PersistContext
+                           , pctx            :: Persist.Context
                            , schedJobURI     :: URI -> UUID -> URI
                            , outputURI       :: Name -> AbsFile -> URI
                            , subexecutorUser :: Text }

@@ -24,7 +24,7 @@ import GHC.Generics (Generic)
 
 data TransitionaryState = TransitionaryState { _appState :: AppState
                                              , _scheduleCommands :: [ScheduleCommand]
-                                             , _persist  :: Maybe (Persist.PersistAction ()) }
+                                             , _persist  :: Maybe (Persist.Action ()) }
                           deriving (Generic)
 
 instance Default TransitionaryState

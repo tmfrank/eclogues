@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
 
-module Eclogues.Persist ( PersistAction, PersistContext
+module Eclogues.Persist ( Action, Context
                         , withPersistDir, atomically
                         , insert, updateState, delete, scheduleIntent, deleteIntent
                         , allIntents, allJobs )
@@ -43,48 +43,48 @@ ScheduleIntent
     UniqueCommand command
 |]
 
-newtype PersistContext  = PersistContext PSql.ConnectionPool
-newtype PersistAction r = PersistAction (ReaderT PSql.SqlBackend IO r)
+newtype Context  = Context PSql.ConnectionPool
+newtype Action r = Action (ReaderT PSql.SqlBackend IO r)
                           deriving (Functor, Applicative, Monad)
 
-instance Monoid (PersistAction ()) where
+instance Monoid (Action ()) where
     mempty = pure ()
     mappend = (*>)
 
-withPersistDir :: FilePath -> (PersistContext -> LoggingT IO a) -> IO a
+withPersistDir :: FilePath -> (Context -> LoggingT IO a) -> IO a
 withPersistDir path f = runStderrLoggingT $ withSqlitePool ("WAL=off " <> (T.pack path) <> "/eclogues.db3") 1 act where
     act pool = do
         PSql.runSqlPool (PSql.runMigration migrateAll) pool
-        f (PersistContext pool)
+        f (Context pool)
 
-atomically :: PersistContext -> PersistAction r -> IO r
-atomically (PersistContext pool) (PersistAction a) = PSql.runSqlPool a pool
+atomically :: Context -> Action r -> IO r
+atomically (Context pool) (Action a) = PSql.runSqlPool a pool
 
-insert :: JobStatus -> PersistAction ()
-insert (JobStatus spec st uuid) = PersistAction $ P.insert_ job where
+insert :: JobStatus -> Action ()
+insert (JobStatus spec st uuid) = Action $ P.insert_ job where
     job = Job { jobName = spec ^. Job.name
               , jobSpec = spec
               , jobState = st
               , jobUuid = uuid }
 
-updateState :: Name -> Job.JobState -> PersistAction ()
-updateState name st = PersistAction $ P.updateWhere [JobName ==. name] [JobState =. st]
+updateState :: Name -> Job.JobState -> Action ()
+updateState name st = Action $ P.updateWhere [JobName ==. name] [JobState =. st]
 
-delete :: Name -> PersistAction ()
-delete = PersistAction . P.deleteBy . UniqueName
+delete :: Name -> Action ()
+delete = Action . P.deleteBy . UniqueName
 
-scheduleIntent :: ScheduleCommand -> PersistAction ()
-scheduleIntent = PersistAction . P.insert_ . ScheduleIntent
+scheduleIntent :: ScheduleCommand -> Action ()
+scheduleIntent = Action . P.insert_ . ScheduleIntent
 
-deleteIntent :: ScheduleCommand -> PersistAction ()
-deleteIntent = PersistAction . P.deleteBy . UniqueCommand
+deleteIntent :: ScheduleCommand -> Action ()
+deleteIntent = Action . P.deleteBy . UniqueCommand
 
-getAll :: (PSql.SqlBackend ~ PSql.PersistEntityBackend a, PSql.PersistEntity a) => (a -> b) -> PersistAction [b]
-getAll f = PersistAction $ fmap (f . P.entityVal) <$> P.selectList [] []
+getAll :: (PSql.SqlBackend ~ PSql.PersistEntityBackend a, PSql.PersistEntity a) => (a -> b) -> Action [b]
+getAll f = Action $ fmap (f . P.entityVal) <$> P.selectList [] []
 
-allIntents :: PersistAction [ScheduleCommand]
+allIntents :: Action [ScheduleCommand]
 allIntents = getAll scheduleIntentCommand
 
-allJobs :: PersistAction [JobStatus]
+allJobs :: Action [JobStatus]
 allJobs = getAll toStatus where
     toStatus (Job _ spec st uuid) = JobStatus spec st uuid
