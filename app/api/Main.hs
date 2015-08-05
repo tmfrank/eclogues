@@ -56,6 +56,46 @@ data ApiConfig = ApiConfig { jobsDir :: FilePath
 
 $(deriveJSON defaultOptions ''ApiConfig)
 
+main :: IO ()
+main = do
+    seedStdGen
+    apiConf <- orError =<< readJSON "/etc/xdg/eclogues/api.json"
+    webLock <- Lock.new
+    res <- withZookeeper (zookeeperHosts apiConf) $ runExceptT . withZK apiConf webLock
+    case res of
+        Left (LZKError e)         -> error $ "Zookeeper coordination error: " ++ show e
+        Left (ActionException ex) -> throwIO ex
+        Left LeadershipLost       -> error "impossibru!"
+        Right e                   -> error $ "Aurora ZK lookup error: " ++ show e
+
+withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
+withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
+    let jdir = jobsDir apiConf
+    schedV <- newTChanIO
+    (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
+    createDirectoryIfMissing False jdir
+    Persist.withPersistDir jdir $ \pctx' -> do
+        let conf   = AppConfig jdir getURI schedV pctx' jobURI outURI user
+            user   = subexecutorUser apiConf
+            jobURI = schedulerJobUI $ TS.unpack user
+            outURI = mkOutputURI $ outputUrlPrefix apiConf
+        lift $ withPersist conf webLock followAuroraFailure
+
+withPersist :: AppConfig -> Lock -> Async ZKError -> IO ZKError
+withPersist conf webLock followAuroraFailure = do
+    st <- loadFromDB conf
+    stateV <- newTVarIO st
+    let web = Lock.with webLock $ serve 8000 conf stateV
+        updater = forever $ do
+            loadSchedulerState conf stateV
+            threadDelay . floor $ second (1 :: Double) `asVal` micro second
+        -- TODO: catch run error and reschedule
+        enacter = forever . STM.atomically $ runSingleCommand conf
+
+    hPutStrLn stderr "Starting server on port 8000"
+    withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA ->
+        snd <$> waitAny [followAuroraFailure, const undefined <$> webA, updaterA, enacterA]
+
 throwExc :: (Exception e) => ExceptT e IO a -> IO a
 throwExc act = runExceptT act >>= \case
     Left e  -> throwIO e
@@ -76,19 +116,6 @@ mkOutputURI pf name path = pf { uriPath = (uriPath pf) ++ TL.unpack name ++ esca
   where
     escapedPath = escapeURIString isUnescapedInURI $ toFilePath path
 
-withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
-withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
-    let jdir = jobsDir apiConf
-    schedV <- newTChanIO
-    (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
-    createDirectoryIfMissing False jdir
-    Persist.withPersistDir jdir $ \pctx' -> do
-        let conf   = AppConfig jdir getURI schedV pctx' jobURI outURI user
-            user   = subexecutorUser apiConf
-            jobURI = schedulerJobUI $ TS.unpack user
-            outURI = mkOutputURI $ outputUrlPrefix apiConf
-        lift $ withPersist conf webLock followAuroraFailure
-
 loadFromDB :: AppConfig -> IO AppState
 loadFromDB conf = fmap ((^. ES.appState) . snd) . ES.runStateTS def $ do
     (js, cmds) <- lift . Persist.atomically (Config.pctx conf) $
@@ -104,36 +131,9 @@ runSingleCommand conf = do
         runScheduleCommand schedConf cmd
         lift . Persist.atomically (Config.pctx conf) $ Persist.deleteIntent cmd
 
-withPersist :: AppConfig -> Lock -> Async ZKError -> IO ZKError
-withPersist conf webLock followAuroraFailure = do
-    st <- loadFromDB conf
-    stateV <- newTVarIO st
-    let web = Lock.with webLock $ serve 8000 conf stateV
-        updater = forever $ do
-            loadSchedulerState conf stateV
-            threadDelay . floor $ second (1 :: Double) `asVal` micro second
-        -- TODO: catch run error and reschedule
-        enacter = forever . STM.atomically $ runSingleCommand conf
-
-    hPutStrLn stderr "Starting server on port 8000"
-    withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA ->
-        snd <$> waitAny [followAuroraFailure, const undefined <$> webA, updaterA, enacterA]
-
 seedStdGen :: IO ()
 seedStdGen = do
     curTime <- getPOSIXTime
     -- Unlikely to start twice within a millisecond
     let pico = floor (curTime * 1e3) :: Int
     setStdGen $ mkStdGen pico
-
-main :: IO ()
-main = do
-    seedStdGen
-    apiConf <- orError =<< readJSON "/etc/xdg/eclogues/api.json"
-    webLock <- Lock.new
-    res <- withZookeeper (zookeeperHosts apiConf) $ runExceptT . withZK apiConf webLock
-    case res of
-        Left (LZKError e)         -> error $ "Zookeeper coordination error: " ++ show e
-        Left (ActionException ex) -> throwIO ex
-        Left LeadershipLost       -> error "impossibru!"
-        Right e                   -> error $ "Aurora ZK lookup error: " ++ show e
