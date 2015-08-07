@@ -41,47 +41,49 @@ isolatedJob x = JobSpec x "/bin/echo" res [] False []
 dependentJob :: Name -> [Name] -> JobSpec
 dependentJob job deps = dependsOn .~ deps $ isolatedJob job
 
-shouldHave :: Result -> (Result -> Bool) -> Expectation
-shouldHave result f = (f result) `shouldBe` True
+shouldHave :: Result -> (Result -> Either String Bool) -> Expectation
+shouldHave result f = result `shouldSatisfy` (either (const False) (id)) . f
 
-getJob :: Name -> Result -> Maybe JobStatus
-getJob jName result = (snd result) ^. appState ^. jobs ^. at jName
+getJob :: Name -> Result -> Either String JobStatus
+getJob jName result = maybe (Left "No job found.") Right job
+    where job = (snd result) ^. appState ^. jobs ^. at jName
 
--- TODO: Address relationship between failure in Result and job existence.
-noJob :: Name -> (Result -> Bool)
+noJob :: Name -> Result -> Either String Bool
 noJob jName = validator
     where validator result
-            | (isLeft . fst) result = False
-            | otherwise = isNothing $ getJob jName result
+            | (isLeft . fst) result = Left "Process returned error."
+            | otherwise = Right $ isLeft (getJob jName result)
 
-getRevDep :: Name -> Result -> Maybe [Name]
-getRevDep jName result = (snd result) ^. appState ^. revDeps ^. at jName
+getRevDep :: Name -> Result -> Either String [Name]
+getRevDep jName result = maybe (Left "No reverse dependency found.") Right revDep
+    where revDep = (snd result) ^. appState ^. revDeps ^. at jName
 
--- TODO: Address relationship between failure in Result and reverse dependency existence.
-noRevDep :: Name -> (Result -> Bool)
+noRevDep :: Name -> Result -> Either String Bool
 noRevDep jName = validator
     where validator result
-            | (isLeft . fst) result = False
-            | otherwise = isNothing $ getRevDep jName result
+            | (isLeft . fst) result = Left "Process returned error."
+            | otherwise = Right $ isLeft (getRevDep jName result)
 
-jobInState :: Name -> JobState -> (Result -> Bool)
+jobInState :: Name -> JobState -> Result -> Either String Bool
 jobInState jName jState = validator
     where validator result
-            | (isLeft . fst) result = False
-            | otherwise = maybe False inState $ getJob jName result
+            | (isLeft . fst) result = Left "Process returned error."
+            | otherwise = fmap inState $ getJob jName result
           inState = (== jState) . (flip (^.) jobState)
 
-jobWithRevDep :: Name -> [Name] -> (Result -> Bool)
+jobWithRevDep :: Name -> [Name] -> Result -> Either String Bool
 jobWithRevDep jName jRevDeps = validator
     where validator result
-            | (isLeft . fst) result = False
-            | otherwise = maybe False (== jRevDeps) $ getRevDep jName result
+            | (isLeft . fst) result = Left "Process returned error."
+            | otherwise = fmap (== jRevDeps) $ getRevDep jName result
 
-producedError :: JobError -> (Result -> Bool)
-producedError jError = (either (== jError) (const False)) . fst
+producedError :: JobError -> Result -> Either String Bool
+producedError jError = \m -> case fst m of
+    Left x -> Right $ x == jError
+    Right x -> Left "Job did not produce error."
 
-notProducedError :: (Result -> Bool)
-notProducedError = isRight . fst
+notProducedError :: Result -> Either String Bool
+notProducedError = Right . isRight . fst
 
 testCreateJob :: Spec
 testCreateJob = do
