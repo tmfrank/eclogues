@@ -26,7 +26,6 @@ module Eclogues.Client (
 import Database.Zookeeper.Election (ZookeeperError, getLeaderInfo)
 import Database.Zookeeper.ManagedEvents (ManagedZK)
 import Eclogues.API (VAPI, JobError, Health)
-import Eclogues.Client.Instances ()
 import Eclogues.ServantInstances ()
 import Eclogues.JobSpec (JobStatus, JobState, Name, JobSpec)
 

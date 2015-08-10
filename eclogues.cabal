@@ -160,8 +160,7 @@ executable eclogues-client
                       TypeFamilies TypeOperators
     hs-source-dirs: app/client
     other-modules:
-        Eclogues.Client,
-        Eclogues.Client.Instances
+        Eclogues.Client
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
 test-suite spec
