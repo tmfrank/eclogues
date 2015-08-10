@@ -12,7 +12,7 @@ Portability : portable
 Election pattern for Zookeeper.
 -}
 
-module Database.Zookeeper.Election ( ZookeeperError, LeadershipError (..)
+module Database.Zookeeper.Election ( LeadershipError (..), ZKError
                                    , whenLeader, getLeaderInfo, followLeaderInfo )
                                    where
 
@@ -25,7 +25,7 @@ import Control.Concurrent.Async (Async, async, waitCatch, race, waitAnyCancel, c
 import Control.Concurrent.Broadcast (listen)
 import Control.Exception.Lifted (SomeException, finally)
 import Control.Monad (void, join)
-import Control.Monad.Morph (squash, hoist)
+import Control.Monad.Morph (squash)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), withExceptT, runExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
@@ -36,10 +36,6 @@ import Data.Maybe (listToMaybe)
 import Database.Zookeeper ( Zookeeper, Event (..), State (..), ZKError (..), AclList (..), CreateFlag (..), Watcher
                           , getChildren, get, create, delete, getState )
 import System.IO (hPutStrLn, stderr)
-
-data ZookeeperError e = ContentError e
-                      | ZookeeperError ZKError
-                      deriving (Show)
 
 electionPrefix :: String
 electionPrefix = "member_"
@@ -98,23 +94,18 @@ followLeaderInfo (ManagedZK zk br) node var = run where
         Disconnected                               -> pure ConnectionLossError
         _                                          -> gWatcher errVar
 
--- TODO: remove ZookeeperError
 -- | Get the current leader of an election, if any such node exists.
-getLeaderInfo :: forall e a.
-       (Maybe ByteString -> Either e a) -- ^ A conversion function for leader node data
-    -> ManagedZK
-    -> ZNode -- ^ The node under which the election is taking place
-    -> ExceptT (ZookeeperError e) IO (Maybe a)
-getLeaderInfo conv (ManagedZK zk _) node = runMaybeT fetch where
-    fetch :: MaybeT (ExceptT (ZookeeperError e) IO) a
+getLeaderInfo :: ManagedZK
+              -> ZNode -- ^ The node under which the election is taking place
+              -> ExceptT ZKError IO (Maybe (Maybe ByteString))
+getLeaderInfo (ManagedZK zk _) node = runMaybeT fetch where
+    fetch :: MaybeT (ExceptT ZKError IO) (Maybe ByteString)
     fetch = do
-        first <- squash . MaybeT $ listToMaybe <$> (hoist (withExceptT ZookeeperError) $ getMembers zk node Nothing)
-        nodeM <- lift . wrapZKE $ maybeExists <$> get zk (node ++ "/" ++ first) Nothing
+        first <- squash . MaybeT $ listToMaybe <$> getMembers zk node Nothing
+        nodeM <- lift . ExceptT $ maybeExists <$> get zk (node ++ "/" ++ first) Nothing
         case nodeM of
             Nothing       -> fetch
-            Just (bsM, _) -> lift . withExceptT ContentError . ExceptT . pure $ conv bsM
-    wrapZKE :: forall e' a' m. (Functor m) => m (Either ZKError a') -> ExceptT (ZookeeperError e') m a'
-    wrapZKE = withExceptT ZookeeperError . ExceptT
+            Just (bsM, _) -> pure bsM
 
 ensureEphemeralNodeDeleted :: ManagedZK -> ZNode -> IO (Async (Maybe ZKError))
 ensureEphemeralNodeDeleted (ManagedZK zk br) node = async attempt where

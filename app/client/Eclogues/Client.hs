@@ -23,7 +23,7 @@ module Eclogues.Client (
                        , getEcloguesLeader
                        ) where
 
-import Database.Zookeeper.Election (ZookeeperError, getLeaderInfo)
+import Database.Zookeeper.Election (ZKError, getLeaderInfo)
 import Database.Zookeeper.ManagedEvents (ManagedZK)
 import Eclogues.API (VAPI, JobError, Health)
 import Eclogues.ServantInstances ()
@@ -31,7 +31,7 @@ import Eclogues.JobSpec (JobStatus, JobState, Name, JobSpec)
 
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Either (runEitherT)
-import Control.Monad.Trans.Except (ExceptT (..), withExceptT)
+import Control.Monad.Trans.Except (ExceptT (..), throwE, withExceptT)
 import Data.Aeson (eitherDecode, eitherDecodeStrict)
 import Data.Either.Combinators (mapLeft)
 import Data.Proxy (Proxy (..))
@@ -72,9 +72,9 @@ masterHost = _masterHost
 
 -- | Lookup the Eclogues master and return a set of functions for interacting
 -- with it.
-ecloguesClient :: ManagedZK -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
+ecloguesClient :: ManagedZK -> ExceptT (Either ZKError String) IO (Maybe EcloguesClient)
 ecloguesClient = mkClient <=< getEcloguesLeader where
-    mkClient :: Maybe (String, Word16) -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
+    mkClient :: Maybe (String, Word16) -> ExceptT (Either ZKError String) IO (Maybe EcloguesClient)
     mkClient hostM = pure . flip fmap hostM $ \(host, port) ->
         let (     getJobs'
              :<|> jobStatus'
@@ -100,7 +100,8 @@ ecloguesClient = mkClient <=< getEcloguesLeader where
     tryParseErr other                         = Left other
 
 -- | Query Zookeeper for the Eclogues master host details, if any.
-getEcloguesLeader :: ManagedZK -> ExceptT (ZookeeperError String) IO (Maybe (String, Word16))
-getEcloguesLeader mzk = getLeaderInfo parse mzk "/eclogues" where
-    parse Nothing   = Left "missing node content"
-    parse (Just bs) = eitherDecodeStrict bs
+getEcloguesLeader :: ManagedZK -> ExceptT (Either ZKError String) IO (Maybe (String, Word16))
+getEcloguesLeader mzk = parse =<< withExceptT Left (getLeaderInfo mzk "/eclogues") where
+    parse Nothing          = pure Nothing
+    parse (Just Nothing)   = throwE $ Right "missing node content"
+    parse (Just (Just bs)) = either (throwE . Right) pure $ eitherDecodeStrict bs

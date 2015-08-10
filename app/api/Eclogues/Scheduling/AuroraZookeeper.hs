@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
@@ -16,14 +17,14 @@ Retrieving Aurora master details from Zookeeper.
 module Eclogues.Scheduling.AuroraZookeeper (
     AuroraHost, getAuroraMaster, followAuroraMaster) where
 
-import Database.Zookeeper.Election (ZookeeperError, followLeaderInfo, getLeaderInfo)
+import Database.Zookeeper.Election (followLeaderInfo, getLeaderInfo)
 import Database.Zookeeper.ManagedEvents (ZNode, ManagedZK)
 
 import Control.Arrow ((&&&))
 import Control.Concurrent.Async (Async, async)
 import Control.Concurrent.AdvSTM (AdvSTM, atomically, newTVar, readTVar)
-import Control.Monad (join)
-import Control.Monad.Trans.Except (ExceptT)
+import Control.Monad ((<=<), join)
+import Control.Monad.Except (MonadError, ExceptT, withExceptT, throwError)
 import Data.Aeson (eitherDecodeStrict)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Data.ByteString (ByteString)
@@ -42,17 +43,17 @@ $(deriveJSON defaultOptions ''AuroraMember)
 $(deriveJSON defaultOptions ''AuroraEndpoint)
 
 -- | Try to extract host details from Aurora ZK election node data.
-conv :: Maybe ByteString -> Either String AuroraHost
-conv Nothing   = Left "missing node content"
-conv (Just bs) = (host &&& port) . serviceEndpoint <$> eitherDecodeStrict bs
+conv :: (MonadError (Either e String) m) => Maybe ByteString -> m AuroraHost
+conv Nothing   = throwError $ Right "missing node content"
+conv (Just bs) = either (throwError . Right) pure $ (host &&& port) . serviceEndpoint <$> eitherDecodeStrict bs
 
 rightMay :: Either e a -> Maybe a
 rightMay (Left  _) = Nothing
 rightMay (Right a) = Just a
 
 -- | Retrieve host details of the elected Aurora master, if any.
-getAuroraMaster :: ManagedZK -> ZNode -> ExceptT (ZookeeperError String) IO (Maybe AuroraHost)
-getAuroraMaster = getLeaderInfo conv
+getAuroraMaster :: ManagedZK -> ZNode -> ExceptT (Either ZKError String) IO (Maybe AuroraHost)
+getAuroraMaster zk = maybe (pure Nothing) (fmap Just . conv) <=< withExceptT Left . getLeaderInfo zk
 
 -- | Follow the elected Aurora master asynchronously. Spawns a thread that will
 -- run until a Zookeeper error occurs. Master details available via an 'AdvSTM'
