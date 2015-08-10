@@ -1,8 +1,25 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
 
-module Eclogues.State (createJob, updateJobs, getJob, getJobs, activeJobs, killJob, deleteJob) where
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Job(s) state views and transformation. Actions are actually scheduled in 'TS'.
+-}
+
+module Eclogues.State (
+                      -- * View
+                        getJob, getJobs, activeJobs
+                      -- * Mutate
+                      , createJob, updateJobs, killJob, deleteJob) where
 
 import Eclogues.API (JobError (..))
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
@@ -26,6 +43,8 @@ import Data.Maybe (isJust)
 import Data.Monoid (Sum (Sum))
 import Data.UUID (UUID)
 
+-- | Try to schedule a new job. UUID must be unique; best to randomly generate
+-- it.
 createJob :: forall m. (TS m, MonadError JobError m) => UUID -> JobSpec -> m ()
 createJob uuid spec = do
     let name = spec ^. Job.name
@@ -49,11 +68,13 @@ createJob uuid spec = do
                   | otherwise       -> throwError $ JobCannotHaveFailed depName
             Nothing -> throwError $ JobMustExist depName
 
+-- | Retrieve an existing job.
 existingJob :: (TS m, MonadError JobError m) => Name -> m JobStatus
 existingJob name = ES.getJob name >>= \case
     Just js -> pure js
     Nothing -> throwError NoSuchJob
 
+-- | Kill a job. Fails if job is already terminated.
 killJob :: (TS m, MonadError JobError m) => Name -> m ()
 killJob name = existingJob name >>= \js ->
     if isTerminationState (js ^. Job.jobState)
@@ -62,6 +83,7 @@ killJob name = existingJob name >>= \js ->
             ES.setJobState name Killing
             ES.schedule $ KillJob name (js ^. Job.uuid)
 
+-- | Delete a terminated job and all its output.
 deleteJob :: (TS m, MonadError JobError m) => Name -> m ()
 deleteJob name = existingJob name >>= \js -> do
     when (isActiveState $ js ^. Job.jobState) . throwError $ JobMustBeTerminated True
@@ -72,12 +94,16 @@ deleteJob name = existingJob name >>= \js -> do
 
 -- Only check on active jobs; terminated jobs shouldn't change status
 -- Also Waiting jobs aren't in Aurora so filter out those
+-- Can't use 'isOnScheduler' because 'LocalQueue' jobs may have been scheduled.
+-- | All jobs that should be queried on the scheduler.
 activeJobs :: AppState -> Jobs
 activeJobs = HashMap.filter (isNonWaitingActiveState . view Job.jobState) . view jobs where
     isNonWaitingActiveState :: JobState -> Bool
     isNonWaitingActiveState (Waiting _) = False
     isNonWaitingActiveState s           = isActiveState s
 
+-- | Update the status of a set of jobs with new data from the scheduler,
+-- scheduling any new actions required (eg. dependencies).
 updateJobs :: forall m. (TS m) => Jobs -> [(Name, JobState)] -> m ()
 updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeStatuses where
     transition :: Name -> JobStatus -> m ()
@@ -120,9 +146,11 @@ updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeSt
             ES.setJobState rdepName $ Waiting $ n - 1
         _         -> pure ()
 
+-- | All jobs.
 getJobs :: AppState -> [JobStatus]
 getJobs = elems . view jobs
 
+-- | Retrieve a job status by name.
 getJob :: (MonadError JobError m) => Name -> AppState -> m JobStatus
 getJob name state = case HashMap.lookup name (state ^. jobs) of
     Nothing -> throwError NoSuchJob

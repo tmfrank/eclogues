@@ -1,3 +1,20 @@
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Zookeeper connection with broadcasted events, so more than one function can
+react.
+
+See also 'ZK.withZookeeper'.
+-}
+
 module Database.Zookeeper.ManagedEvents where
 
 import Control.Concurrent.Broadcast (Broadcast)

@@ -1,6 +1,19 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Eclogues REST API definition.
+-}
 
 module Eclogues.API where
 

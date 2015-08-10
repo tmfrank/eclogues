@@ -1,12 +1,27 @@
-module Eclogues.Client ( EcloguesClient ( getJobs
-                                        , getJobStatus
-                                        , getJobState
-                                        , setJobState
-                                        , deleteJob
-                                        , createJob
-                                        , getHealth
-                                        , masterHost )
-                       , Result, getEcloguesLeader, ecloguesClient ) where
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Interaction with an Eclogues web service.
+-}
+
+module Eclogues.Client (
+                       -- * Client
+                         EcloguesClient, Result, ecloguesClient
+                       -- ** View
+                       , getJobs, getJobStatus, getJobState, getHealth, masterHost
+                       -- ** Mutate
+                       , createJob, deleteJob, setJobState
+                       -- * Zookeeper
+                       , getEcloguesLeader
+                       ) where
 
 import Database.Zookeeper.Election (ZookeeperError, getLeaderInfo)
 import Database.Zookeeper.ManagedEvents (ManagedZK)
@@ -27,15 +42,37 @@ import Servant.Client (BaseUrl (..), Scheme (Http), ServantError (..), client)
 
 type Result a = ExceptT (Either ServantError JobError) IO a
 
-data EcloguesClient = EcloguesClient { getJobs      ::            Result [JobStatus]
-                                     , getJobStatus :: Name    -> Result JobStatus
-                                     , getJobState  :: Name    -> Result JobState
-                                     , setJobState  :: Name    -> JobState -> Result ()
-                                     , deleteJob    :: Name    -> Result ()
-                                     , createJob    :: JobSpec -> Result ()
-                                     , getHealth    ::            Result Health
-                                     , masterHost   :: (String, Word16) }
+-- | Functions for interacting with an Eclogues master. See 'ecloguesClient'.
+data EcloguesClient = EcloguesClient { _getJobs      ::            Result [JobStatus]
+                                     , _getJobStatus :: Name    -> Result JobStatus
+                                     , _getJobState  :: Name    -> Result JobState
+                                     , _setJobState  :: Name    -> JobState -> Result ()
+                                     , _deleteJob    :: Name    -> Result ()
+                                     , _createJob    :: JobSpec -> Result ()
+                                     , _getHealth    ::            Result Health
+                                     , _masterHost   :: (String, Word16) }
 
+-- Have to redefine these so they're not exported as record fields.
+
+getJobs :: EcloguesClient -> Result [JobStatus]
+getJobs = _getJobs
+getJobStatus :: EcloguesClient -> Name -> Result JobStatus
+getJobStatus = _getJobStatus
+getJobState :: EcloguesClient -> Name -> Result JobState
+getJobState = _getJobState
+setJobState :: EcloguesClient -> Name -> JobState -> Result ()
+setJobState = _setJobState
+deleteJob :: EcloguesClient -> Name -> Result ()
+deleteJob = _deleteJob
+createJob :: EcloguesClient -> JobSpec -> Result ()
+createJob = _createJob
+getHealth :: EcloguesClient -> Result Health
+getHealth = _getHealth
+masterHost :: EcloguesClient -> (String, Word16)
+masterHost = _masterHost
+
+-- | Lookup the Eclogues master and return a set of functions for interacting
+-- with it.
 ecloguesClient :: ManagedZK -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
 ecloguesClient = mkClient <=< getEcloguesLeader where
     mkClient :: Maybe (String, Word16) -> ExceptT (ZookeeperError String) IO (Maybe EcloguesClient)
@@ -63,6 +100,7 @@ ecloguesClient = mkClient <=< getEcloguesLeader where
     tryParseErr serr@(FailureResponse _ _ bs) = mapLeft (const serr) $ eitherDecode bs
     tryParseErr other                         = Left other
 
+-- | Query Zookeeper for the Eclogues master host details, if any.
 getEcloguesLeader :: ManagedZK -> ExceptT (ZookeeperError String) IO (Maybe (String, Word16))
 getEcloguesLeader mzk = getLeaderInfo parse mzk "/eclogues" where
     parse Nothing   = Left "missing node content"

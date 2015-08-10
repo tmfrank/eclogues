@@ -1,3 +1,17 @@
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Utility definitions.
+-}
+
 module Eclogues.Util where
 
 import Prelude hiding (readFile)
@@ -9,6 +23,7 @@ import Data.Maybe (fromMaybe)
 readJSON :: (FromJSON a) => FilePath -> IO (Either String a)
 readJSON = fmap eitherDecode . readFile
 
+-- | 'error' on 'Left'.
 orError :: Either String a -> IO a
 orError = \case
     Right a -> pure a

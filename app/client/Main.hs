@@ -1,4 +1,17 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Entry point for the Eclogues CLI.
+-}
 
 module Main where
 
@@ -6,7 +19,8 @@ import Prelude hiding (readFile)
 
 import Database.Zookeeper.ManagedEvents (ZKURI, withZookeeper)
 import Eclogues.Util (orShowError)
-import Eclogues.Client (EcloguesClient (..), ecloguesClient)
+import Eclogues.Client ( ecloguesClient, getJobs, getJobState, masterHost
+                       , createJob, getHealth )
 import Eclogues.JobSpec (JobStatus, Name, majorState, majorJobStates, _jobState)
 
 import Control.Applicative (optional)
@@ -32,9 +46,11 @@ import Options.Applicative ( Parser, strOption, strArgument, switch, long, metav
 import System.Directory (doesFileExist)
 import System.Environment.XDG.BaseDir (getAllConfigFiles)
 
+-- | CLI options.
 data Opts = Opts { optZkUri  :: Maybe ZKURI
                  , optCommand :: Command }
 
+-- | CLI subcommand.
 data Command = ListJobs
              | JobState Name
              | CreateJob FilePath
@@ -42,10 +58,12 @@ data Command = ListJobs
              | GetHealth
              | JobStats Bool
 
+-- | JSON configuration type.
 data ClientConfig = ClientConfig { zookeeperHosts :: ZKURI }
 
 $(deriveJSON defaultOptions ''ClientConfig)
 
+-- | Find and read the config file, or 'error'.
 readZkUri :: IO ZKURI
 readZkUri = do
     paths <- getAllConfigFiles "eclogues" "client.json"

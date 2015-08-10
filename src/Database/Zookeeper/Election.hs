@@ -1,3 +1,17 @@
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Election pattern for Zookeeper.
+-}
+
 module Database.Zookeeper.Election ( ZookeeperError, LeadershipError (..)
                                    , whenLeader, getLeaderInfo, followLeaderInfo )
                                    where
@@ -40,7 +54,14 @@ getMembers zk node watch = do
     children <- MaybeT . ExceptT $ maybeExists <$> getChildren zk node watch
     pure . sort $ filter (isPrefixOf electionPrefix) children
 
-followLeaderInfo :: ManagedZK -> ZNode -> TVar (Maybe (Maybe ByteString)) -> IO ZKError
+-- | Follow a Zookeeper election, updating a TVar with details of the
+-- current leader (if any).
+followLeaderInfo :: ManagedZK
+                 -> ZNode -- ^ The node under which the election is taking place
+                 -> TVar (Maybe (Maybe ByteString)) -- ^ The TVar to update with leader details. There may not be
+                                                    -- a current leader (outer Maybe), and that leader node may or
+                                                    -- may not contain data (inner Maybe)
+                 -> IO ZKError -- ^ This function only returns if there is a ZK error
 followLeaderInfo (ManagedZK zk br) node var = run where
     run = do
         errVar <- newEmptyMVar
@@ -77,9 +98,13 @@ followLeaderInfo (ManagedZK zk br) node var = run where
         Disconnected                               -> pure ConnectionLossError
         _                                          -> gWatcher errVar
 
--- TODO: take ManagedZK
 -- TODO: remove ZookeeperError
-getLeaderInfo :: forall e a. (Maybe ByteString -> Either e a) -> ManagedZK -> ZNode -> ExceptT (ZookeeperError e) IO (Maybe a)
+-- | Get the current leader of an election, if any such node exists.
+getLeaderInfo :: forall e a.
+       (Maybe ByteString -> Either e a) -- ^ A conversion function for leader node data
+    -> ManagedZK
+    -> ZNode -- ^ The node under which the election is taking place
+    -> ExceptT (ZookeeperError e) IO (Maybe a)
 getLeaderInfo conv (ManagedZK zk _) node = runMaybeT fetch where
     fetch :: MaybeT (ExceptT (ZookeeperError e) IO) a
     fetch = do
@@ -118,7 +143,14 @@ findPrev a (x:nx:xs)
     | otherwise = findPrev a xs
 findPrev _ _    = Nothing
 
-whenLeader :: forall a. ManagedZK -> ZNode -> ByteString -> IO a -> ExceptT LeadershipError IO a
+-- | Run some IO action only when elected.
+--
+-- Exceptions from the action will be returned in 'ActionException'.
+whenLeader :: forall a. ManagedZK
+           -> ZNode      -- ^ The node under which the election is taking place
+           -> ByteString -- ^ Data for election node
+           -> IO a       -- ^ Action to run if elected
+           -> ExceptT LeadershipError IO a
 whenLeader mzk@(ManagedZK zk br) node content act = whenConnected where
     whenConnected = (lift $ getState zk) >>= \case
         ConnectedState -> run

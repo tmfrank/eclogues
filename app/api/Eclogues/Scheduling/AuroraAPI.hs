@@ -1,5 +1,18 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Client API for Apache Aurora.
+-}
 
 module Eclogues.Scheduling.AuroraAPI (
       Client, Result, JobConfiguration, UnexpectedResponse (..)

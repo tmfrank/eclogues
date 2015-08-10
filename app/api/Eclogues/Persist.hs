@@ -7,11 +7,29 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
 
-module Eclogues.Persist ( Action, Context
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Persistence for job states and yet-to-be-run 'ScheduleCommand's.
+-}
+
+module Eclogues.Persist (
+                        -- * 'Action'
+                          Action, Context
+                        -- ** Running
                         , withPersistDir, atomically
-                        , insert, updateState, delete, scheduleIntent, deleteIntent
-                        , allIntents, allJobs )
+                        -- * View
+                        , allIntents, allJobs
+                        -- * Mutate
+                        , insert, updateState, delete, scheduleIntent, deleteIntent )
                         where
 
 import Eclogues.Persist.Stage1 ()
@@ -31,6 +49,7 @@ import qualified Database.Persist as P
 import qualified Database.Persist.Sql as PSql
 import Database.Persist.Sqlite (withSqlitePool)
 
+-- Table definitions.
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Job
     name Name
@@ -43,20 +62,27 @@ ScheduleIntent
     UniqueCommand command
 |]
 
+-- Hide away the implementation details.
+-- | All 'Action's run in a Context.
 newtype Context  = Context PSql.ConnectionPool
+-- | An interaction with the persistence backend.
 newtype Action r = Action (ReaderT PSql.SqlBackend IO r)
                           deriving (Functor, Applicative, Monad)
 
+-- | You can join up Actions by running them sequentially.
 instance Monoid (Action ()) where
     mempty = pure ()
     mappend = (*>)
 
+-- | Run some action that might persist things inside the given directory.
+-- Logs to stderr.
 withPersistDir :: FilePath -> (Context -> LoggingT IO a) -> IO a
 withPersistDir path f = runStderrLoggingT $ withSqlitePool ("WAL=off " <> (T.pack path) <> "/eclogues.db3") 1 act where
     act pool = do
         PSql.runSqlPool (PSql.runMigration migrateAll) pool
         f (Context pool)
 
+-- | Apply some Action in a transaction.
 atomically :: Context -> Action r -> IO r
 atomically (Context pool) (Action a) = PSql.runSqlPool a pool
 

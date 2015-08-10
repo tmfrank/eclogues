@@ -2,6 +2,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Web server thread.
+-}
 
 module Eclogues.Threads.Server (serve) where
 
@@ -44,6 +57,7 @@ import Servant.Server ( Server, ServerT, ServantErr (..), (:~>) (..)
 import qualified Servant.Server as Server
 import System.Random (randomIO)
 
+-- | Start serving.
 serve :: Int -> AppConfig -> TVar AppState -> IO ()
 serve port conf = Warp.run port . myCors . Server.serve (Proxy :: (Proxy VAPIWithDocs)) . server conf
   where

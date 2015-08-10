@@ -1,3 +1,17 @@
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+API implementation global config, static from initial generation.
+-}
+
 module Eclogues.AppConfig (AppConfig (..), requireSchedConf) where
 
 import Eclogues.API (AbsFile)
@@ -12,14 +26,21 @@ import Data.Text.Lazy (fromStrict)
 import Data.UUID (UUID)
 import Network.URI (URI)
 
-data AppConfig = AppConfig { jobsDir         :: FilePath
+data AppConfig = AppConfig {
+                           -- | The mount point of the shared jobs directory.
+                             jobsDir         :: FilePath
+                           -- | Get the URI to the scheduler, if it's available.
                            , auroraURI       :: AdvSTM (Maybe URI)
                            , schedChan       :: TChan ScheduleCommand
                            , pctx            :: Persist.Context
+                           -- | Scheduler web UI for the provided job UUID.
                            , schedJobURI     :: URI -> UUID -> URI
+                           -- | Job file output URI.
                            , outputURI       :: Name -> AbsFile -> URI
+                           -- | User the subexecutor is run as.
                            , subexecutorUser :: Text }
 
+-- | Wait until the scheduler is available.
 requireSchedConf :: AppConfig -> AdvSTM ScheduleConf
 requireSchedConf conf = ScheduleConf (jobsDir conf) (fromStrict $ subexecutorUser conf) <$> requireAurora conf
 

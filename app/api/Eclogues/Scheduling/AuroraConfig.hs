@@ -1,9 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Conversion between Aurora Thrift types and the saner "Eclogues.JobSpec" types.
+-}
 
 module Eclogues.Scheduling.AuroraConfig (
-      ATaskExecConf, TaskConfig, Role
+      ATaskExecConf, TaskConfig, Role, Name
     , auroraJobConfig, lockKey, defaultJobKey
     , getJobName, getJobState ) where
 

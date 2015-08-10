@@ -2,6 +2,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Communication with the remote scheduler.
+-}
 
 module Eclogues.Scheduling.Command ( ScheduleCommand (..), ScheduleConf (..), AuroraURI
                                    , runScheduleCommand, getSchedulerStatuses, schedulerJobUI ) where
@@ -34,8 +47,7 @@ import System.Exit (ExitCode (..))
 import System.IO.Error (isDoesNotExistError)
 import Text.Read.HT (maybeRead)
 
--- TODO: split up
-
+-- | Tell the scheduler to do something.
 data ScheduleCommand = QueueJob JobSpec UUID
                      | KillJob Name UUID
                      | CleanupJob Name UUID

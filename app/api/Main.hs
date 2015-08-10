@@ -1,5 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+API executable entry point.
+-}
 
 module Main where
 
@@ -30,7 +43,7 @@ import Control.Exception (Exception, throwIO)
 import Control.Lens ((^.))
 import Control.Monad (forever)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE, catchE)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import qualified Data.ByteString as BSS
@@ -47,6 +60,7 @@ import System.Directory (createDirectoryIfMissing)
 import System.IO (hPutStrLn, stderr)
 import System.Random (mkStdGen, setStdGen)
 
+-- | User-supplied API configuration.
 data ApiConfig = ApiConfig { jobsDir :: FilePath
                            , zookeeperHosts :: ZKURI
                            , bindAddress :: String
@@ -60,6 +74,9 @@ main :: IO ()
 main = do
     seedStdGen
     apiConf <- orError =<< readJSON "/etc/xdg/eclogues/api.json"
+    -- Used to prevent multiple web server threads from running at the same
+    -- time. This can happen if the web thread doesn't finish dying between
+    -- losing and regaining ZK election master status.
     webLock <- Lock.new
     res <- withZookeeper (zookeeperHosts apiConf) $ runExceptT . withZK apiConf webLock
     case res of
@@ -71,7 +88,7 @@ main = do
 withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
 withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
     let jdir = jobsDir apiConf
-    schedV <- newTChanIO
+    schedV <- newTChanIO  -- Scheduler action channel
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
     createDirectoryIfMissing False jdir
     Persist.withPersistDir jdir $ \pctx' -> do
@@ -96,21 +113,20 @@ withPersist conf webLock followAuroraFailure = do
     withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA ->
         snd <$> waitAny [followAuroraFailure, const undefined <$> webA, updaterA, enacterA]
 
-throwExc :: (Exception e) => ExceptT e IO a -> IO a
-throwExc act = runExceptT act >>= \case
-    Left e  -> throwIO e
-    Right a -> pure a
-
+-- | Contest Zookeeper election with the provided node data, and perform some
+-- action while elected. If leadership is lost, wait until re-elected and
+-- perform the action again. This function will never throw 'LeadershipLost'.
 whileLeader :: ManagedZK -> BSS.ByteString -> IO a -> ExceptT LeadershipError IO a
 whileLeader zk advertisedHost act =
-    lift (runExceptT $ whenLeader zk "/eclogues" advertisedHost act) >>= \case
-        Left LeadershipLost -> whileLeader zk advertisedHost act
-        Left  e             -> throwE e
-        Right a             -> pure a
+    catchE (whenLeader zk "/eclogues" advertisedHost act) $ \case
+        LeadershipLost -> whileLeader zk advertisedHost act
+        e              -> throwE e
 
+-- | Create encoded (host, port) to advertise via Zookeeper.
 advertisedData :: ApiConfig -> BSS.ByteString
 advertisedData (ApiConfig _ _ host port _ _) = BSL.toStrict $ encode (host, port)
 
+-- | Append the job name and file path to the path of the job output server URI.
 mkOutputURI :: URI -> Job.Name -> AbsFile -> URI
 mkOutputURI pf name path = pf { uriPath = (uriPath pf) ++ TL.unpack name ++ escapedPath }
   where
@@ -123,6 +139,8 @@ loadFromDB conf = fmap ((^. ES.appState) . snd) . ES.runStateTS def $ do
     ES.loadJobs js
     lift . STM.atomically $ mapM_ (writeTChan $ Config.schedChan conf) cmds
 
+-- | Read a single scheduler command from 'Config.schedChan' and send it to
+-- the scheduler, waiting if it is unavailable.
 runSingleCommand :: AppConfig -> STM.AdvSTM ()
 runSingleCommand conf = do
     cmd <- readTChan $ Config.schedChan conf
@@ -130,7 +148,13 @@ runSingleCommand conf = do
     STM.onCommit . throwExc $ do
         runScheduleCommand schedConf cmd
         lift . Persist.atomically (Config.pctx conf) $ Persist.deleteIntent cmd
+  where
+    throwExc :: (Exception e) => ExceptT e IO a -> IO a
+    throwExc act = runExceptT act >>= \case
+        Left e  -> throwIO e
+        Right a -> pure a
 
+-- | Seed the PRNG with the current time.
 seedStdGen :: IO ()
 seedStdGen = do
     curTime <- getPOSIXTime

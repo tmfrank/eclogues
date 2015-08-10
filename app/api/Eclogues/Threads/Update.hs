@@ -1,3 +1,17 @@
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Updating local state with data from the scheduler.
+-}
+
 module Eclogues.Threads.Update (loadSchedulerState) where
 
 import Eclogues.AppConfig (AppConfig)
@@ -18,6 +32,7 @@ import Control.Monad.Trans.Except (runExceptT)
 import qualified Data.HashMap.Lazy as HashMap
 import System.IO (hPutStrLn, stderr)
 
+-- | Query the scheduler and run 'updateJobs'.
 loadSchedulerState :: AppConfig -> STM.TVar AppState -> IO ()
 loadSchedulerState conf stateV = do
     schedConf <- STM.atomically $ Config.requireSchedConf conf

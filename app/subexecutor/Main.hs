@@ -1,4 +1,17 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Entry point for the subexecutor, called by the executor on compute slaves.
+-}
 
 module Main where
 
@@ -20,10 +33,12 @@ import System.FilePath ((</>))
 import System.FilePath.Glob (glob)
 import System.Process (callProcess, spawnProcess, waitForProcess)
 
+-- | JSON configuration type.
 data SubexecutorConfig = SubexecutorConfig { jobsDir :: FilePath }
 
 $(deriveJSON defaultOptions ''SubexecutorConfig)
 
+-- | Run a bash command with a time limit.
 runCommand :: Value Int Second -> Command -> IO RunResult
 runCommand timeout cmd = do
     proc <- spawnProcess "/usr/bin/timeout" [show (val timeout), "/bin/bash", "-c", L.unpack cmd]
@@ -32,10 +47,15 @@ runCommand timeout cmd = do
         ExitFailure 124 -> Overtime
         c               -> Ended c
 
+-- | Copy the contents of a directory into another.
 copyDirContents :: FilePath -> FilePath -> IO ()
 copyDirContents from to = callProcess "/bin/cp" ["-r", from ++ "/.", to]
 
-copyFileOrDir :: FilePath -> FilePath -> IO Bool
+-- | Copy a file or directory relative to the working directory to the same
+-- relative path under another directory.
+copyFileOrDir :: FilePath -- ^ Relative path of file or dir
+              -> FilePath -- ^ Absolute path of target directory
+              -> IO Bool  -- ^ True if copied, False if path doesn't exist
 copyFileOrDir from to = go where
     go = condM [ (doesFileExist      from, copyFile from to' *> pure True)
                , (doesDirectoryExist from, copyDir           *> pure True)
@@ -43,7 +63,10 @@ copyFileOrDir from to = go where
     to' = to ++ from
     copyDir = callProcess "mkdir" ["-p", to'] *> copyDirContents from to'
 
-runJob :: FilePath -> String -> IO ()
+-- | Run a job from its spec.
+runJob :: FilePath -- ^ Shared jobs directory
+       -> String   -- ^ Job name
+       -> IO ()
 runJob path name = do
     spec <- orError =<< readJSON (specDir </> "spec.json") :: IO JobSpec
 

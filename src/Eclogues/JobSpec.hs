@@ -2,6 +2,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
+
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Specification of jobs and the current state of submitted jobs.
+-}
 
 module Eclogues.JobSpec where
 
@@ -46,6 +59,8 @@ $(deriveJSON defaultOptions{fieldLabelModifier = specJName} ''JobSpec)
 $(makeClassy ''JobSpec)
 instance HasResources JobSpec where resources = job_resources
 
+-- | The result of a job, as communicated by the subexecutor. Other failure
+-- modes are communicated by the scheduler.
 data RunResult = Ended ExitCode | Overtime deriving (Show, Read)
 
 data FailureReason = UserKilled
@@ -81,9 +96,13 @@ $(deriveJSON defaultOptions{fieldLabelModifier = statusJName} ''JobStatus)
 $(makeClassy ''JobStatus)
 instance HasJobSpec JobStatus where jobSpec = job_spec
 
+-- | Names of JobState constructors. Could probably be replaced by something
+-- from "GHC.Generics".
 majorJobStates :: [String]
 majorJobStates = ["Queued", "Waiting", "Running", "Killing", "Finished", "Failed", "RunError"]
 
+-- | The JobState constructor name. Could probably be replaced by something
+-- from "GHC.Generics".
 majorState :: JobState -> String
 majorState (Queued _)   = "Queued"
 majorState (Waiting _)  = "Waiting"
@@ -93,10 +112,13 @@ majorState Finished     = "Finished"
 majorState (Failed _)   = "Failed"
 majorState (RunError _) = "RunError"
 
+-- | Whether the constructor is 'Queued'.
 isQueueState :: JobState -> Bool
 isQueueState (Queued _) = True
 isQueueState _          = False
 
+-- | Whether the state is terminal. A terminal state is steady and represents
+-- the completion (successful or not) of a job.
 isTerminationState :: JobState -> Bool
 isTerminationState (Queued _)   = False
 isTerminationState (Waiting _)  = False
@@ -106,14 +128,19 @@ isTerminationState Finished     = True
 isTerminationState (Failed _)   = True
 isTerminationState (RunError _) = True
 
+-- | > isActiveState = not . 'isTerminationState'
 isActiveState :: JobState -> Bool
 isActiveState = not . isTerminationState
 
+-- | Whether the job is known by the remote scheduler.
 isOnScheduler :: JobState -> Bool
 isOnScheduler (Queued LocalQueue) = False
 isOnScheduler (Waiting _)         = False
 isOnScheduler s                   = isActiveState s
 
+-- | Whether the first JobState may transition to the second in the lifecycle.
+-- Unexpected transitions are treated as scheduler errors
+-- ('BadSchedulerTransition').
 isExpectedTransition :: JobState -> JobState -> Bool
 isExpectedTransition (Queued LocalQueue) (Queued SchedulerQueue) = True
 isExpectedTransition (Queued _)   Running       = True
