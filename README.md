@@ -79,7 +79,8 @@ Kill a job, by putting the following state:
 Redirect to the job page on Aurora.
 
 ### GET `/jobs/:name/output?path=`
-Redirect to job output.
+Redirect to job output. The path must be absolute, where the root is the job
+working directory, eg. `/hello.txt`.
 
 ### DELETE `/jobs/:name`
 Clean up a terminated job.
