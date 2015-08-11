@@ -20,7 +20,6 @@ library
     build-depends:
         base >=4.7.0.1 && <4.9,
         text >=1.1.0.0 && <1.3,
-        unordered-containers >=0.2.4.0 && <0.3,
         bytestring >=0.10.4.0 && <0.11,
         aeson >=0.8 && <0.10,
         servant >=0.4.1 && <0.5,
@@ -39,13 +38,13 @@ library
         network-uri >=2.6
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
-    other-extensions: CPP DataKinds EmptyDataDecls ExtendedDefaultRules
+    other-extensions: DataKinds EmptyDataDecls ExtendedDefaultRules
                       FlexibleInstances KindSignatures MultiParamTypeClasses
                       OverloadedStrings TemplateHaskell TypeOperators
     hs-source-dirs: src
     other-modules:
         Eclogues.JobSpec.Aeson
-    ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
+    ghc-options: -Wall -Werror
 
 executable eclogues-api
     main-is: Main.hs
@@ -65,7 +64,6 @@ executable eclogues-api
         servant-docs >=0.4.1 && <0.5,
         servant-pandoc >=0.4.0 && <0.5,
         pandoc >=1.13.2.1 && <1.16,
-        wai >=3.0.2.3 && <3.1,
         http-types >=0.8.6 && <0.9,
         transformers >=0.4.0.0 && <0.5,
         warp >=3.0.13.1 && <3.1,
@@ -120,7 +118,6 @@ executable eclogues-subexecutor
         base >=4.7.0.1 && <4.9,
         text >=1.1.0.0 && <1.3,
         aeson >=0.8 && <0.10,
-        bytestring >=0.10.4.0 && <0.11,
         process >=1.2.0.0 && <1.3,
         directory >=1.2.1.0 && <1.3,
         filepath >=1.3.0.2 && <1.5,
@@ -146,7 +143,6 @@ executable eclogues-client
         servant >=0.4.1 && <0.5,
         servant-client >=0.4.1 && <0.5,
         either >=4.3.4.1 && <4.5,
-        http-types >=0.8.6 && <0.9,
         optparse-applicative >=0.11.0.2 && <0.12,
         xdg-basedir >=0.2.2 && <0.3,
         monad-loops >=0.4.2.1 && <0.5,
@@ -156,8 +152,7 @@ executable eclogues-client
         eclogues ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
-    other-extensions: CPP DataKinds FlexibleInstances TemplateHaskell
-                      TypeFamilies TypeOperators
+    other-extensions: TemplateHaskell
     hs-source-dirs: app/client
     other-modules:
         Eclogues.Client
