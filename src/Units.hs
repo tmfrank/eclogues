@@ -5,13 +5,13 @@
 
 module Units where
 
-import Control.Monad (mzero)
 import Data.Aeson (ToJSON (..), FromJSON (..))
 import qualified Data.Aeson as Aeson
 import Data.Proxy (Proxy (Proxy))
 import Data.Ratio ((%))
 import qualified Data.Text as Text
 import Data.Void (Void)
+import Text.Read (readEither)
 
 data Byte
 data Mega u
@@ -84,8 +84,8 @@ instance (Show a, Unit u) => ToJSON (Value a u) where
     toJSON = Aeson.String . Text.pack . show . val
 
 instance (Read a, Unit u) => FromJSON (Value a u) where
-    parseJSON (Aeson.String t) = pure . Value . read $ Text.unpack t
-    parseJSON _                = mzero
+    parseJSON (Aeson.String t) = either (fail . ("invalid Value: " ++)) (pure . Value) . readEither $ Text.unpack t
+    parseJSON _                = fail "Value must be string"
 
 byte :: a -> Value a Byte
 byte = Value
