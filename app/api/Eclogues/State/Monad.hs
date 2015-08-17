@@ -114,9 +114,9 @@ getDependents :: (TS m) => Name -> m [Name]
 getDependents name = use $ revDeps . at name . non []
 
 loadJobs :: forall m. (TS m) => [JobStatus] -> m ()
-loadJobs js = mapM_ go js where
+loadJobs = mapM_ go where
     go :: JobStatus -> m ()
     go j = do
         let name = j ^. Job.name
         jobs . at name ?= j
-        mapM_ (flip addRevDep name) $ j ^. Job.dependsOn
+        mapM_ (`addRevDep` name) $ j ^. Job.dependsOn

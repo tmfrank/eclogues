@@ -86,6 +86,11 @@ producedError jError (Left e) = case e of
     e                  -> Left (UnexpectedError e)
 producedError jError (Right e) = Left (ExpectedError jError)
 
+createJobWithDep depState = do
+    createJob' $ isolatedJob "dep"
+    ES.setJobState "dep" depState
+    createJob' $ dependentJob "job" ["dep"]
+
 testCreateJob :: Spec
 testCreateJob = do
     describe "createJob" $
@@ -95,18 +100,12 @@ testCreateJob = do
 
     context "when provided with dependency in Finished state" $
         it "should be placed in the Queued state" $
-            let result = do
-                    createJob' $ isolatedJob "dep"
-                    lift $ ES.setJobState "dep" Finished
-                    createJob' $ dependentJob "job" ["dep"]
+            let result = createJobWithDep Finished
             in scheduler' result `shouldHave` jobInState "job" (Queued LocalQueue)
 
     context "when provided with dependency in an active state" $
         it "should be waiting on one job" $
-            let result = do
-                    createJob' $ isolatedJob "dep"
-                    lift $ ES.setJobState "dep" Running
-                    createJob' $ dependentJob "job" ["dep"]
+            let result = createJobWithDep Running
             in scheduler' result `shouldHave` jobInState "job" (Waiting 1)
 
     context "when provided with a dependency" $
@@ -177,9 +176,7 @@ testDeleteJob = do
     context "when provided the name of a job that has outstanding dependants" $
         it "should return OutstandingDependants error" $
             let result = do
-                    createJob' $ isolatedJob "dep"
-                    lift $ ES.setJobState "dep" Finished
-                    createJob' $ dependentJob "job" ["dep"]
+                    createJobWithDep Finished
                     deleteJob "dep"
             in scheduler' result `shouldHave` producedError (OutstandingDependants ["job"])
 
@@ -267,10 +264,7 @@ testUpdateJobs = let
 
         context "when job does not transition into a termination state" $
             it "should not change the state of any dependent jobs" $
-                let result = do
-                        createJob' $ isolatedJob "dep"
-                        lift $ ES.setJobState "dep" Running
-                        createJob' $ dependentJob "job" ["dep"]
+                let result = createJobWithDep Running
                     statuses = [("dep", Running)]
                 in do
                     updated result statuses `shouldHave` jobInState "dep" Running
@@ -278,10 +272,7 @@ testUpdateJobs = let
 
         context "when job transitions into non-Finished termination state" $
             it "should change the state of dependent jobs to Failed DependencyFailed" $
-                let result = do
-                        createJob' $ isolatedJob "dep"
-                        lift $ ES.setJobState "dep" Running
-                        createJob' $ dependentJob "job" ["dep"]
+                let result = createJobWithDep Running
                     statuses = [("dep", Failed UserKilled)]
                 in do
                     updated result statuses `shouldHave` jobInState "dep" (Failed UserKilled)
@@ -289,10 +280,7 @@ testUpdateJobs = let
 
         context "when job transitions into Finished state" $
             it "should change the state of exclusively dependent job to Queued LocalQueue" $
-                let result = do
-                        createJob' $ isolatedJob "dep"
-                        lift $ ES.setJobState "dep" Running
-                        createJob' $ dependentJob "job" ["dep"]
+                let result = createJobWithDep Running
                     statuses = [("dep", Finished)]
                 in do
                     updated result statuses `shouldHave` jobInState "dep" Finished

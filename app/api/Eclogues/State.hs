@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
 {-|
@@ -34,7 +33,7 @@ import Eclogues.JobSpec ( Name, FailureReason (..), RunErrorReason (..)
 import qualified Eclogues.JobSpec as Job
 
 import Control.Lens ((^.), view)
-import Control.Monad (when, void)
+import Control.Monad (when, void, unless)
 import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.Trans.Writer.Lazy (WriterT, tell, execWriterT)
 import Data.HashMap.Lazy (elems, traverseWithKey)
@@ -88,7 +87,7 @@ deleteJob :: (TS m, MonadError JobError m) => Name -> m ()
 deleteJob name = existingJob name >>= \js -> do
     when (isActiveState $ js ^. Job.jobState) . throwError $ JobMustBeTerminated True
     dependents <- ES.getDependents name
-    when (not $ null dependents) . throwError $ OutstandingDependants dependents
+    unless (null dependents) . throwError $ OutstandingDependants dependents
     ES.deleteJob name
     ES.schedule $ CleanupJob name (js ^. Job.uuid)
 
@@ -132,7 +131,7 @@ updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeSt
             let name = pst ^. Job.name
             rdepNames <- ES.getDependents name
             -- Remove this job from the rev deps of its dependencies
-            mapM_ (flip ES.removeRevDep name) $ pst ^. Job.dependsOn
+            mapM_ (`ES.removeRevDep` name) $ pst ^. Job.dependsOn
             case newState of
                 Finished -> mapM_ triggerDep rdepNames
                 _        -> mapM_ (flip ES.setJobState . Failed $ DependencyFailed name) rdepNames

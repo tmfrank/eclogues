@@ -67,4 +67,4 @@ followAuroraMaster zk node = go where
     getURI var = readTVar var >>= \case
         Nothing  -> return Nothing
         Just bsM -> return . join . rightMay $ toURI <$> conv bsM
-    toURI (host', port') = parseURI $ "http://" ++ host' ++ ':':(show port') ++ "/api"
+    toURI (host', port') = parseURI $ "http://" ++ host' ++ ':' : show port' ++ "/api"

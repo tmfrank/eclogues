@@ -78,7 +78,7 @@ readZkUri = do
 
 go :: Opts -> IO ()
 go opts = do
-    zkUri <- maybe (readZkUri) pure $ optZkUri opts
+    zkUri <- maybe readZkUri pure $ optZkUri opts
     setDebugLevel ZLogWarn
     clientM <- withZookeeper zkUri $ (orShowError =<<) . runExceptT . ecloguesClient
     when (isNothing clientM) $ error "No Eclogues server advertised"
@@ -101,7 +101,7 @@ go opts = do
         printStats as = mapM_ (putStrLn . intercalate "\t" . biList . second show) . HashMap.toList . getStats (statStart as)
         statStart :: Bool -> HashMap String Integer
         statStart False = HashMap.empty
-        statStart True  = foldl' (flip (flip HashMap.insert 0)) HashMap.empty majorJobStates
+        statStart True  = foldl' (flip (`HashMap.insert` 0)) HashMap.empty majorJobStates
         getStats :: HashMap String Integer -> [JobStatus] -> HashMap String Integer
         getStats = foldl' (\m j -> HashMap.insertWith (+) (majorState $ _jobState j) 1 m)
 

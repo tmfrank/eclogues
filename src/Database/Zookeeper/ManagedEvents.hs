@@ -33,7 +33,7 @@ data ManagedZK = ManagedZK { mzk      :: ZK.Zookeeper
                            , zkEvents :: Broadcast ZKEvent }
 
 withZookeeper :: ZKURI -> (ManagedZK -> IO a) -> IO a
-withZookeeper uri act = withZookeeper' uri 1000 Nothing act
+withZookeeper uri = withZookeeper' uri 1000 Nothing
 
 withZookeeper' :: ZKURI -> ZK.Timeout -> Maybe ZK.ClientID -> (ManagedZK -> IO a) -> IO a
 withZookeeper' uri timeout clid act = go where

@@ -49,7 +49,7 @@ $(makeClassy ''Resources)
 
 data JobSpec = JobSpec { _name          :: Name
                        , _command       :: Command
-                       , _job_resources :: Resources
+                       , __jobResources :: Resources
                        , _outputFiles   :: [FilePath]
                        , _captureStdout :: Bool
                        , _dependsOn     :: [Name] }
@@ -57,7 +57,7 @@ data JobSpec = JobSpec { _name          :: Name
 
 $(deriveJSON defaultOptions{fieldLabelModifier = specJName} ''JobSpec)
 $(makeClassy ''JobSpec)
-instance HasResources JobSpec where resources = job_resources
+instance HasResources JobSpec where resources = _jobResources
 
 -- | The result of a job, as communicated by the subexecutor. Other failure
 -- modes are communicated by the scheduler.
@@ -87,14 +87,14 @@ data JobState = Queued QueueStage
               | RunError RunErrorReason
                 deriving (Show, Eq)
 
-data JobStatus = JobStatus { _job_spec :: JobSpec
+data JobStatus = JobStatus { __jobSpec :: JobSpec
                            , _jobState :: JobState
                            , _uuid     :: UUID }
                            deriving (Show, Eq)
 
 $(deriveJSON defaultOptions{fieldLabelModifier = statusJName} ''JobStatus)
 $(makeClassy ''JobStatus)
-instance HasJobSpec JobStatus where jobSpec = job_spec
+instance HasJobSpec JobStatus where jobSpec = _jobSpec
 
 -- | Names of JobState constructors. Could probably be replaced by something
 -- from "GHC.Generics".

@@ -77,7 +77,7 @@ instance Monoid (Action ()) where
 -- | Run some action that might persist things inside the given directory.
 -- Logs to stderr.
 withPersistDir :: FilePath -> (Context -> LoggingT IO a) -> IO a
-withPersistDir path f = runStderrLoggingT $ withSqlitePool ("WAL=off " <> (T.pack path) <> "/eclogues.db3") 1 act where
+withPersistDir path f = runStderrLoggingT $ withSqlitePool ("WAL=off " <> T.pack path <> "/eclogues.db3") 1 act where
     act pool = do
         PSql.runSqlPool (PSql.runMigration migrateAll) pool
         f (Context pool)

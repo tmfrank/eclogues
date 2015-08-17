@@ -21,13 +21,13 @@ testThrift = do
 
     describe "ATaskExecConf" $
         it "is embedded in a JobConfiguration" $ do
-            let Just ec = taskConfig_executorConfig . jobConfiguration_taskConfig $ auroraJobConfig "default" $ task
+            let Just ec = taskConfig_executorConfig . jobConfiguration_taskConfig $ auroraJobConfig "default" task
             let text = executorConfig_data ec
             let encoded = encodeUtf8 text
             (decode encoded :: Maybe ATaskExecConf) `shouldSatisfy` isJust
 
 testUnits :: Spec
-testUnits = do
+testUnits =
     describe "Units" $ do
         it "keeps val" $
             val (mega byte 10) `shouldBe` (10 :: Double)

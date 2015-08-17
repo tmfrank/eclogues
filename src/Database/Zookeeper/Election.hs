@@ -143,7 +143,7 @@ whenLeader :: forall a. ManagedZK
            -> IO a       -- ^ Action to run if elected
            -> ExceptT LeadershipError IO a
 whenLeader mzk@(ManagedZK zk br) node content act = whenConnected where
-    whenConnected = (lift $ getState zk) >>= \case
+    whenConnected = lift (getState zk) >>= \case
         ConnectedState -> run
         _              -> lift (listen br) *> whenConnected
     run :: ExceptT LeadershipError IO a

@@ -45,7 +45,7 @@ import Control.Monad.Trans.Either (EitherT (EitherT))
 import Control.Monad.Trans.Except (ExceptT, runExceptT, withExceptT, mapExceptT, throwE)
 import Data.Aeson (encode)
 import qualified Data.ByteString.Char8 as BSSC
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, fromMaybe)
 import Data.Proxy (Proxy (Proxy))
 import Network.HTTP.Types (methodGet, methodPost, methodDelete, methodPut)
 import qualified Network.Wai.Handler.Warp as Warp
@@ -85,7 +85,7 @@ mainServer conf stateV = handleExcept server' where
         getJobH name *>
         throwE (SchedulerRedirect $ Config.outputURI conf name path)
       where
-        path = maybe $(mkAbsFile "/stdout") id pathM
+        path = fromMaybe $(mkAbsFile "/stdout") pathM
 
     killJobH jid (Failed UserKilled) = runScheduler' $ killJob jid
     killJobH jid _                   = throwE (InvalidStateTransition "Can only set state to Failed UserKilled") <* getJobH jid

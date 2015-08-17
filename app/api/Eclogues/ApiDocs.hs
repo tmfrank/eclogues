@@ -50,7 +50,7 @@ instance ToSample JobState JobState where
                   ,("A task killed by a user", Failed UserKilled)]
 
 res :: Resources
-res = (Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5))
+res = Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)
 
 spec :: JobSpec
 spec = JobSpec "hello" "echo hello world > hello.txt" res ["hello.txt"] False []
@@ -67,7 +67,7 @@ failedSpec = JobStatus deadSpec (Failed $ NonZeroExitCode 1) nil where
     deadSpec = JobSpec "i-fail" "exit 1" res [] False []
 
 instance ToSample JobStatus JobStatus where
-    toSample _ = Just $ failedSpec
+    toSample _ = Just failedSpec
 
 instance ToSample [JobStatus] [JobStatus] where
     toSample _ = Just [ JobStatus (spec & Job.command .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) nil

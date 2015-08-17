@@ -77,7 +77,7 @@ runJob path name = do
     runRes <- runCommand (spec ^. Job.time) (spec ^. Job.command)
 
     -- TODO: Trigger Failed state when output doesn't exist
-    mapM_ (flip copyFileOrDir (specDir </> "output/")) $ spec ^. Job.outputFiles
+    mapM_ (`copyFileOrDir` (specDir </> "output/")) $ spec ^. Job.outputFiles
     writeFile (specDir </> "runresult") (show runRes)
     when (spec ^. Job.captureStdout) $ glob ".logs/*/0/stdout" >>= \case
         [fn] -> copyFile fn $ specDir </> "output/stdout"

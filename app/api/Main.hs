@@ -128,7 +128,7 @@ advertisedData (ApiConfig _ _ host port _ _) = BSL.toStrict $ encode (host, port
 
 -- | Append the job name and file path to the path of the job output server URI.
 mkOutputURI :: URI -> Job.Name -> AbsFile -> URI
-mkOutputURI pf name path = pf { uriPath = (uriPath pf) ++ TL.unpack name ++ escapedPath }
+mkOutputURI pf name path = pf { uriPath = uriPath pf ++ TL.unpack name ++ escapedPath }
   where
     escapedPath = escapeURIString isUnescapedInURI $ toFilePath path
 
