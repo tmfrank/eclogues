@@ -16,7 +16,7 @@ type RevDeps = HashMap Name [Name]
 
 data AppState = AppState { _jobs    :: Jobs
                          , _revDeps :: RevDeps }
-                deriving (Generic)
+                deriving (Generic, Show, Eq)
 
 $(makeClassy ''AppState)
 
