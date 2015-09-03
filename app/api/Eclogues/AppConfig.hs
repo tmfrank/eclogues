@@ -39,7 +39,9 @@ data AppConfig = AppConfig {
                            -- | Job file output URI.
                            , outputURI       :: Job.Name -> AbsFile -> URI
                            -- | User the subexecutor is run as.
-                           , subexecutorUser :: Text }
+                           , subexecutorUser :: Text
+                           -- | URL for Graphite server monitoring cluster.
+                           , graphiteUrl :: String }
 
 -- | Wait until the scheduler is available.
 requireSchedConf :: AppConfig -> AdvSTM ScheduleConf

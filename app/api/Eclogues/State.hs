@@ -16,24 +16,26 @@ Job(s) state views and transformation. Actions are actually scheduled in 'TS'.
 
 module Eclogues.State (
                       -- * View
-                        getJob, getJobs, activeJobs
+                        getJob, getJobs, activeJobs, pendingJobs
                       -- * Mutate
-                      , createJob, updateJobs, killJob, deleteJob) where
+                      , createJob, updateJobStates, updateJobSatis, killJob, deleteJob) where
 
 import Eclogues.API (JobError (..))
+import Eclogues.Monitoring.Cluster (Cluster, satisfiability)
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.State.Monad (TS)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState, Jobs, jobs)
 import Eclogues.Job (
-      FailureReason (..), RunErrorReason (..), QueueStage (LocalQueue), Stage (..)
-    , isActiveStage, isTerminationStage, isExpectedTransition, isOnScheduler)
+      FailureReason (..), RunErrorReason (..), QueueStage (LocalQueue), Stage (..), Satisfiability(..)
+    , isActiveStage, isTerminationStage, isExpectedTransition, isOnScheduler, isPendingStage)
 import qualified Eclogues.Job as Job
 
 import Control.Lens ((^.), view)
 import Control.Monad (when, void, unless)
 import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.Trans.Writer.Lazy (WriterT, tell, execWriterT)
+import Data.Bool (bool)
 import Data.HashMap.Lazy (elems, traverseWithKey)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe (isJust, catMaybes)
@@ -42,17 +44,18 @@ import Data.UUID (UUID)
 
 -- | Try to schedule a new job. UUID must be unique; best to randomly generate
 -- it.
-createJob :: forall m. (TS m, MonadError JobError m) => UUID -> Job.Spec -> m ()
-createJob uuid spec = do
+createJob :: forall m. (TS m, MonadError JobError m) => UUID -> Maybe Cluster -> Job.Spec -> m ()
+createJob uuid cluster spec = do
     let name = spec ^. Job.name
         deps = spec ^. Job.dependsOn
+        satis = maybe SatisfiabilityUnknown (`satisfiability` spec) cluster
     existing <- ES.getJob name
     when (isJust existing) $ throwError JobNameUsed
     Sum activeDepCount <- execWriterT $ mapM_ (checkDep name) deps
     let jstage = if activeDepCount == 0
             then Queued LocalQueue
             else Waiting activeDepCount
-    ES.insertJob $ Job.Status spec jstage uuid
+    ES.insertJob $ Job.Status spec jstage satis uuid
     if jstage == Queued LocalQueue
         then ES.schedule $ QueueJob spec uuid
         else pure ()
@@ -94,15 +97,22 @@ deleteJob name = existingJob name >>= \js -> do
 -- Can't use 'isOnScheduler' because 'LocalQueue' jobs may have been scheduled.
 -- | All jobs that should be queried on the scheduler.
 activeJobs :: AppState -> Jobs
-activeJobs = HashMap.filter (isNonWaitingActiveStage . view Job.stage) . view jobs where
+activeJobs = filterJobsByStage isNonWaitingActiveStage where
     isNonWaitingActiveStage :: Job.Stage -> Bool
     isNonWaitingActiveStage (Waiting _) = False
     isNonWaitingActiveStage s           = isActiveStage s
 
+-- | All jobs that are waiting to run.
+pendingJobs :: AppState -> Jobs
+pendingJobs = filterJobsByStage isPendingStage
+
+filterJobsByStage :: (Job.Stage -> Bool) -> AppState -> Jobs
+filterJobsByStage f = HashMap.filter (f . view Job.stage) . view jobs
+
 -- | Update the status of a set of jobs with new data from the scheduler,
 -- scheduling any new actions required (eg. dependencies).
-updateJobs :: forall m. (TS m) => Jobs -> [(Job.Name, Job.Stage)] -> m ()
-updateJobs activeStatuses gotStages = void $ traverseWithKey transition activeStatuses where
+updateJobStates :: forall m. (TS m) => Jobs -> [(Job.Name, Job.Stage)] -> m ()
+updateJobStates activeStatuses gotStages = void $ traverseWithKey transition activeStatuses where
     transition :: Job.Name -> Job.Status -> m ()
     transition name pst =
         let oldStage = pst ^. Job.stage
@@ -138,10 +148,10 @@ updateJobs activeStatuses gotStages = void $ traverseWithKey transition activeSt
         | otherwise                  = pure ()
     triggerDep :: Job.Name -> m ()
     triggerDep rdepName = ES.getJob rdepName >>= \case
-        Just (Job.Status spec (Waiting 1) uuid) -> do
+        Just (Job.Status spec (Waiting 1) _ uuid) -> do
             ES.schedule $ QueueJob spec uuid
             ES.setJobStage rdepName $ Queued LocalQueue
-        Just (Job.Status _    (Waiting n) _   ) ->
+        Just (Job.Status _    (Waiting n) _ _) ->
             ES.setJobStage rdepName $ Waiting $ n - 1
         _         -> pure ()
     cascadeDepFailure :: Job.Name -> Job.Status -> m ()
@@ -152,6 +162,14 @@ updateJobs activeStatuses gotStages = void $ traverseWithKey transition activeSt
         ES.setJobStage name (Failed $ DependencyFailed depName)
         rDepStatuses <- catMaybes <$> mapM ES.getJob rDepNames
         mapM_ (cascadeDepFailure name) rDepStatuses
+
+-- | Update the satisfiability of a set of jobs.
+updateJobSatis :: forall m. (TS m) => Jobs -> [(Job.Name, Satisfiability)] -> m ()
+updateJobSatis activeStatuses gotSatis = void $ traverseWithKey satis activeStatuses
+    where
+        satis name jobStatus = case lookup name gotSatis of
+            Just x -> bool (ES.setJobSatis name x) (pure ()) $ jobStatus ^. Job.satis == x
+            Nothing -> pure ()
 
 -- | All jobs.
 getJobs :: AppState -> [Job.Status]

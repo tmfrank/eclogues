@@ -45,6 +45,13 @@ instance P.PersistField Job.Stage where
 instance PSql.PersistFieldSql Job.Stage where
     sqlType _ = PSql.SqlBlob
 
+instance P.PersistField Job.Satisfiability where
+    toPersistValue = jsonPersistValue
+    fromPersistValue = jsonPersistParse "Job.Satisfiability"
+
+instance PSql.PersistFieldSql Job.Satisfiability where
+    sqlType _ = PSql.SqlBlob
+
 instance P.PersistField Job.Spec where
     toPersistValue = jsonPersistValue
     fromPersistValue = jsonPersistParse "Spec"

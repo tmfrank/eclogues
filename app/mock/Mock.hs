@@ -8,7 +8,7 @@ import Eclogues.AppConfig (AppConfig (AppConfig))
 import qualified Eclogues.Job as Job
 import Eclogues.Persist (withPersistDir)
 import Eclogues.Scheduling.Command (schedulerJobUI)
-import Eclogues.State (updateJobs)
+import Eclogues.State (updateJobStates)
 import Eclogues.State.Monad (runState, appState)
 import Eclogues.State.Types (AppState, jobs)
 import Eclogues.Threads.Server (serve)
@@ -36,15 +36,16 @@ main = run (pure ()) "127.0.0.1" 8000
 run :: IO () -> String -> Word16 -> IO ()
 run bla host port' = withSystemTempDirectory "em" $ \d -> withPersistDir d $ \pctx -> lift $ do
     schedV <- newTChanIO
-    let conf   = AppConfig jdir getURI schedV pctx jobURI outURI user
+    let conf   = AppConfig jdir getURI schedV pctx jobURI outURI user ""
         jdir   = $(mkAbsDir "/mock/jobs")
         user   = "test"
         getURI = pure . Just . fromJust $ parseURI "http://localhost:8081/"
         jobURI = schedulerJobUI $ T.unpack user
         outURI = mkOutputURI . fromJust $ parseURI "http://localhost:8001/"
         port   = fromIntegral port'
-    stateV <- newTVarIO def
-    let web = serve bla host port conf stateV
+    stateV   <- newTVarIO def
+    clusterV <- newTVarIO def
+    let web = serve bla host port conf stateV clusterV
         updater = forever $ do
             update stateV
             threadDelay . floor $ second (1 :: Double) `asVal` micro second
@@ -57,7 +58,7 @@ update :: TVar AppState -> IO ()
 update stateV = atomically $ do
     state <- readTVar stateV
     let jerbs   = state ^. jobs
-        (_, ts) = runState state . updateJobs jerbs $ changes jerbs
+        (_, ts) = runState state . updateJobStates jerbs $ changes jerbs
     writeTVar stateV $ ts ^. appState
   where
     changes _ = []

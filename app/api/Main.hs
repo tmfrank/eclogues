@@ -6,11 +6,9 @@
 Module      : $Header$
 Copyright   : (c) 2015 Swinburne Software Innovation Lab
 License     : BSD3
-
 Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
 Stability   : unstable
 Portability : portable
-
 API executable entry point.
 -}
 
@@ -27,7 +25,7 @@ import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
 import Eclogues.Scheduling.Command (runScheduleCommand, schedulerJobUI)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState)
-import Eclogues.Threads.Update (loadSchedulerState)
+import Eclogues.Threads.Update (loadSchedulerState, monitorCluster)
 import Eclogues.Threads.Server (serve)
 import Eclogues.Util (AbsDir (getDir), readJSON, orError)
 import Units
@@ -65,7 +63,8 @@ data ApiConfig = ApiConfig { jobsDir :: AbsDir
                            , bindAddress :: String
                            , bindPort :: Word16
                            , subexecutorUser :: T.Text
-                           , outputUrlPrefix :: URI }
+                           , outputUrlPrefix :: URI
+                           , aGraphiteUrl :: String }
 
 $(deriveFromJSON defaultOptions ''ApiConfig)
 
@@ -91,28 +90,33 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
     createDirectoryIfMissing False jdir
     Persist.withPersistDir jdir $ \pctx' -> do
-        let conf   = AppConfig jdir getURI schedV pctx' jobURI outURI user
+        let conf   = AppConfig jdir getURI schedV pctx' jobURI outURI user grphUrl
             user   = subexecutorUser apiConf
             jobURI = schedulerJobUI $ T.unpack user
             outURI = mkOutputURI $ outputUrlPrefix apiConf
             host   = bindAddress apiConf
             port   = fromIntegral $ bindPort apiConf
+            grphUrl = aGraphiteUrl apiConf
         lift $ withPersist host port conf webLock followAuroraFailure
 
 withPersist :: String -> Int -> AppConfig -> Lock -> Async ZKError -> IO ZKError
 withPersist host port conf webLock followAuroraFailure = do
     st <- loadFromDB conf
     stateV <- newTVarIO st
-    let web = Lock.with webLock $ serve (pure ()) host port conf stateV
+    clusterV <- newTVarIO Nothing
+    let web = Lock.with webLock $ serve (pure ()) host port conf stateV clusterV
         updater = forever $ do
             loadSchedulerState conf stateV
             threadDelay . floor $ second (1 :: Double) `asVal` micro second
         -- TODO: catch run error and reschedule
+        monitor = forever $ do
+            monitorCluster conf stateV clusterV
+            threadDelay . floor $ second (30 :: Double) `asVal` micro second
         enacter = forever . STM.atomically $ runSingleCommand conf
 
     hPutStrLn stderr $ "Starting server on " ++ host ++ ':':show port
-    withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA ->
-        snd <$> waitAny [followAuroraFailure, const undefined <$> webA, updaterA, enacterA]
+    withAsync web $ \webA -> withAsync updater $ \webB -> withAsync monitor $ \updaterA -> withAsync enacter $ \enacterA ->
+        snd <$> waitAny [followAuroraFailure, const undefined <$> webA, const undefined <$> webB, updaterA, enacterA]
 
 -- | Contest Zookeeper election with the provided node data, and perform some
 -- action while elected. If leadership is lost, wait until re-elected and
@@ -125,7 +129,7 @@ whileLeader zk advertisedHost act =
 
 -- | Create encoded (host, port) to advertise via Zookeeper.
 advertisedData :: ApiConfig -> BSS.ByteString
-advertisedData (ApiConfig _ _ host port _ _) = BSL.toStrict $ encode (host, port)
+advertisedData (ApiConfig _ _ host port _ _ _) = BSL.toStrict $ encode (host, port)
 
 -- | Append the job name and file path to the path of the job output server URI.
 mkOutputURI :: URI -> Job.Name -> AbsFile -> URI

@@ -33,6 +33,7 @@ module Eclogues.State.Monad (
                             , insertJob
                             , deleteJob
                             , setJobStage
+                            , setJobSatis
                             , addRevDep
                             , removeRevDep
                             , schedule
@@ -97,6 +98,11 @@ setJobStage :: (TS m) => Job.Name -> Job.Stage -> m ()
 setJobStage name st = do
     jobs . ix name %= (Job.stage .~ st)
     persist <>= Just (Persist.updateStage name st)
+
+setJobSatis :: (TS m) => Job.Name -> Job.Satisfiability -> m ()
+setJobSatis name st = do
+    jobs . ix name %= (Job.satis .~ st)
+    persist <>= Just (Persist.updateSatis name st)
 
 -- | Add a reverse dependency; second name depends on first.
 addRevDep :: (TS m) => Job.Name -> Job.Name -> m ()

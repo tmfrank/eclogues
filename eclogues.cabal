@@ -5,7 +5,7 @@ build-type: Simple
 license: BSD3
 license-file: LICENSE
 copyright: (c) 2015 Swinburne Software Innovation Lab
-maintainer: Rhys Adams <rhysadams@swin.edu.au>
+maintainer: Rhys Adams <rhysadams@swin.edu.au>, Shannon Pace <space@swin.edu.au>
 synopsis: API and controller for Apache Aurora.
 
 library
@@ -89,11 +89,16 @@ executable eclogues-api
         mtl >=2.2,
         path >=0.5,
         path-io,
+        wreq >=0.4.0.0,
+        http-client >=0.4.11.2,
+        exceptions >=0.6.1,
+        monad-loops >=0.4.2.1 && <0.5,
+        safe >=0.3.9,
         eclogues ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
     other-extensions: ConstraintKinds DataKinds DeriveDataTypeable DeriveGeneric
-                      FlexibleContexts FlexibleInstances GADTs
+                      FlexibleContexts FlexibleInstances FunctionalDependencies GADTs
                       GeneralizedNewtypeDeriving MultiParamTypeClasses
                       OverloadedStrings RankNTypes QuasiQuotes TemplateHaskell
                       TupleSections TypeFamilies TypeOperators
@@ -111,7 +116,9 @@ executable eclogues-api
         Eclogues.State.Monad,
         Eclogues.State.Types,
         Eclogues.Threads.Server,
-        Eclogues.Threads.Update
+        Eclogues.Threads.Update,
+        Eclogues.Monitoring.Graphite,
+        Eclogues.Monitoring.Cluster
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
 executable eclogues-subexecutor

@@ -29,7 +29,7 @@ module Eclogues.Persist (
                         -- * View
                         , allIntents, allJobs
                         -- * Mutate
-                        , insert, updateStage, delete, scheduleIntent, deleteIntent )
+                        , insert, updateStage, updateSatis, delete, scheduleIntent, deleteIntent )
                         where
 
 import Eclogues.Persist.Stage1 ()
@@ -55,6 +55,7 @@ Job
     name Job.Name
     spec Job.Spec
     stage Job.Stage
+    satis Job.Satisfiability
     uuid UUID
     UniqueName name
 ScheduleIntent
@@ -89,14 +90,18 @@ atomically :: Context -> Action r -> IO r
 atomically (Context pool) (Action a) = PSql.runSqlPool a pool
 
 insert :: Job.Status -> Action ()
-insert (Job.Status spec st uuid) = Action $ P.insert_ job where
+insert (Job.Status spec st satis uuid) = Action $ P.insert_ job where
     job = Job { jobName = spec ^. Job.name
               , jobSpec = spec
               , jobStage = st
+              , jobSatis = satis
               , jobUuid = uuid }
 
 updateStage :: Job.Name -> Job.Stage -> Action ()
 updateStage name st = Action $ P.updateWhere [JobName ==. name] [JobStage =. st]
+
+updateSatis :: Job.Name -> Job.Satisfiability -> Action ()
+updateSatis name st = Action $ P.updateWhere [JobName ==. name] [JobSatis =. st]
 
 delete :: Job.Name -> Action ()
 delete = Action . P.deleteBy . UniqueName
@@ -115,4 +120,4 @@ allIntents = getAll scheduleIntentCommand
 
 allJobs :: Action [Job.Status]
 allJobs = getAll toStatus where
-    toStatus (Job _ spec st uuid) = Job.Status spec st uuid
+    toStatus (Job _ spec st satis uuid) = Job.Status spec st satis uuid

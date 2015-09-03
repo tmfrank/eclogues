@@ -100,6 +100,15 @@ instance (Read a, Unit u) => FromJSON (Value a u) where
     parseJSON (Aeson.String t) = either (fail . ("invalid Value: " ++)) (pure . Value) . readEither $ Text.unpack t
     parseJSON _                = fail "Value must be string"
 
+instance Ord (Value Double Core) where
+    (Value x) `compare` (Value y) = x `compare` y
+
+instance Ord (Value Double MiB) where
+    (Value x) `compare` (Value y) = x `compare` y
+
+instance Ord (Value Double MB) where
+    (Value x) `compare` (Value y) = x `compare` y
+
 byte :: a -> Value a Byte
 byte = Value
 

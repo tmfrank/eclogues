@@ -22,7 +22,7 @@ Portability : portable
 module Eclogues.ApiDocs (VAPIWithDocs, apiDocs, apiDocsMd, apiDocsHtml) where
 
 import Eclogues.API (VAPI, Health (Health), AbsFile)
-import Eclogues.Job (Stage (Failed, Running), FailureReason (..))
+import Eclogues.Job (Stage (Failed, Running), FailureReason (..), Satisfiability (Satisfiable))
 import qualified Eclogues.Job as Job
 import Units
 
@@ -71,7 +71,7 @@ instance ToSample Job.Spec Job.Spec where
                   ,("A job depending on previous output", depSpec)]
 
 failedSpec :: Job.Status
-failedSpec = Job.Status deadSpec (Failed $ NonZeroExitCode 1) nil where
+failedSpec = Job.Status deadSpec (Failed $ NonZeroExitCode 1) Satisfiable nil where
     deadSpec = Job.Spec n "exit 1" res [] False []
     n = fromJust $ Job.mkName "i-fail"
 
@@ -79,8 +79,8 @@ instance ToSample Job.Status Job.Status where
     toSample _ = Just failedSpec
 
 instance ToSample [Job.Status] [Job.Status] where
-    toSample _ = Just [ Job.Status (spec & Job.command .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) nil
-                      , Job.Status depSpec (Failed $ DependencyFailed helloName) nil]
+    toSample _ = Just [ Job.Status (spec & Job.command .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) Satisfiable nil
+                      , Job.Status depSpec (Failed $ DependencyFailed helloName) Satisfiable nil]
 
 instance ToSample () () where
     toSample _ = Nothing

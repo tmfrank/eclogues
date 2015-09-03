@@ -7,7 +7,7 @@ import Eclogues.API (JobError(..))
 import Eclogues.Job (
     Stage (..), QueueStage (..), RunErrorReason (..), FailureReason (..))
 import qualified Eclogues.Job as Job
-import Eclogues.State (createJob, killJob, deleteJob, updateJobs)
+import Eclogues.State (createJob, killJob, deleteJob, updateJobStates)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types
 import Units
@@ -54,7 +54,7 @@ shouldHave :: EitherError AppState -> (EitherError AppState -> EitherError Bool)
 shouldHave result f = result `shouldSatisfy` either (const False) id . f
 
 createJob' :: Job.Spec -> Scheduler
-createJob' = createJob nil
+createJob' = createJob nil Nothing
 
 forceName :: Text -> Job.Name
 forceName name = fromMaybe (error $ "invalid test name " ++ show name) $ Job.mkName name
@@ -198,9 +198,9 @@ testDeleteJob = do
 testUpdateJobs :: Spec
 testUpdateJobs = let
         updated :: Scheduler -> [(Job.Name, Job.Stage)] -> EitherError AppState
-        updated m statuses = scheduler' m >>= \s -> scheduler s $ lift (updateJobs (s ^. jobs) statuses)
+        updated m statuses = scheduler' m >>= \s -> scheduler s $ lift (updateJobStates (s ^. jobs) statuses)
     in do
-        describe "updateJobs" $
+        describe "updateJobStates" $
             it "should do nothing when job status hasn't changed" $
                 let result = do
                         createJob' $ isolatedJob job
@@ -327,7 +327,7 @@ testUpdateJobs = let
                         createJob' $ dependentJob job [dep]
                     modify state = do
                         let statuses = [(dep, Failed UserKilled)]
-                        updateJobs (state ^. jobs) statuses
+                        updateJobStates (state ^. jobs) statuses
                         ES.deleteJob dep
                         ES.deleteJob job
                     result = case scheduler' start of
