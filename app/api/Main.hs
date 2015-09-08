@@ -96,20 +96,22 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
             user   = subexecutorUser apiConf
             jobURI = schedulerJobUI $ TS.unpack user
             outURI = mkOutputURI $ outputUrlPrefix apiConf
-        lift $ withPersist conf webLock followAuroraFailure
+            host   = bindAddress apiConf
+            port   = fromIntegral $ bindPort apiConf
+        lift $ withPersist host port conf webLock followAuroraFailure
 
-withPersist :: AppConfig -> Lock -> Async ZKError -> IO ZKError
-withPersist conf webLock followAuroraFailure = do
+withPersist :: String -> Int -> AppConfig -> Lock -> Async ZKError -> IO ZKError
+withPersist host port conf webLock followAuroraFailure = do
     st <- loadFromDB conf
     stateV <- newTVarIO st
-    let web = Lock.with webLock $ serve 8000 conf stateV
+    let web = Lock.with webLock $ serve host port conf stateV
         updater = forever $ do
             loadSchedulerState conf stateV
             threadDelay . floor $ second (1 :: Double) `asVal` micro second
         -- TODO: catch run error and reschedule
         enacter = forever . STM.atomically $ runSingleCommand conf
 
-    hPutStrLn stderr "Starting server on port 8000"
+    hPutStrLn stderr $ "Starting server on " ++ host ++ ':':show port
     withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA ->
         snd <$> waitAny [followAuroraFailure, const undefined <$> webA, updaterA, enacterA]
 

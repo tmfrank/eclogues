@@ -47,6 +47,7 @@ import Data.Aeson (encode)
 import qualified Data.ByteString.Char8 as BSSC
 import Data.Maybe (isJust, fromMaybe)
 import Data.Proxy (Proxy (Proxy))
+import Data.String (fromString)
 import Network.HTTP.Types (methodGet, methodPost, methodDelete, methodPut)
 import qualified Network.Wai.Handler.Warp as Warp
 import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), cors)
@@ -58,11 +59,16 @@ import qualified Servant.Server as Server
 import System.Random (randomIO)
 
 -- | Start serving.
-serve :: Int -> AppConfig -> TVar AppState -> IO ()
-serve port conf = Warp.run port . myCors . Server.serve (Proxy :: (Proxy VAPIWithDocs)) . server conf
+serve :: String        -- ^ Host interface to bind to
+      -> Int           -- ^ Port to listen on
+      -> AppConfig     -- ^ App config
+      -> TVar AppState -- ^ Mutable app state
+      -> IO ()
+serve host port conf = Warp.runSettings settings . myCors . Server.serve (Proxy :: (Proxy VAPIWithDocs)) . server conf
   where
     myCors = cors . const $ Just corsPolicy
     server c = otherwiseShowDocs . mainServer c
+    settings = Warp.setHost (fromString host) $ Warp.setPort port Warp.defaultSettings
 
 mainServer :: AppConfig -> TVar AppState -> Server VAPI
 mainServer conf stateV = handleExcept server' where
