@@ -36,7 +36,8 @@ Configuration
     "bindAddress": "0.0.0.0",
     "bindPort": 8000,
     "subexecutorUser": "vagrant",
-    "outputUrlPrefix": "http://localhost:9000/"
+    "outputUrlPrefix": "http://localhost:9000/",
+    "graphiteUrl": "http://localhost:8888/"
 }
 ```
 

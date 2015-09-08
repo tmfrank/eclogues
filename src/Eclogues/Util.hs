@@ -52,6 +52,3 @@ instance FromJSON AbsDir where
       where
         toP = either (fail . ("Absolute dir: " ++) . displayException) (pure . AbsDir)
     parseJSON _                = fail "Absolute dir must be string"
-
-bool :: a -> a -> Bool -> a
-bool a b p = if p then b else a

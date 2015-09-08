@@ -1,5 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{-|
+Module      : $Header$
+Copyright   : (c) 2015 Swinburne Software Innovation Lab
+License     : BSD3
+
+Maintainer  : Shannon Pace <space@swin.edu.au>
+Stability   : unstable
+Portability : portable
+
+Test entry point.
+-}
+
+
 module Main where
 
 import Api_Types
@@ -9,6 +22,7 @@ import Eclogues.Scheduling.AuroraConfig
 import Units
 import MockSpec (testMock)
 import StateSpec
+import MonitorSpec
 
 import Test.Hspec
 
@@ -53,3 +67,4 @@ main = hspec $ do
     testUnits
     testState
     testMock
+    testMonitor

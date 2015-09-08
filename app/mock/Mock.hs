@@ -8,7 +8,7 @@ import Eclogues.AppConfig (AppConfig (AppConfig))
 import qualified Eclogues.Job as Job
 import Eclogues.Persist (withPersistDir)
 import Eclogues.Scheduling.Command (schedulerJobUI)
-import Eclogues.State (updateJobStates)
+import Eclogues.State (updateJobs)
 import Eclogues.State.Monad (runState, appState)
 import Eclogues.State.Types (AppState, jobs)
 import Eclogues.Threads.Server (serve)
@@ -58,7 +58,7 @@ update :: TVar AppState -> IO ()
 update stateV = atomically $ do
     state <- readTVar stateV
     let jerbs   = state ^. jobs
-        (_, ts) = runState state . updateJobStates jerbs $ changes jerbs
+        (_, ts) = runState state . updateJobs jerbs $ changes jerbs
     writeTVar stateV $ ts ^. appState
   where
     changes _ = []

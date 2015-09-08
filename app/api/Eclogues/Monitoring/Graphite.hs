@@ -1,10 +1,10 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
 
 {-|
 Module      : $Header$
@@ -20,6 +20,11 @@ Functions for obtaining total machine resources via Graphite.
 
 module Eclogues.Monitoring.Graphite where
 
+import qualified Eclogues.Job as Job
+import Eclogues.Monitoring.Cluster
+import Units (Core, MiB, MB, mega, mebi, byte, core, second)
+import qualified Units as U
+
 import Data.Aeson (FromJSON, parseJSON, (.:))
 import qualified Data.Aeson.Types as AT (Value(Object, Array))
 import Network.Wreq (Response, Options, param, defaults, getWith, asJSON, responseBody)
@@ -34,9 +39,6 @@ import Data.List (intercalate)
 import Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import Control.Monad.Trans.Reader (ReaderT(..), withReaderT)
 import Safe (headMay)
-import Units (Core, MiB, MB, mega, mebi, byte, core)
-import qualified Units as U
-import Eclogues.Monitoring.Cluster
 
 -- Structures for parsing Graphite data
 data Result = Result { metricName :: Text }
@@ -129,10 +131,11 @@ monitorDisk :: String -> MaybeT (URLReaderT IO) (U.Value Double MB)
 monitorDisk host = mega byte <$> getSeriesState path
     where path = [host, "mesos-slave", "gauge-slave_disk_total"]
 
-monitorResources :: String -> MaybeT (URLReaderT IO) MResources
-monitorResources host = MResources <$> monitorRam host <*> monitorCores host <*> monitorDisk host
+monitorResources :: String -> MaybeT (URLReaderT IO) Job.Resources
+monitorResources host = mResources <$> monitorDisk host <*> monitorRam host <*> monitorCores host
+    where mResources disk ram cpu = Job.Resources disk ram cpu (second 0)
 
-getResources :: String -> MaybeT (URLReaderT IO) (String, MResources)
+getResources :: String -> MaybeT (URLReaderT IO) (String, Job.Resources)
 getResources host = (host,) <$> monitorResources host
 
 getCluster :: URLReaderT IO Cluster

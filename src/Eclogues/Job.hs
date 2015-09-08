@@ -20,7 +20,7 @@ Specification of jobs and the current state of submitted jobs.
 
 module Eclogues.Job (
     -- * Job satisfiability
-      Satisfiability(..), UnsatisfiabilityReason(..)
+      Satisfiability(..), UnsatisfiableReason(..), isUnsatisfiable
     -- * Job status
     , Status (Status), spec, stage, satis, uuid
     -- ** Job spec
@@ -46,6 +46,7 @@ import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
 import qualified Data.Aeson as Aeson
 import Data.Aeson.TH (deriveJSON, deriveToJSON, defaultOptions, fieldLabelModifier)
 import Data.Hashable (Hashable)
+import Data.Ord (comparing)
 import qualified Data.Text as T
 import Data.UUID (UUID)
 import Data.UUID.Aeson ()
@@ -66,6 +67,9 @@ nameText = _nameText
 
 instance Show Name where
     show = show . nameText
+
+instance Ord Name where
+    compare = comparing _nameText
 
 type Command = T.Text
 
@@ -124,12 +128,14 @@ data Stage = Queued QueueStage
            | RunError RunErrorReason
            deriving (Show, Eq)
 
-data UnsatisfiabilityReason = InsufficientResources deriving (Show, Eq)
-
 data Satisfiability = Satisfiable
-                    | Unsatisfiable UnsatisfiabilityReason
+                    | Unsatisfiable UnsatisfiableReason
                     | SatisfiabilityUnknown
                       deriving (Show, Eq)
+
+data UnsatisfiableReason = InsufficientResources
+                         | DependenciesUnsatisfiable [Name]
+                           deriving (Show, Eq)
 
 data Status = Status { __spec :: Spec
                      , _stage :: Stage
@@ -176,7 +182,7 @@ isTerminationStage (RunError _) = True
 -- | Whether the constructor is queued or waiting on a dependency.
 isPendingStage :: Stage -> Bool
 isPendingStage (Queued _)  = True
-isPendingStage (Waiting _) = False
+isPendingStage (Waiting _) = True
 isPendingStage _           = False
 
 -- | > isActiveStage = not . 'isTerminationStage'
@@ -204,6 +210,11 @@ isExpectedTransition o n | isQueueStage o || o == Running = case n of
                                   (RunError _) -> True
                                   _            -> False
 isExpectedTransition _            _             = False
+
+-- | Whether the Satisfiability is Unsatisfiable.
+isUnsatisfiable :: Satisfiability -> Bool
+isUnsatisfiable (Unsatisfiable _) = True
+isUnsatisfiable _ = False
 
 instance ToJSON Stage where
     toJSON (Queued LocalQueue)     = object ["type" .= "Queued", "substage" .= "local"]
@@ -253,16 +264,18 @@ instance FromJSON Stage where
 instance ToJSON Satisfiability where
     toJSON Satisfiable = object ["type" .= "Satisfiable"]
     toJSON (Unsatisfiable InsufficientResources) = object ["type" .= "Unsatisfiable", "reason" .= "InsufficientResources"]
+    toJSON (Unsatisfiable (DependenciesUnsatisfiable d)) = object ["type" .= "Unsatisfiable", "reason" .= "DependenciesUnsatisfiable", "dependencies" .= d]
     toJSON SatisfiabilityUnknown = object ["type" .= "SatisfiabilityUnknown"]
 
 instance FromJSON Satisfiability where
     parseJSON (Aeson.Object v) = do
         typ <- v .: "type"
         case typ of
-            "JobSatisfiable" -> pure Satisfiable
-            "JobUnsatisfiable" -> v .: "reason" >>= \case
-                "InsufficientResources"   -> pure $ Unsatisfiable InsufficientResources
-                _                         -> fail "Invalid job unsatisfiability reason"
+            "Satisfiable" -> pure Satisfiable
+            "Unsatisfiable" -> v .: "reason" >>= \case
+                "InsufficientResources"     -> pure $ Unsatisfiable InsufficientResources
+                "DependenciesUnsatisfiable" -> Unsatisfiable <$> DependenciesUnsatisfiable <$> v .: "dependencies"
+                _                           -> fail "Invalid job unsatisfiability reason"
             "SatisfiabilityUnknown" -> pure SatisfiabilityUnknown
             _ -> fail "Invalid job satisfiability type"
     parseJSON _ = fail "Invalid job satisfiability value"
