@@ -61,14 +61,14 @@ monitorCluster :: AppConfig -> STM.TVar AppState -> STM.TVar (Maybe CM.Cluster) 
 monitorCluster conf stateV clusterV = do
     let satisfiabilityUnknown = HashMap.toList . HashMap.map (const Job.SatisfiabilityUnknown)
     let possiblySatisfiable clstr = HashMap.toList . HashMap.map (satisfiability clstr . view Job.spec)
-    clusterRes <- try . runReaderT Graphite.getCluster $ Config.graphiteUrl conf
+    clusterRes <- try . runReaderT Graphite.getCluster $ Config.monitorUrl conf
     getSatis <- case clusterRes of
         Right cluster -> do
             STM.atomically $ STM.writeTVar clusterV (Just cluster)
             return $ possiblySatisfiable cluster
         Left (ex :: IOException) -> do
             STM.atomically $ STM.writeTVar clusterV Nothing
-            hPutStrLn stderr $ "Error connecting to Graphite at " ++ Config.graphiteUrl conf ++ "; retrying: " ++ show ex
+            hPutStrLn stderr $ "Error connecting to Graphite at " ++ Config.monitorUrl conf ++ "; retrying: " ++ show ex
             return satisfiabilityUnknown
     STM.atomically $ do
         state <- STM.readTVar stateV

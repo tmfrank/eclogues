@@ -64,7 +64,7 @@ data ApiConfig = ApiConfig { jobsDir :: AbsDir
                            , bindPort :: Word16
                            , subexecutorUser :: T.Text
                            , outputUrlPrefix :: URI
-                           , aGraphiteUrl :: String }
+                           , graphiteUrl :: String }
 
 $(deriveFromJSON defaultOptions ''ApiConfig)
 
@@ -96,7 +96,7 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
             outURI = mkOutputURI $ outputUrlPrefix apiConf
             host   = bindAddress apiConf
             port   = fromIntegral $ bindPort apiConf
-            grphUrl = aGraphiteUrl apiConf
+            grphUrl = graphiteUrl apiConf
         lift $ withPersist host port conf webLock followAuroraFailure
 
 withPersist :: String -> Int -> AppConfig -> Lock -> Async ZKError -> IO ZKError
