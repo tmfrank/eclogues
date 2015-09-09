@@ -22,12 +22,13 @@ import Data.Default.Generics (Default)
 import Data.HashMap.Lazy (HashMap)
 import GHC.Generics (Generic)
 
--- | Map of jobs names to status.
 type Jobs    = HashMap Name JobStatus
--- | Map of job names to jobs that depend on them.
 type RevDeps = HashMap Name [Name]
 
-data AppState = AppState { _jobs    :: Jobs
+data AppState = AppState { -- | Map of jobs names to status.
+                           _jobs    :: Jobs
+                           -- | Map of job names to jobs that depend on them
+                           -- and have yet to terminate.
                          , _revDeps :: RevDeps }
                 deriving (Generic, Show, Eq)
 
