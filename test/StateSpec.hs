@@ -298,7 +298,7 @@ testUpdateJobs = let
                     updated result statuses `shouldHave` jobInState "dep" Finished
                     updated result statuses `shouldHave` jobInState "job" (Waiting 1)
 
-        context "when dependent job finishes" $
+        context "when dependent job finishes" $ do
             it "should remove reverse dependency on the job on which it depended" $
                 let result = do
                         createJob' $ isolatedJob "dep"
@@ -306,7 +306,6 @@ testUpdateJobs = let
                     statuses = [("dep", Finished), ("job", Finished)]
                 in updated result statuses `shouldHave` noRevDep "dep"
 
-        context "when job is killed" $
             it "should allow job and dependent to be deleted" $
                 let init = do
                         createJob' $ isolatedJob "dep"
@@ -323,7 +322,6 @@ testUpdateJobs = let
                     result `shouldHave` noJob "dep"
                     result `shouldHave` noJob "job"
 
-        context "when job is killed" $
             it "should recursively cause all dependencies to fail" $
                 let result = do
                         createJob' $ isolatedJob "dep"
