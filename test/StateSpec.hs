@@ -323,6 +323,19 @@ testUpdateJobs = let
                     result `shouldHave` noJob "dep"
                     result `shouldHave` noJob "job"
 
+        context "when job is killed" $
+            it "should recursively cause all dependencies to fail" $
+                let result = do
+                        createJob' $ isolatedJob "dep"
+                        createJob' $ dependentJob "job" ["dep"]
+                        createJob' $ dependentJob "job2" ["job"]
+                    statuses = [("dep", Failed UserKilled)]
+                in do
+                    updated result statuses `shouldHave` noRevDep "dep"
+                    updated result statuses `shouldHave` noRevDep "job"
+                    updated result statuses `shouldHave` jobInState "job" (Failed (DependencyFailed "dep"))
+                    updated result statuses `shouldHave` jobInState "job2" (Failed (DependencyFailed "job"))
+
 testState :: Spec
 testState = do
     testCreateJob
