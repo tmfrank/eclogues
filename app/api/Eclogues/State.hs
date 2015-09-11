@@ -38,7 +38,7 @@ import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.Trans.Writer.Lazy (WriterT, tell, execWriterT)
 import Data.HashMap.Lazy (elems, traverseWithKey)
 import qualified Data.HashMap.Lazy as HashMap
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, catMaybes)
 import Data.Monoid (Sum (Sum))
 import Data.UUID (UUID)
 
@@ -129,12 +129,14 @@ updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeSt
     handleDeps pst newState
         | isTerminationState newState = do
             let name = pst ^. Job.name
-            rdepNames <- ES.getDependents name
+            rDepNames <- ES.getDependents name
             -- Remove this job from the rev deps of its dependencies
             mapM_ (`ES.removeRevDep` name) $ pst ^. Job.dependsOn
             case newState of
-                Finished -> mapM_ triggerDep rdepNames
-                _        -> mapM_ (flip ES.setJobState . Failed $ DependencyFailed name) rdepNames
+                Finished -> mapM_ triggerDep rDepNames
+                _        -> do
+                    rDepStatuses <- catMaybes <$> mapM ES.getJob rDepNames
+                    mapM_ (cascadeDepFailure name) rDepStatuses
         | otherwise                  = pure ()
     triggerDep :: Name -> m ()
     triggerDep rdepName = ES.getJob rdepName >>= \case
@@ -144,6 +146,14 @@ updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeSt
         Just (JobStatus _    (Waiting n) _   ) ->
             ES.setJobState rdepName $ Waiting $ n - 1
         _         -> pure ()
+    cascadeDepFailure :: Name -> JobStatus -> m ()
+    cascadeDepFailure depName cst = do
+        let name = cst ^. Job.name
+        rDepNames <- ES.getDependents name
+        mapM_ (`ES.removeRevDep` name) $ cst ^. Job.dependsOn
+        ES.setJobState name (Failed $ DependencyFailed depName)
+        rDepStatuses <- catMaybes <$> mapM ES.getJob rDepNames
+        mapM_ (cascadeDepFailure name) rDepStatuses
 
 -- | All jobs.
 getJobs :: AppState -> [JobStatus]

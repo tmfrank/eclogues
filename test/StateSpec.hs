@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module StateSpec where
 
@@ -304,6 +305,23 @@ testUpdateJobs = let
                         createJob' $ dependentJob "job" ["dep"]
                     statuses = [("dep", Finished), ("job", Finished)]
                 in updated result statuses `shouldHave` noRevDep "dep"
+
+        context "when job is killed" $
+            it "should allow job and dependent to be deleted" $
+                let init = do
+                        createJob' $ isolatedJob "dep"
+                        createJob' $ dependentJob "job" ["dep"]
+                    modify state = do
+                        let statuses = [("dep", Failed UserKilled)]
+                        updateJobs (state ^. jobs) statuses
+                        ES.deleteJob "dep"
+                        ES.deleteJob "job"
+                    result = case scheduler' init of
+                        Right state -> scheduler state (modify state)
+                        Left x -> Left x
+                in do
+                    result `shouldHave` noJob "dep"
+                    result `shouldHave` noJob "job"
 
 testState :: Spec
 testState = do
