@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
 {-|
@@ -19,6 +20,7 @@ import Prelude hiding (readFile)
 import Data.Aeson (FromJSON, eitherDecode)
 import Data.ByteString.Lazy (readFile)
 import Data.Maybe (fromMaybe)
+import Path (Path, Abs, Rel, stripDir, mkAbsDir)
 
 readJSON :: (FromJSON a) => FilePath -> IO (Either String a)
 readJSON = fmap eitherDecode . readFile
@@ -36,3 +38,6 @@ orShowError = \case
 
 maybeDo :: (Applicative f) => Maybe (f ()) -> f ()
 maybeDo = fromMaybe $ pure ()
+
+toRelPath :: Path Abs a -> Path Rel a
+toRelPath = either (error "abs path is not abs") id . stripDir $(mkAbsDir "/")

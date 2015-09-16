@@ -19,24 +19,30 @@ Specification of jobs and the current state of submitted jobs.
 module Eclogues.JobSpec where
 
 import Eclogues.JobSpec.Aeson
+import Eclogues.Util (toRelPath)
 
+import Control.Exception (displayException)
 import Control.Lens.TH (makeClassy)
 import Control.Monad ((<=<))
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
 import qualified Data.Aeson as Aeson
 import Data.Aeson.TH (deriveJSON, deriveToJSON, defaultOptions, fieldLabelModifier)
-import qualified Data.Text
+import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 import Data.UUID (UUID)
 import Data.UUID.Aeson ()
+import Path (Path, Abs, Rel, File, Dir, (</>), parseAbsFile, parseAbsDir, toFilePath)
 import System.Exit (ExitCode)
 
 import Units
 
-default (Data.Text.Text)
+default (T.Text)
 
 type Name = L.Text
 type Command = L.Text
+
+newtype OutputPath = OutputPath { getPath :: Path Abs File }
+                     deriving (Show, Eq)
 
 data Resources = Resources { _disk :: Value Double MB
                            , _ram  :: Value Double MiB
@@ -50,7 +56,7 @@ $(makeClassy ''Resources)
 data JobSpec = JobSpec { _name          :: Name
                        , _command       :: Command
                        , __jobResources :: Resources
-                       , _outputFiles   :: [FilePath]
+                       , _outputFiles   :: [OutputPath]
                        , _captureStdout :: Bool
                        , _dependsOn     :: [Name] }
                          deriving (Show, Eq)
@@ -207,3 +213,19 @@ instance FromJSON Resources where
             if any ((== -1) . signum) [val dsk, val rm, val cu, fromIntegral (val te)]
                 then fail "Negative resource value"
                 else pure res
+
+instance FromJSON OutputPath where
+    parseJSON (Aeson.String s) = toP $ parseAbsFile $ T.unpack s
+      where
+        toP = either (fail . ("Output path: " ++) . displayException) (pure . OutputPath)
+    parseJSON _                = fail "Output path must be string"
+
+instance ToJSON OutputPath where
+    toJSON = Aeson.String . T.pack . toFilePath . getPath
+
+getOutputPath :: Path Abs Dir -> OutputPath -> Path Abs File
+getOutputPath dir = (dir </>) . toRelPath . getPath
+
+-- TODO: make this signature not a lie
+dirName :: Name -> Path Rel Dir
+dirName = toRelPath . either (error . displayException) id . parseAbsDir . ("/" ++) . (++ "/") . L.unpack

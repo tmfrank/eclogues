@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
@@ -32,6 +33,7 @@ import Data.Text.Lazy (pack)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import Data.UUID (nil)
 import Network.HTTP.Media ((//), (/:))
+import Path (mkAbsFile)
 import Text.Pandoc (writeHtmlString, def)
 import Servant.API (Capture, QueryParam, Get, Accept (..), MimeRender (..), (:>), (:<|>))
 import Servant.Docs ( API, ToCapture (..), ToSample (..), ToParam (..),
@@ -53,7 +55,7 @@ res :: Resources
 res = Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)
 
 spec :: JobSpec
-spec = JobSpec "hello" "echo hello world > hello.txt" res ["hello.txt"] False []
+spec = JobSpec "hello" "echo hello world > hello.txt" res [Job.OutputPath $(mkAbsFile "/hello.txt")] False []
 
 depSpec :: JobSpec
 depSpec = JobSpec "cat-hello" "cat virgil-dependencies/hello/hello.txt" res [] True ["hello"]

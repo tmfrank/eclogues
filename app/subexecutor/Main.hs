@@ -21,22 +21,28 @@ import Eclogues.Util (readJSON, orError)
 import Units
 
 import Control.Arrow ((&&&))
-import Control.Conditional (condM, otherwiseM)
+import Control.Exception (displayException)
 import Control.Lens ((^.))
 import Control.Monad (when)
-import Data.Aeson.TH (deriveJSON, defaultOptions)
+import Data.Aeson (FromJSON (..))
+import qualified Data.Aeson as Aeson
+import Data.Aeson.TH (deriveFromJSON, defaultOptions)
+import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
-import System.Directory (createDirectoryIfMissing, doesFileExist, doesDirectoryExist, copyFile)
+import Path ( Path, Abs, Dir, File, (</>), toFilePath
+            , parseAbsDir, parseAbsFile, mkRelFile, mkRelDir )
+import qualified System.Directory as D
 import System.Environment (getArgs)
 import System.Exit (ExitCode (..))
-import System.FilePath ((</>))
 import System.FilePath.Glob (glob)
 import System.Process (callProcess, spawnProcess, waitForProcess)
 
--- | JSON configuration type.
-data SubexecutorConfig = SubexecutorConfig { jobsDir :: FilePath }
+newtype AbsDir = AbsDir { getDir :: Path Abs Dir }
 
-$(deriveJSON defaultOptions ''SubexecutorConfig)
+-- | JSON configuration type.
+data SubexecutorConfig = SubexecutorConfig { jobsDir :: AbsDir }
+
+$(deriveFromJSON defaultOptions ''SubexecutorConfig)
 
 -- | Run a bash command with a time limit.
 runCommand :: Value Int Second -> Command -> IO RunResult
@@ -48,48 +54,51 @@ runCommand timeout cmd = do
         c               -> Ended c
 
 -- | Copy the contents of a directory into another.
-copyDirContents :: FilePath -> FilePath -> IO ()
-copyDirContents from to = callProcess "/bin/cp" ["-r", from ++ "/.", to]
+copyDirContents :: Path Abs Dir -> Path Abs Dir -> IO ()
+copyDirContents from to = callProcess "/bin/cp" ["-r", toFilePath from ++ ".", toFilePath to]
 
--- | Copy a file or directory relative to the working directory to the same
--- relative path under another directory.
-copyFileOrDir :: FilePath -- ^ Relative path of file or dir
-              -> FilePath -- ^ Absolute path of target directory
-              -> IO Bool  -- ^ True if copied, False if path doesn't exist
-copyFileOrDir from to = go where
-    go = condM [ (doesFileExist      from, copyFile from to' *> pure True)
-               , (doesDirectoryExist from, copyDir           *> pure True)
-               , (otherwiseM             , pure False) ]
-    to' = to ++ from
-    copyDir = callProcess "mkdir" ["-p", to'] *> copyDirContents from to'
+copyFile :: Path Abs File -> Path Abs a -> IO ()
+copyFile a = D.copyFile (toFilePath a) . toFilePath
 
 -- | Run a job from its spec.
-runJob :: FilePath -- ^ Shared jobs directory
-       -> String   -- ^ Job name
+runJob :: AbsDir    -- ^ Shared jobs directory
+       -> Job.Name  -- ^ Job name
        -> IO ()
-runJob path name = do
-    spec <- orError =<< readJSON (specDir </> "spec.json") :: IO JobSpec
+runJob (AbsDir shared) name = do
+    cwd <- parseAbsDir =<< D.getCurrentDirectory
+    let inputDir = cwd </> $(mkRelDir "virgil-dependencies/")
+        copyDep = uncurry copyDirContents . (outputDir &&& (inputDir </>)) . Job.dirName
+        copyOutput f = copyFile (Job.getOutputPath cwd f)
+                                (Job.getOutputPath (outputDir jobDirName) f)
 
-    copyDirContents (specDir </> "workspace") "."
-    createDirectoryIfMissing False depsDir
+    spec <- orError =<< readJSON (toFilePath specFile) :: IO JobSpec
+
+    D.createDirectoryIfMissing False $ toFilePath inputDir
     mapM_ copyDep $ spec ^. Job.dependsOn
 
     runRes <- runCommand (spec ^. Job.time) (spec ^. Job.command)
 
     -- TODO: Trigger Failed state when output doesn't exist
-    mapM_ (`copyFileOrDir` (specDir </> "output/")) $ spec ^. Job.outputFiles
-    writeFile (specDir </> "runresult") (show runRes)
+    mapM_ copyOutput $ spec ^. Job.outputFiles
+    writeFile (toFilePath $ specDir </> $(mkRelFile "runresult")) (show runRes)
     when (spec ^. Job.captureStdout) $ glob ".logs/*/0/stdout" >>= \case
-        [fn] -> copyFile fn $ specDir </> "output/stdout"
+        [fp] | Just fn <- parseAbsFile fp
+             -> copyFile fn $ outputDir jobDirName </> $(mkRelFile "stdout")
         _    -> error "Stdout log file missing"
-    where
-        specDir = path </> name
-        depsDir = "./virgil-dependencies/"
-        depOutput n = path </> n </> "output"
-        copyDep = uncurry copyDirContents . (depOutput &&& (depsDir ++)) . L.unpack
+  where
+    specDir = shared </> jobDirName
+    specFile = specDir </> $(mkRelFile "spec.json")
+    outputDir n = shared </> n </> $(mkRelDir "output/")
+    jobDirName = Job.dirName name
 
 main :: IO ()
 main = do
     conf <- orError =<< readJSON "/etc/xdg/eclogues/subexecutor.json"
     (name:_) <- getArgs
-    runJob (jobsDir conf) name
+    runJob (jobsDir conf) $ L.pack name
+
+instance FromJSON AbsDir where
+    parseJSON (Aeson.String s) = toP $ parseAbsDir $ T.unpack s
+      where
+        toP = either (fail . ("Absolute dir: " ++) . displayException) (pure . AbsDir)
+    parseJSON _                = fail "Absolute dir must be string"
