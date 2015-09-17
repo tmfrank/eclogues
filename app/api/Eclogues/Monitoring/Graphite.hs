@@ -57,7 +57,7 @@ instance FromJSON (Maybe SeriesPoint) where
         | V.length v == 2 = do
             x::Maybe Integer <- parseJSON $ v V.! 0
             y::Integer       <- parseJSON $ v V.! 1
-            return $ SeriesPoint <$> x <*> return y
+            pure $ SeriesPoint <$> x <*> pure y
         | otherwise = fail "Unexpected number of elements in Graphite timestamp bucket"
     parseJSON _ = fail "Invalid Graphite timestamp bucket"
 
@@ -70,7 +70,7 @@ instance FromJSON SeriesData where
     parseJSON (AT.Object o) = do
         t <- o .: "target"
         p <- o .: "datapoints"
-        return $ SeriesData t (catMaybes p)
+        pure $ SeriesData t (catMaybes p)
     parseJSON _ = fail "Invalid Graphite series"
 
 seriesState :: Num a => SeriesData -> Maybe a
@@ -95,7 +95,7 @@ graphitePath = pack . intercalate "."
 
 -- GET conveniences
 bodyJSON :: FromJSON a => Response ByteString -> URLReaderT IO a
-bodyJSON r = return . view responseBody =<< asJSON r
+bodyJSON r = pure . view responseBody =<< asJSON r
 
 getWith' :: [Options -> Options] -> URLReaderT IO (Response ByteString)
 getWith' options = ReaderT $ \url -> getWith (foldr ($) defaults options) url
@@ -114,10 +114,10 @@ getSeries path = bodyJSON =<< getWithEndpoint ["render"] options
 getSeriesState :: Num a => [String] -> MaybeT (URLReaderT IO) a
 getSeriesState path = MaybeT $ do
     series <- getSeries path
-    return $ fromInteger <$> do
+    pure $ do
         pts <- view points <$> headMay series
         val <- view value <$> headMay pts
-        return $ fromInteger val
+        pure $ fromInteger val
 
 monitorCores :: String -> MaybeT (URLReaderT IO) (U.Value Double Core)
 monitorCores host = core <$> getSeriesState path

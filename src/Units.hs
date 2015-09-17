@@ -25,6 +25,7 @@ import Data.Ratio ((%))
 import qualified Data.Text as Text
 import Data.Void (Void)
 import Text.Read (readEither)
+import Data.Function (on)
 
 data Byte
 data Mega u
@@ -101,13 +102,13 @@ instance (Read a, Unit u) => FromJSON (Value a u) where
     parseJSON _                = fail "Value must be string"
 
 instance Ord (Value Double Core) where
-    (Value x) `compare` (Value y) = x `compare` y
+    compare = compare `on` val
 
 instance Ord (Value Double MiB) where
-    (Value x) `compare` (Value y) = x `compare` y
+    compare = compare `on` val
 
 instance Ord (Value Double MB) where
-    (Value x) `compare` (Value y) = x `compare` y
+    compare = compare `on` val
 
 byte :: a -> Value a Byte
 byte = Value

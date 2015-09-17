@@ -16,7 +16,14 @@ Types representing machines/cluster and functions for determing
 satisfiability of jobs.
 -}
 
-module Eclogues.Monitoring.Cluster where
+module Eclogues.Monitoring.Cluster (
+                                   -- * Types
+                                     Cluster,
+                                   -- * Satisfiability updates
+                                     updateSatisfiabilities, updateSatisfy, allSatisfyUnknown,
+                                   -- * Satisfiability checking
+                                     specSatisfy, depSatisfy, jobDepSatisfy
+                                   ) where
 
 import qualified Eclogues.Job as Job
 import Eclogues.Job (Name, Resources, Spec, Status, Satisfiability(..), UnsatisfiableReason(..))
@@ -87,7 +94,7 @@ groupSatisfy st = Satisfiabilities (filter satisfiable' st) (filter unsatisfiabl
 depSatisfy :: (TS m) => [Name] -> m (Maybe Satisfiability)
 depSatisfy deps = fmap (minSatisfy . groupSatisfy) $ catMaybes <$> mapM ES.getJob deps
 
--- | Return satisfiability of given job status with respect to extant resources and the
+-- | Return job satisfiability factoring in the resources it requires and the
 --   satisfiability of its dependencies.
 jobDepSatisfy :: (TS m) => Status -> Cluster -> m Satisfiability
 jobDepSatisfy status cluster = case specSatisfy cluster $ status ^. Job.spec of
@@ -116,7 +123,7 @@ allSatisfyUnknown aState = void $ HashMap.traverseWithKey stateOrUnknown (aState
         setUnknown k = ES.setJobSatis k SatisfiabilityUnknown
 
 -- | Order jobs with respect to dependencies.
-orderByDep :: (TS m) => [Status] -> m [Status]
+orderByDep :: (TS m) => [Job.Status] -> m [Job.Status]
 orderByDep jobStatuses = graph jobStatuses >>= \(x, y) -> pure $ map y (topSort x)
     where
         graph :: (TS m) => [Status] -> m (Graph, Vertex -> Status)
@@ -125,7 +132,7 @@ orderByDep jobStatuses = graph jobStatuses >>= \(x, y) -> pure $ map y (topSort 
             (graph', gLookup, _) <- graphFromEdges <$> nodes
             let gLookup' = (\(r, _, _) -> r) . gLookup
             pure (graph', gLookup')
-        node :: (TS m) => Status -> m Node
+        node :: (TS m) => Job.Status -> m Node
         node status = do
-            dependents <- ES.getDependents $ status ^. Job.spec . Job.name
-            pure (status, status ^. Job.spec . Job.name, dependents)
+            dependents <- ES.getDependents $ status ^. Job.name
+            pure (status, status ^. Job.name, dependents)

@@ -86,7 +86,7 @@ mainServer conf stateV clusterV = handleExcept server' where
     createJobH jobSpec = do
         uuid <- lift randomIO
         cluster <- lift . atomically $ readTVar clusterV
-        spec <- lift $ return jobSpec
+        spec <- pure jobSpec
         runScheduler' $ createJob uuid cluster spec
     deleteJobH = runScheduler' . deleteJob
     mesosJob = toMesos <=< getJobH where

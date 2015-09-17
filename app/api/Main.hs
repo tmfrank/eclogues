@@ -6,9 +6,11 @@
 Module      : $Header$
 Copyright   : (c) 2015 Swinburne Software Innovation Lab
 License     : BSD3
+
 Maintainer  : Rhys Adams <rhysadams@swin.edu.au>
 Stability   : unstable
 Portability : portable
+
 API executable entry point.
 -}
 
@@ -108,15 +110,15 @@ withPersist host port conf webLock followAuroraFailure = do
         updater = forever $ do
             loadSchedulerState conf stateV
             threadDelay . floor $ second (1 :: Double) `asVal` micro second
-        -- TODO: catch run error and reschedule
         monitor = forever $ do
             monitorCluster conf stateV clusterV
             threadDelay . floor $ second (30 :: Double) `asVal` micro second
+        -- TODO: catch run error and reschedule
         enacter = forever . STM.atomically $ runSingleCommand conf
 
     hPutStrLn stderr $ "Starting server on " ++ host ++ ':':show port
-    withAsync web $ \webA -> withAsync updater $ \webB -> withAsync monitor $ \updaterA -> withAsync enacter $ \enacterA ->
-        snd <$> waitAny [followAuroraFailure, const undefined <$> webA, const undefined <$> webB, updaterA, enacterA]
+    withAsync web $ \webA -> withAsync updater $ \monMon -> withAsync monitor $ \updaterA -> withAsync enacter $ \enacterA ->
+        snd <$> waitAny [followAuroraFailure, const undefined <$> webA, const undefined <$> monMon, updaterA, enacterA]
 
 -- | Contest Zookeeper election with the provided node data, and perform some
 -- action while elected. If leadership is lost, wait until re-elected and
