@@ -25,19 +25,19 @@ import Eclogues.Monitoring.Cluster
 import Units (Core, MiB, MB, mega, mebi, byte, core, second)
 import qualified Units as U
 
-import Data.Aeson (FromJSON, parseJSON, (.:))
-import qualified Data.Aeson.Types as AT (Value(Object, Array))
-import Network.Wreq (Response, Options, param, defaults, getWith, asJSON, responseBody)
 import Control.Lens (view, (&), (.~))
 import Control.Lens.TH (makeClassy)
-import Data.Text (Text, pack, unpack)
-import Data.HashMap.Lazy (fromList)
-import Data.ByteString.Lazy.Char8 (ByteString)
-import qualified Data.Vector as V
-import Data.Maybe (catMaybes)
-import Data.List (intercalate)
 import Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import Control.Monad.Trans.Reader (ReaderT(..), withReaderT)
+import Data.Aeson (FromJSON, parseJSON, (.:))
+import qualified Data.Aeson.Types as AT (Value(Object, Array))
+import Data.ByteString.Lazy.Char8 (ByteString)
+import Data.HashMap.Lazy (fromList)
+import Data.List (intercalate)
+import Data.Maybe (catMaybes)
+import Data.Text (Text, pack, unpack)
+import qualified Data.Vector as V
+import Network.Wreq (Response, Options, param, defaults, getWith, asJSON, responseBody)
 import Safe (headMay)
 
 -- Structures for parsing Graphite data

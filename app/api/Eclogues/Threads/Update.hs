@@ -17,6 +17,8 @@ module Eclogues.Threads.Update (loadSchedulerState, monitorCluster) where
 
 import Eclogues.AppConfig (AppConfig)
 import qualified Eclogues.AppConfig as Config
+import Eclogues.Monitoring.Cluster as CM
+import Eclogues.Monitoring.Graphite as Graphite
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.Command (ScheduleConf (auroraURI), getSchedulerStatuses)
 import Eclogues.State (activeJobs, updateJobs)
@@ -33,8 +35,6 @@ import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
 import qualified Data.HashMap.Lazy as HashMap
 import System.IO (hPutStrLn, stderr)
-import Eclogues.Monitoring.Cluster as CM
-import Eclogues.Monitoring.Graphite as Graphite
 
 -- | Query the scheduler and run 'updateJobs'.
 loadSchedulerState :: AppConfig -> STM.TVar AppState -> IO ()
