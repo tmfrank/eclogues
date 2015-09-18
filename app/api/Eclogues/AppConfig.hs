@@ -25,10 +25,11 @@ import Data.Text (Text)
 import Data.Text.Lazy (fromStrict)
 import Data.UUID (UUID)
 import Network.URI (URI)
+import Path (Path, Abs, Dir)
 
 data AppConfig = AppConfig {
                            -- | The mount point of the shared jobs directory.
-                             jobsDir         :: FilePath
+                             jobsDir         :: Path Abs Dir
                            -- | Get the URI to the scheduler, if it's available.
                            , auroraURI       :: AdvSTM (Maybe URI)
                            , schedChan       :: TChan ScheduleCommand

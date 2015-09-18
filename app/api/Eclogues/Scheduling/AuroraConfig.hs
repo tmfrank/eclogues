@@ -24,7 +24,8 @@ import Api_Types hiding (DRAINING, FAILED, FINISHED)
 import Api_Types2
 
 import Eclogues.JobSpec ( JobSpec (JobSpec), Resources (Resources), JobState (..)
-                        , FailureReason (..), RunErrorReason (..), QueueStage (SchedulerQueue))
+                        , FailureReason (..), RunErrorReason (..), QueueStage (SchedulerQueue) )
+import qualified Eclogues.JobSpec as Job
 import Units
 
 import Data.Aeson (ToJSON (toJSON))
@@ -157,7 +158,7 @@ aResources (Resources disk ram cpu _) = AResources (ceiling $ disk `asVal` byte)
 
 auroraJobConfig :: Role -> JobSpec -> JobConfiguration
 auroraJobConfig role (JobSpec name cmd resources@(Resources disk ram cpu _) _ _ _) = job where
-    jobKey = defaultJobKey role name
+    jobKey = defaultJobKey role name'
     owner = Identity role role
     job = JobConfiguration  { jobConfiguration_key                 = jobKey
                             , jobConfiguration_owner               = owner
@@ -168,7 +169,7 @@ auroraJobConfig role (JobSpec name cmd resources@(Resources disk ram cpu _) _ _ 
     task = default_TaskConfig   { taskConfig_job             = jobKey
                                 , taskConfig_owner           = owner
                                 , taskConfig_environment     = defaultEnvironment
-                                , taskConfig_jobName         = name
+                                , taskConfig_jobName         = name'
                                 , taskConfig_isService       = defaultIsService
                                 , taskConfig_numCpus         = cpu `asVal` core
                                 , taskConfig_ramMb           = ceiling $ ram `asVal` mebi byte
@@ -183,7 +184,7 @@ auroraJobConfig role (JobSpec name cmd resources@(Resources disk ram cpu _) _ _ 
                                 , executorConfig_data = encodeToText aTaskExecConf }
     aTaskExecConf = ATaskExecConf   { tec_environment           = defaultEnvironment
                                     , tec_task                  = aTask
-                                    , tec_name                  = name
+                                    , tec_name                  = name'
                                     , tec_service               = defaultIsService
                                     , tec_max_task_failures     = defaultMaxTaskFailures
                                     , tec_cron_collision_policy = defaultCronCollisionPolicy
@@ -194,20 +195,22 @@ auroraJobConfig role (JobSpec name cmd resources@(Resources disk ram cpu _) _ _ 
                                     , tec_enable_hooks          = False
                                     , tec_production            = defaultProduction }
     aTask = ATask { task_processes          = [aProcess]
-                  , task_name               = name
+                  , task_name               = name'
                   , task_finalization_wait  = defaultFinalisationWait
                   , task_max_failures       = defaultMaxTaskFailures
                   , task_max_concurrency    = defaultMaxConcurrency
                   , task_resources          = aResources resources
                   , task_constraints        = [orderConstraint] }
-    orderConstraint = ATaskConstraint { order = [name] }
+    orderConstraint = ATaskConstraint { order = [name'] }
     aProcess = AProcess { p_daemon       = False
-                        , p_name         = name
+                        , p_name         = name'
                         , p_ephemeral    = False
                         , p_max_failures = defaultMaxTaskFailures
                         , p_min_duration = defaultMinDuration
-                        , p_cmdline      = cmd
+                        , p_cmdline      = cmd'
                         , p_final        = False }
+    name' = L.fromStrict $ Job.nameText name
+    cmd' = L.fromStrict cmd
 
 lockKey :: Role -> Name -> LockKey
 lockKey role = LockKey . defaultJobKey role

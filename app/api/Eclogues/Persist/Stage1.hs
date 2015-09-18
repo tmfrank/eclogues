@@ -18,12 +18,14 @@ Template Haskell stage restricted definitions and orphan instances for
 module Eclogues.Persist.Stage1 where
 
 import Eclogues.Scheduling.Command (ScheduleCommand)
-import Eclogues.JobSpec (JobSpec, JobState)
+import Eclogues.JobSpec (JobSpec, JobState, Name, nameText, mkName)
 
+import Control.Monad ((<=<))
 import Data.Aeson (FromJSON, ToJSON, encode, eitherDecodeStrict)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Either.Combinators (mapLeft)
 import Data.Monoid ((<>))
+import Data.Proxy (Proxy (..))
 import qualified Data.Text as T
 import Data.UUID (UUID, toASCIIBytes, fromASCIIBytes)
 import qualified Database.Persist as P
@@ -66,3 +68,10 @@ instance P.PersistField UUID where
 
 instance PSql.PersistFieldSql UUID where
     sqlType _ = PSql.SqlBlob
+
+instance P.PersistField Name where
+    toPersistValue = P.toPersistValue . nameText
+    fromPersistValue = mapLeft T.pack . mkName <=< P.fromPersistValue
+
+instance PSql.PersistFieldSql Name where
+    sqlType _ = PSql.sqlType (Proxy :: Proxy T.Text)

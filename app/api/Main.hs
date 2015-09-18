@@ -29,7 +29,7 @@ import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState)
 import Eclogues.Threads.Update (loadSchedulerState)
 import Eclogues.Threads.Server (serve)
-import Eclogues.Util (readJSON, orError)
+import Eclogues.Util (AbsDir (getDir), readJSON, orError)
 import Units
 
 import Control.Concurrent (threadDelay)
@@ -45,12 +45,11 @@ import Control.Monad (forever)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE, catchE)
 import Data.Aeson (encode)
-import Data.Aeson.TH (deriveJSON, defaultOptions)
+import Data.Aeson.TH (deriveFromJSON, defaultOptions)
 import qualified Data.ByteString as BSS
 import qualified Data.ByteString.Lazy as BSL
 import Data.Default.Generics (def)
-import qualified Data.Text as TS
-import qualified Data.Text.Lazy as TL
+import qualified Data.Text as T
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Word (Word16)
 import Database.Zookeeper (ZKError)
@@ -61,14 +60,14 @@ import System.IO (hPutStrLn, stderr)
 import System.Random (mkStdGen, setStdGen)
 
 -- | User-supplied API configuration.
-data ApiConfig = ApiConfig { jobsDir :: FilePath
+data ApiConfig = ApiConfig { jobsDir :: AbsDir
                            , zookeeperHosts :: ZKURI
                            , bindAddress :: String
                            , bindPort :: Word16
-                           , subexecutorUser :: TS.Text
+                           , subexecutorUser :: T.Text
                            , outputUrlPrefix :: URI }
 
-$(deriveJSON defaultOptions ''ApiConfig)
+$(deriveFromJSON defaultOptions ''ApiConfig)
 
 main :: IO ()
 main = do
@@ -87,14 +86,14 @@ main = do
 
 withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
 withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
-    let jdir = jobsDir apiConf
+    let jdir = getDir $ jobsDir apiConf
     schedV <- newTChanIO  -- Scheduler action channel
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
-    createDirectoryIfMissing False jdir
+    createDirectoryIfMissing False $ toFilePath jdir
     Persist.withPersistDir jdir $ \pctx' -> do
         let conf   = AppConfig jdir getURI schedV pctx' jobURI outURI user
             user   = subexecutorUser apiConf
-            jobURI = schedulerJobUI $ TS.unpack user
+            jobURI = schedulerJobUI $ T.unpack user
             outURI = mkOutputURI $ outputUrlPrefix apiConf
             host   = bindAddress apiConf
             port   = fromIntegral $ bindPort apiConf
@@ -130,9 +129,10 @@ advertisedData (ApiConfig _ _ host port _ _) = BSL.toStrict $ encode (host, port
 
 -- | Append the job name and file path to the path of the job output server URI.
 mkOutputURI :: URI -> Job.Name -> AbsFile -> URI
-mkOutputURI pf name path = pf { uriPath = uriPath pf ++ TL.unpack name ++ escapedPath }
+mkOutputURI pf name path = pf { uriPath = uriPath pf ++ name' ++ escapedPath }
   where
     escapedPath = escapeURIString isUnescapedInURI $ toFilePath path
+    name' = T.unpack $ Job.nameText name
 
 loadFromDB :: AppConfig -> IO AppState
 loadFromDB conf = fmap ((^. ES.appState) . snd) . ES.runStateTS def $ do

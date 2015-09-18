@@ -48,6 +48,7 @@ import Database.Persist ((==.), (=.))
 import qualified Database.Persist as P
 import qualified Database.Persist.Sql as PSql
 import Database.Persist.Sqlite (withSqlitePool)
+import Path (Path, Abs, Dir, toFilePath)
 
 -- Table definitions.
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
@@ -76,11 +77,13 @@ instance Monoid (Action ()) where
 
 -- | Run some action that might persist things inside the given directory.
 -- Logs to stderr.
-withPersistDir :: FilePath -> (Context -> LoggingT IO a) -> IO a
-withPersistDir path f = runStderrLoggingT $ withSqlitePool ("WAL=off " <> T.pack path <> "/eclogues.db3") 1 act where
+withPersistDir :: Path Abs Dir -> (Context -> LoggingT IO a) -> IO a
+withPersistDir path f = runStderrLoggingT $ withSqlitePool ("WAL=off " <> path' <> "/eclogues.db3") 1 act
+  where
     act pool = do
         PSql.runSqlPool (PSql.runMigration migrateAll) pool
         f (Context pool)
+    path' = T.pack $ toFilePath path
 
 -- | Apply some Action in a transaction.
 atomically :: Context -> Action r -> IO r

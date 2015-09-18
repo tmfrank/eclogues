@@ -1,5 +1,7 @@
 {-# LANGUAGE ExtendedDefaultRules #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
@@ -16,30 +18,54 @@ Portability : portable
 Specification of jobs and the current state of submitted jobs.
 -}
 
-module Eclogues.JobSpec where
+module Eclogues.JobSpec (
+    -- * Job status
+      JobStatus (JobStatus), jobSpec, jobState, uuid
+    -- ** Job spec
+    , JobSpec (JobSpec), name, command, resources, outputFiles, captureStdout, dependsOn
+    , Name, nameText, mkName, dirName, uuidName
+    , Command
+    , Resources (Resources), disk, ram, cpu, time
+    , OutputPath (..), getOutputPath
+    -- ** Job state
+    , JobState (..), RunResult (..), FailureReason (..), RunErrorReason (..), QueueStage (..)
+    , majorState, majorJobStates
+    -- * Predicates
+    , isActiveState, isTerminationState, isOnScheduler, isExpectedTransition
+    ) where
 
 import Eclogues.JobSpec.Aeson
 import Eclogues.Util (toRelPath)
 
 import Control.Exception (displayException)
 import Control.Lens.TH (makeClassy)
-import Control.Monad ((<=<))
+import Control.Monad (MonadPlus, (<=<))
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
 import qualified Data.Aeson as Aeson
 import Data.Aeson.TH (deriveJSON, deriveToJSON, defaultOptions, fieldLabelModifier)
+import Data.Hashable (Hashable)
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as L
 import Data.UUID (UUID)
 import Data.UUID.Aeson ()
 import Path (Path, Abs, Rel, File, Dir, (</>), parseAbsFile, parseAbsDir, toFilePath)
+import Servant.Common.Text (FromText (..), ToText (..))
 import System.Exit (ExitCode)
+import Text.Regex.PCRE.Heavy ((=~), re)
 
 import Units
 
 default (T.Text)
 
-type Name = L.Text
-type Command = L.Text
+newtype Name = Name { _nameText :: T.Text } deriving (Eq, Hashable)
+
+-- Don't want to export a record field
+nameText :: Name -> T.Text
+nameText = _nameText
+
+instance Show Name where
+    show = show . nameText
+
+type Command = T.Text
 
 newtype OutputPath = OutputPath { getPath :: Path Abs File }
                      deriving (Show, Eq)
@@ -223,9 +249,29 @@ instance FromJSON OutputPath where
 instance ToJSON OutputPath where
     toJSON = Aeson.String . T.pack . toFilePath . getPath
 
+instance FromJSON Name where
+    parseJSON (Aeson.String s) = mkName s
+    parseJSON _                = fail "Name must be string"
+
+instance ToJSON Name where
+    toJSON = Aeson.String . nameText
+
+instance FromText Name where
+    fromText = mkName
+
+instance ToText Name where
+    toText = nameText
+
 getOutputPath :: Path Abs Dir -> OutputPath -> Path Abs File
 getOutputPath dir = (dir </>) . toRelPath . getPath
 
+mkName :: (MonadPlus m) => T.Text -> m Name
+mkName s | s =~ [re|^[a-zA-Z0-9\._\-]+$|] = pure $ Name s
+         | otherwise                      = fail "invalid name"
+
 -- TODO: make this signature not a lie
 dirName :: Name -> Path Rel Dir
-dirName = toRelPath . either (error . displayException) id . parseAbsDir . ("/" ++) . (++ "/") . L.unpack
+dirName = toRelPath . either (error . displayException) id . parseAbsDir . ("/" ++) . (++ "/") . T.unpack . nameText
+
+uuidName :: UUID -> Name
+uuidName = Name . T.pack . show

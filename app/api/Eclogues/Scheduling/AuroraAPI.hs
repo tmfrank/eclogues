@@ -31,13 +31,14 @@ import qualified AuroraSchedulerManager_Client as AClient
 import qualified ReadOnlyScheduler_Client as ROClient
 
 import Eclogues.Scheduling.AuroraConfig (Role, auroraJobConfig, lockKey, defaultJobKey)
-import Eclogues.JobSpec (JobSpec, Name)
+import Eclogues.JobSpec (JobSpec, Name, nameText)
 
 import Control.Exception (Exception)
 import Control.Monad (void)
 import Control.Monad.Trans.Except (ExceptT (..))
 import Data.Foldable (toList)
 import qualified Data.HashSet as HashSet
+import qualified Data.Text.Lazy as L
 import Data.Typeable (Typeable)
 import Network.URI (URI)
 import Thrift.Protocol.JSON (JSONProtocol (..))
@@ -66,7 +67,9 @@ getJobs client = do
     pure . getJobsResult_configs $ result_getJobsResult res
 
 taskQuery :: Role -> [Name] -> TaskQuery
-taskQuery role names = default_TaskQuery { taskQuery_jobKeys = Just . HashSet.fromList $ defaultJobKey role <$> names }
+taskQuery role names = default_TaskQuery { taskQuery_jobKeys = Just . HashSet.fromList $ key <$> names }
+  where
+    key = defaultJobKey role . L.fromStrict . nameText
 
 getTasksWithoutConfigs :: Client -> Role -> [Name] -> Result [ScheduledTask]
 getTasksWithoutConfigs client role names = do
@@ -81,7 +84,8 @@ unauthenticated = SessionKey (Just "UNAUTHENTICATED") (Just "UNAUTHENTICATED")
 
 acquireLock :: Client -> Role -> Name -> Result Lock
 acquireLock client role name = do
-    res <- ExceptT $ onlyRes <$> AClient.acquireLock client (lockKey role name) unauthenticated
+    let name' = L.fromStrict . nameText $ name
+    res <- ExceptT $ onlyRes <$> AClient.acquireLock client (lockKey role name') unauthenticated
     pure . acquireLockResult_lock $ result_acquireLockResult res
 
 releaseLock :: Client -> Lock -> Result ()

@@ -12,12 +12,13 @@ import StateSpec
 import Test.Hspec
 
 import Data.Aeson (decode)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, fromMaybe)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 
 testThrift :: Spec
 testThrift = do
-    let task = JobSpec "hello" "/bin/echo" (Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)) [] False []
+    let task = JobSpec tn "/bin/echo" (Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)) [] False []
+        tn   = fromMaybe (error "hello is not a valid job name") $ mkName "hello"
 
     describe "ATaskExecConf" $
         it "is embedded in a JobConfiguration" $ do

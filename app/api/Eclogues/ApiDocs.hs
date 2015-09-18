@@ -28,6 +28,7 @@ import Units
 
 import Control.Lens ((.~), (&))
 import qualified Data.ByteString.Lazy as L
+import Data.Maybe (fromJust)
 import Data.Proxy (Proxy (..))
 import Data.Text.Lazy (pack)
 import Data.Text.Lazy.Encoding (encodeUtf8)
@@ -54,11 +55,16 @@ instance ToSample JobState JobState where
 res :: Resources
 res = Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)
 
+helloName :: Name
+helloName = fromJust $ Job.mkName "hello"
+
 spec :: JobSpec
-spec = JobSpec "hello" "echo hello world > hello.txt" res [Job.OutputPath $(mkAbsFile "/hello.txt")] False []
+spec = JobSpec helloName "echo hello world > hello.txt" res [Job.OutputPath $(mkAbsFile "/hello.txt")] False []
 
 depSpec :: JobSpec
-depSpec = JobSpec "cat-hello" "cat virgil-dependencies/hello/hello.txt" res [] True ["hello"]
+depSpec = JobSpec n "cat virgil-dependencies/hello/hello.txt" res [] True [helloName]
+  where
+    n = fromJust $ Job.mkName "cat-hello"
 
 instance ToSample JobSpec JobSpec where
     toSamples _ = [("A job with output", spec)
@@ -66,14 +72,15 @@ instance ToSample JobSpec JobSpec where
 
 failedSpec :: JobStatus
 failedSpec = JobStatus deadSpec (Failed $ NonZeroExitCode 1) nil where
-    deadSpec = JobSpec "i-fail" "exit 1" res [] False []
+    deadSpec = JobSpec n "exit 1" res [] False []
+    n = fromJust $ Job.mkName "i-fail"
 
 instance ToSample JobStatus JobStatus where
     toSample _ = Just failedSpec
 
 instance ToSample [JobStatus] [JobStatus] where
     toSample _ = Just [ JobStatus (spec & Job.command .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) nil
-                      , JobStatus depSpec (Failed $ DependencyFailed "hello") nil]
+                      , JobStatus depSpec (Failed $ DependencyFailed helloName) nil]
 
 instance ToSample () () where
     toSample _ = Nothing

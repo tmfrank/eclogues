@@ -17,18 +17,14 @@ module Main where
 
 import Eclogues.JobSpec (Command, RunResult (..), JobSpec)
 import qualified Eclogues.JobSpec as Job
-import Eclogues.Util (readJSON, orError)
+import Eclogues.Util (AbsDir (..), readJSON, orError)
 import Units
 
 import Control.Arrow ((&&&))
-import Control.Exception (displayException)
 import Control.Lens ((^.))
 import Control.Monad (when)
-import Data.Aeson (FromJSON (..))
-import qualified Data.Aeson as Aeson
 import Data.Aeson.TH (deriveFromJSON, defaultOptions)
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as L
 import Path ( Path, Abs, Dir, File, (</>), toFilePath
             , parseAbsDir, parseAbsFile, mkRelFile, mkRelDir )
 import qualified System.Directory as D
@@ -36,8 +32,6 @@ import System.Environment (getArgs)
 import System.Exit (ExitCode (..))
 import System.FilePath.Glob (glob)
 import System.Process (callProcess, spawnProcess, waitForProcess)
-
-newtype AbsDir = AbsDir { getDir :: Path Abs Dir }
 
 -- | JSON configuration type.
 data SubexecutorConfig = SubexecutorConfig { jobsDir :: AbsDir }
@@ -47,7 +41,7 @@ $(deriveFromJSON defaultOptions ''SubexecutorConfig)
 -- | Run a bash command with a time limit.
 runCommand :: Value Int Second -> Command -> IO RunResult
 runCommand timeout cmd = do
-    proc <- spawnProcess "/usr/bin/timeout" [show (val timeout), "/bin/bash", "-c", L.unpack cmd]
+    proc <- spawnProcess "/usr/bin/timeout" [show (val timeout), "/bin/bash", "-c", T.unpack cmd]
     code <- waitForProcess proc
     pure $ case code of
         ExitFailure 124 -> Overtime
@@ -94,11 +88,7 @@ runJob (AbsDir shared) name = do
 main :: IO ()
 main = do
     conf <- orError =<< readJSON "/etc/xdg/eclogues/subexecutor.json"
-    (name:_) <- getArgs
-    runJob (jobsDir conf) $ L.pack name
-
-instance FromJSON AbsDir where
-    parseJSON (Aeson.String s) = toP $ parseAbsDir $ T.unpack s
-      where
-        toP = either (fail . ("Absolute dir: " ++) . displayException) (pure . AbsDir)
-    parseJSON _                = fail "Absolute dir must be string"
+    (nameStr:_) <- getArgs
+    case Job.mkName $ T.pack nameStr of
+        Nothing   -> error "Invalid job name"
+        Just name -> runJob (jobsDir conf) name
