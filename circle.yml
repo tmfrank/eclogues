@@ -1,0 +1,18 @@
+dependencies:
+  cache_directories:
+    - "~/.stack"
+  pre:
+    - wget https://github.com/commercialhaskell/stack/releases/download/v0.1.4.0/stack-0.1.4.0-x86_64-linux.tar.gz -O /tmp/stack.tar.gz
+    - tar xvf /tmp/stack.tar.gz stack -O > /tmp/stack && chmod +x /tmp/stack
+    - sudo mv /tmp/stack /usr/bin/stack
+  override:
+    - stack setup
+    - sudo apt-get install libzookeeper-mt-dev
+    - stack build --dependencies-only --test
+  post:
+    - stack install hlint
+
+test:
+  override:
+    - stack test
+    - stack exec hlint src/ app/
