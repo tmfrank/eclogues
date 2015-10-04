@@ -1,5 +1,6 @@
 Eclogues
 ========
+[![Build status](https://img.shields.io/circleci/project/rimmington/eclogues/master.svg)](https://circleci.com/gh/rimmington/eclogues/tree/master)
 
 *The Eclogues (/ˈɛklɒɡz/; Latin: Eclogae [ˈɛklɔɡaj]), also called the Bucolics, is the first of the three major works of the Latin poet Virgil.*
 
