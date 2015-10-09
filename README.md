@@ -4,11 +4,14 @@ Eclogues
 
 *The Eclogues (/ˈɛklɒɡz/; Latin: Eclogae [ˈɛklɔɡaj]), also called the Bucolics, is the first of the three major works of the Latin poet Virgil.*
 
-Installing with [Halcyon](http://halcyon.sh)
---------------------------------------------
+Installing with [Stack](https://github.com/commercialhaskell/stack)
+-------------------------------------------------------------------
 
 ```
-halcyon install git://github.com/rimmington/eclogues.git
+sudo apt-get install libzookeeper-mt-dev
+git clone git@github.com:rimmington/eclogues
+cd eclogues
+stack install
 ```
 
 Project Dependencies
