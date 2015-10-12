@@ -22,4 +22,5 @@ specJName x             = toLower <$> drop 1 x
 
 statusJName :: String -> String
 statusJName "__spec" = "spec"
+statusJName "_satis" = "satisfiability"
 statusJName x        = toLower <$> drop 1 x
