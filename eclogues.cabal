@@ -198,6 +198,6 @@ test-suite spec
     default-extensions: LambdaCase ScopedTypeVariables
     other-extensions: OverloadedStrings
     hs-source-dirs: gen-hs app/api test
-    ghc-options: -Wall
+    ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
     other-modules:
         StateSpec

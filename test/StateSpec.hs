@@ -55,7 +55,7 @@ createJob' :: JobSpec -> Scheduler
 createJob' = createJob nil
 
 forceName :: Text -> Name
-forceName name = fromMaybe (error $ "invalid test name" ++ show name) $ mkName name
+forceName jName = fromMaybe (error $ "invalid test name " ++ show jName) $ mkName jName
 
 job :: Name
 job = forceName "job"
@@ -64,7 +64,7 @@ dep :: Name
 dep = forceName "dep"
 
 isolatedJob :: Name -> JobSpec
-isolatedJob name = JobSpec name "/bin/echo" res [] False []
+isolatedJob jName = JobSpec jName "/bin/echo" res [] False []
   where
     res = Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)
 
@@ -320,7 +320,7 @@ testUpdateJobs = let
                 in updated result statuses `shouldHave` noRevDep dep
 
             it "should allow job and dependent to be deleted" $
-                let init = do
+                let start = do
                         createJob' $ isolatedJob dep
                         createJob' $ dependentJob job [dep]
                     modify state = do
@@ -328,7 +328,7 @@ testUpdateJobs = let
                         updateJobs (state ^. jobs) statuses
                         ES.deleteJob dep
                         ES.deleteJob job
-                    result = case scheduler' init of
+                    result = case scheduler' start of
                         Right state -> scheduler state (modify state)
                         Left x -> Left x
                 in do
