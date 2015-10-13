@@ -16,9 +16,9 @@ module Eclogues.Client (
                        -- * Client
                          EcloguesClient, Result, ecloguesClient
                        -- ** View
-                       , getJobs, getJobStatus, getJobState, getHealth, masterHost
+                       , getJobs, getJobStatus, getJobStage, getHealth, masterHost
                        -- ** Mutate
-                       , createJob, deleteJob, setJobState
+                       , createJob, deleteJob, setJobStage
                        -- * Zookeeper
                        , getEcloguesLeader
                        ) where
@@ -44,8 +44,8 @@ type Result a = ExceptT (Either ServantError JobError) IO a
 -- | Functions for interacting with an Eclogues master. See 'ecloguesClient'.
 data EcloguesClient = EcloguesClient { _getJobs      ::             Result [Job.Status]
                                      , _getJobStatus :: Job.Name -> Result Job.Status
-                                     , _getJobState  :: Job.Name -> Result Job.State
-                                     , _setJobState  :: Job.Name -> Job.State -> Result ()
+                                     , _getJobStage  :: Job.Name -> Result Job.Stage
+                                     , _setJobStage  :: Job.Name -> Job.Stage -> Result ()
                                      , _deleteJob    :: Job.Name -> Result ()
                                      , _createJob    :: Job.Spec -> Result ()
                                      , _getHealth    ::             Result Health
@@ -57,10 +57,10 @@ getJobs      :: EcloguesClient -> Result [Job.Status]
 getJobs       = _getJobs
 getJobStatus :: EcloguesClient -> Job.Name -> Result Job.Status
 getJobStatus  = _getJobStatus
-getJobState  :: EcloguesClient -> Job.Name -> Result Job.State
-getJobState   = _getJobState
-setJobState  :: EcloguesClient -> Job.Name -> Job.State -> Result ()
-setJobState   = _setJobState
+getJobStage  :: EcloguesClient -> Job.Name -> Result Job.Stage
+getJobStage   = _getJobStage
+setJobStage  :: EcloguesClient -> Job.Name -> Job.Stage -> Result ()
+setJobStage   = _setJobStage
 deleteJob    :: EcloguesClient -> Job.Name -> Result ()
 deleteJob     = _deleteJob
 createJob    :: EcloguesClient -> Job.Spec -> Result ()
@@ -78,8 +78,8 @@ ecloguesClient = mkClient <=< getEcloguesLeader where
     mkClient hostM = pure . flip fmap hostM $ \(host, port) ->
         let (     getJobs'
              :<|> jobStatus'
-             :<|> jobState'
-             :<|> sJobState'
+             :<|> jobStage'
+             :<|> sJobStage'
              :<|> deleteJob'
              :<|> _  -- scheduler redirect
              :<|> _  -- output redirect
@@ -88,8 +88,8 @@ ecloguesClient = mkClient <=< getEcloguesLeader where
         in EcloguesClient
             (err getJobs')
             (err . jobStatus')
-            (err . jobState')
-            (fmap err . sJobState')
+            (err . jobStage')
+            (fmap err . sJobStage')
             (err . deleteJob')
             (err . createJob')
             (err getHealth')

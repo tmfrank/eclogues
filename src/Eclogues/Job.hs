@@ -20,18 +20,18 @@ Specification of jobs and the current state of submitted jobs.
 
 module Eclogues.Job (
     -- * Job status
-      Status (Status), spec, state, uuid
+      Status (Status), spec, stage, uuid
     -- ** Job spec
     , Spec (Spec), name, command, resources, outputFiles, captureStdout, dependsOn
     , Name, nameText, mkName, dirName, uuidName
     , Command
     , Resources (Resources), disk, ram, cpu, time
     , OutputPath (..), getOutputPath
-    -- ** Job state
-    , State (..), RunResult (..), FailureReason (..), RunErrorReason (..), QueueStage (..)
-    , majorState, majorStates
+    -- ** Job lifecycle stage
+    , Stage (..), RunResult (..), FailureReason (..), RunErrorReason (..), QueueStage (..)
+    , majorStage, majorStages
     -- * Predicates
-    , isActiveState, isTerminationState, isOnScheduler, isExpectedTransition
+    , isActiveStage, isTerminationStage, isOnScheduler, isExpectedTransition
     ) where
 
 import Eclogues.Job.Aeson
@@ -113,7 +113,7 @@ data RunErrorReason = BadSchedulerTransition
 
 data QueueStage = LocalQueue | SchedulerQueue deriving (Show, Eq)
 
-data State = Queued QueueStage
+data Stage = Queued QueueStage
            | Waiting Integer
            | Running
            | Killing
@@ -123,7 +123,7 @@ data State = Queued QueueStage
            deriving (Show, Eq)
 
 data Status = Status { __spec :: Spec
-                     , _state :: State
+                     , _stage :: Stage
                      , _uuid  :: UUID }
                      deriving (Show, Eq)
 
@@ -131,67 +131,67 @@ $(deriveJSON defaultOptions{fieldLabelModifier = statusJName} ''Status)
 $(makeClassy ''Status)
 instance HasSpec Status where spec = _spec
 
--- | Names of 'State' constructors. Could probably be replaced by something
+-- | Names of 'Stage' constructors. Could probably be replaced by something
 -- from "GHC.Generics".
-majorStates :: [String]
-majorStates = ["Queued", "Waiting", "Running", "Killing", "Finished", "Failed", "RunError"]
+majorStages :: [String]
+majorStages = ["Queued", "Waiting", "Running", "Killing", "Finished", "Failed", "RunError"]
 
--- | The 'State' constructor name. Could probably be replaced by something
+-- | The 'Stage' constructor name. Could probably be replaced by something
 -- from "GHC.Generics".
-majorState :: State -> String
-majorState (Queued _)   = "Queued"
-majorState (Waiting _)  = "Waiting"
-majorState Running      = "Running"
-majorState Killing      = "Killing"
-majorState Finished     = "Finished"
-majorState (Failed _)   = "Failed"
-majorState (RunError _) = "RunError"
+majorStage :: Stage -> String
+majorStage (Queued _)   = "Queued"
+majorStage (Waiting _)  = "Waiting"
+majorStage Running      = "Running"
+majorStage Killing      = "Killing"
+majorStage Finished     = "Finished"
+majorStage (Failed _)   = "Failed"
+majorStage (RunError _) = "RunError"
 
 -- | Whether the constructor is 'Queued'.
-isQueueState :: State -> Bool
-isQueueState (Queued _) = True
-isQueueState _          = False
+isQueueStage :: Stage -> Bool
+isQueueStage (Queued _) = True
+isQueueStage _          = False
 
--- | Whether the state is terminal. A terminal state is steady and represents
+-- | Whether the stage is terminal. A terminal stage is steady and represents
 -- the completion (successful or not) of a job.
-isTerminationState :: State -> Bool
-isTerminationState (Queued _)   = False
-isTerminationState (Waiting _)  = False
-isTerminationState Running      = False
-isTerminationState Killing      = False
-isTerminationState Finished     = True
-isTerminationState (Failed _)   = True
-isTerminationState (RunError _) = True
+isTerminationStage :: Stage -> Bool
+isTerminationStage (Queued _)   = False
+isTerminationStage (Waiting _)  = False
+isTerminationStage Running      = False
+isTerminationStage Killing      = False
+isTerminationStage Finished     = True
+isTerminationStage (Failed _)   = True
+isTerminationStage (RunError _) = True
 
--- | > isActiveState = not . 'isTerminationState'
-isActiveState :: State -> Bool
-isActiveState = not . isTerminationState
+-- | > isActiveStage = not . 'isTerminationStage'
+isActiveStage :: Stage -> Bool
+isActiveStage = not . isTerminationStage
 
 -- | Whether the job is known by the remote scheduler.
-isOnScheduler :: State -> Bool
+isOnScheduler :: Stage -> Bool
 isOnScheduler (Queued LocalQueue) = False
 isOnScheduler (Waiting _)         = False
-isOnScheduler s                   = isActiveState s
+isOnScheduler s                   = isActiveStage s
 
--- | Whether the first JobState may transition to the second in the lifecycle.
+-- | Whether the first 'Stage' may transition to the second in the lifecycle.
 -- Unexpected transitions are treated as scheduler errors
 -- ('BadSchedulerTransition').
-isExpectedTransition :: State -> State -> Bool
+isExpectedTransition :: Stage -> Stage -> Bool
 isExpectedTransition (Queued LocalQueue) (Queued SchedulerQueue) = True
 isExpectedTransition (Queued _)   Running       = True
 isExpectedTransition (Waiting 0)  Running       = True
 isExpectedTransition Running      (Queued SchedulerQueue) = True
 isExpectedTransition Killing      (Failed UserKilled) = True
-isExpectedTransition o n | isQueueState o || o == Running = case n of
+isExpectedTransition o n | isQueueStage o || o == Running = case n of
                                   Finished     -> True
                                   (Failed _)   -> True
                                   (RunError _) -> True
                                   _            -> False
 isExpectedTransition _            _             = False
 
-instance ToJSON State where
-    toJSON (Queued LocalQueue)     = object ["type" .= "Queued", "stage" .= "local"]
-    toJSON (Queued SchedulerQueue) = object ["type" .= "Queued", "stage" .= "scheduler"]
+instance ToJSON Stage where
+    toJSON (Queued LocalQueue)     = object ["type" .= "Queued", "substage" .= "local"]
+    toJSON (Queued SchedulerQueue) = object ["type" .= "Queued", "substage" .= "scheduler"]
     toJSON (Waiting n) = object ["type" .= "Waiting", "for" .= n]
     toJSON Running     = object ["type" .= "Running"]
     toJSON Killing     = object ["type" .= "Killing"]
@@ -206,11 +206,11 @@ instance ToJSON State where
     toJSON (Failed TimeExceeded) = object ["type" .= "Failed", "reason" .= "TimeExceeded"]
     toJSON (Failed (DependencyFailed n)) = object ["type" .= "Failed", "reason" .= "DependencyFailed", "dependency" .= n]
 
-instance FromJSON State where
+instance FromJSON Stage where
     parseJSON (Aeson.Object v) = do
         typ <- v .: "type"
         case typ of
-            "Queued"   -> v .: "stage" >>= \case
+            "Queued"   -> v .: "substage" >>= \case
                 "local"     -> pure $ Queued LocalQueue
                 "scheduler" -> pure $ Queued SchedulerQueue
                 _           -> fail "Invalid queue stage"
@@ -231,8 +231,8 @@ instance FromJSON State where
                 "NonZeroExitCode"  -> Failed . NonZeroExitCode <$> v .: "exitCode"
                 "DependencyFailed" -> Failed . DependencyFailed <$> v .: "dependency"
                 _                  -> fail "Invalid failure reason"
-            _          -> fail "Invalid job state type"
-    parseJSON _ = fail "Invalid job state value"
+            _          -> fail "Invalid job stage type"
+    parseJSON _ = fail "Invalid job stage value"
 
 instance FromJSON Resources where
     parseJSON = validate <=< getJSON where

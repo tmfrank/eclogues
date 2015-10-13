@@ -30,8 +30,8 @@ type Get' = Get '[JSON]
 
 type VAPI =  "jobs"   :> Get' [Job.Status]
         :<|> "jobs"   :> Capture "name" Job.Name  :> Get' Job.Status
-        :<|> "jobs"   :> Capture "name" Job.Name  :> "state" :> Get' Job.State
-        :<|> "jobs"   :> Capture "name" Job.Name  :> "state" :> ReqBody '[JSON] Job.State  :> Put '[JSON] ()
+        :<|> "jobs"   :> Capture "name" Job.Name  :> "stage" :> Get' Job.Stage
+        :<|> "jobs"   :> Capture "name" Job.Name  :> "stage" :> ReqBody '[JSON] Job.Stage  :> Put '[JSON] ()
         :<|> "jobs"   :> Capture "name" Job.Name  :> "scheduler" :> Get' ()
         :<|> "jobs"   :> Capture "name" Job.Name  :> "output" :> QueryParam "path" AbsFile :> Get' ()
         :<|> "jobs"   :> Capture "name" Job.Name  :> Delete '[JSON] ()
@@ -44,7 +44,7 @@ data JobError = JobNameUsed
               | JobCannotHaveFailed Job.Name
               | JobMustBeTerminated Bool
               | OutstandingDependants [Job.Name]
-              | InvalidStateTransition String
+              | InvalidStageTransition String
               | SchedulerRedirect URI
               | SchedulerInaccessible
                 deriving (Show, Eq)

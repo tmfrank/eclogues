@@ -38,11 +38,11 @@ jsonPersistParse :: (FromJSON a) => T.Text -> P.PersistValue -> Either T.Text a
 jsonPersistParse _ (P.PersistByteString bs) = mapLeft T.pack $ eitherDecodeStrict bs
 jsonPersistParse n e                        = Left . (("Invalid " <> n <> " persist value ") <>) . T.pack $ show e
 
-instance P.PersistField Job.State where
+instance P.PersistField Job.Stage where
     toPersistValue = jsonPersistValue
-    fromPersistValue = jsonPersistParse "State"
+    fromPersistValue = jsonPersistParse "Stage"
 
-instance PSql.PersistFieldSql Job.State where
+instance PSql.PersistFieldSql Job.Stage where
     sqlType _ = PSql.SqlBlob
 
 instance P.PersistField Job.Spec where

@@ -22,9 +22,9 @@ module Eclogues.Scheduling.Command ( ScheduleCommand (..), ScheduleConf (..), Au
 import Prelude hiding (writeFile, readFile)
 
 import qualified Eclogues.Scheduling.AuroraAPI as A
-import Eclogues.Scheduling.AuroraConfig (Role, getJobName, getJobState)
+import Eclogues.Scheduling.AuroraConfig (Role, getJobName, getJobStage)
 import Eclogues.Job (
-    State (..), FailureReason (..), RunErrorReason (..), RunResult (..))
+    Stage (..), FailureReason (..), RunErrorReason (..), RunResult (..))
 import qualified Eclogues.Job as Job
 import Eclogues.Paths (runResult, specFile)
 
@@ -77,28 +77,28 @@ runScheduleCommand conf (KillJob _name uuid) = do
 runScheduleCommand conf (CleanupJob name _uuid) = lift . void $
     tryJust (guard . isDoesNotExistError) . removeDirectoryRecursive $ jobDir conf name
 
-getSchedulerStatuses :: ScheduleConf -> [Job.Status] -> ExceptT A.UnexpectedResponse IO [(Job.Name, Job.State)]
+getSchedulerStatuses :: ScheduleConf -> [Job.Status] -> ExceptT A.UnexpectedResponse IO [(Job.Name, Job.Stage)]
 getSchedulerStatuses conf jss = do
     client <- lift $ A.thriftClient $ auroraURI conf
     auroraTasks <- A.getTasksWithoutConfigs client (auroraRole conf) (map fst uuids)
-    let newUncheckedStates = catMaybes $ extractState <$> auroraTasks
-    lift $ mapM checkFinState newUncheckedStates
+    let newUncheckedStages = catMaybes $ extractStage <$> auroraTasks
+    lift $ mapM checkFinStage newUncheckedStages
     where
-        checkFinState :: (Job.Name, Job.State) -> IO (Job.Name, Job.State)
-        checkFinState (n, Finished) = do
+        checkFinStage :: (Job.Name, Job.Stage) -> IO (Job.Name, Job.Stage)
+        checkFinStage (n, Finished) = do
             exitCodeStrM <- try $ readFile (jobDir conf n </> runResult) :: IO (Either IOException ByteString)
             case exitCodeStrM of
                 Left  _ -> pure (n, RunError SubexecutorFailure)
                 Right a -> pure . (n,) . checkRunResult $ eitherDecode' a
-        checkFinState e = pure e
-        checkRunResult :: Either e RunResult -> Job.State
+        checkFinStage e = pure e
+        checkRunResult :: Either e RunResult -> Job.Stage
         checkRunResult = either (const $ RunError SubexecutorFailure) $ \case
             Ended ExitSuccess     -> Finished
             Ended (ExitFailure c) -> Failed (NonZeroExitCode c)
             Overtime              -> Failed TimeExceeded
         uuids = map (Job.uuidName . view Job.uuid &&& view Job.name) jss
         aUuidToName = flip lookup uuids <=< Job.mkName . L.toStrict . getJobName
-        extractState at = (, getJobState at) <$> aUuidToName at
+        extractStage at = (, getJobStage at) <$> aUuidToName at
 
 schedulerJobUI :: String -> URI -> UUID -> URI
 schedulerJobUI user uri uuid = uri { uriPath = "/scheduler/" ++ user ++ "/devel/" ++ show uuid }

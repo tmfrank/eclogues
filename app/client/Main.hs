@@ -19,7 +19,7 @@ import Prelude hiding (readFile)
 
 import Database.Zookeeper.ManagedEvents (ZKURI, withZookeeper)
 import Eclogues.Util (orShowError)
-import Eclogues.Client ( ecloguesClient, getJobs, getJobState, masterHost
+import Eclogues.Client ( ecloguesClient, getJobs, getJobStage, masterHost
                        , createJob, getHealth )
 import qualified Eclogues.Job as Job
 
@@ -54,7 +54,7 @@ data Opts = Opts { optZkUri   :: Maybe ZKURI
 
 -- | CLI subcommand.
 data Command = ListJobs
-             | JobState Job.Name
+             | JobStage Job.Name
              | CreateJob FilePath
              | GetMaster
              | GetHealth
@@ -90,7 +90,7 @@ go opts = do
         GetHealth     -> runClient (BSLC.putStrLn . encode) $ getHealth client
         ListJobs      -> runClient print $ getJobs client
         JobStats as   -> runClient (printStats as) $ getJobs client
-        JobState name -> runClient print $ getJobState client name
+        JobStage name -> runClient print $ getJobStage client name
         CreateJob sf  -> do
             cts <- readFile sf
             case eitherDecode cts of
@@ -103,9 +103,9 @@ go opts = do
         printStats as = mapM_ (putStrLn . intercalate "\t" . biList . second show) . HashMap.toList . getStats (statStart as)
         statStart :: Bool -> HashMap String Integer
         statStart False = HashMap.empty
-        statStart True  = foldl' (flip (`HashMap.insert` 0)) HashMap.empty Job.majorStates
+        statStart True  = foldl' (flip (`HashMap.insert` 0)) HashMap.empty Job.majorStages
         getStats :: HashMap String Integer -> [Job.Status] -> HashMap String Integer
-        getStats = foldl' (\m j -> HashMap.insertWith (+) (Job.majorState $ j ^. Job.state) 1 m)
+        getStats = foldl' (\m j -> HashMap.insertWith (+) (Job.majorStage $ j ^. Job.stage) 1 m)
 
 main :: IO ()
 main = execParser opts >>= go where
@@ -121,11 +121,11 @@ main = execParser opts >>= go where
     cmdOpt :: Parser Command
     cmdOpt = subparser
         ( command "list"   (info (pure ListJobs)         (progDesc "List all jobs"))
-       <> command "state"  (info (JobState  <$> nameArg) (progDesc "Get the state of a job"))
+       <> command "stage"  (info (JobStage  <$> nameArg) (progDesc "Get the stage of a job"))
        <> command "create" (info (CreateJob <$> specArg) (progDesc "Schedule a job"))
        <> command "master" (info (pure GetMaster)        (progDesc "Print Eclogues master host"))
        <> command "stats"  (info (JobStats <$> allArg)   (progDesc "Get running job stats"))
        <> command "health" (info (pure GetHealth)        (progDesc "Get service health")) )
     nameArg = argument (Job.mkName . T.pack =<< readerAsk) (metavar "JOB_NAME")
     specArg = strArgument (metavar "SPEC_FILE")
-    allArg  = switch (long "all-states" <> help "List states with no associated jobs")
+    allArg  = switch (long "all-stages" <> help "List stages with no associated jobs")

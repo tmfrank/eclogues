@@ -29,7 +29,7 @@ module Eclogues.Persist (
                         -- * View
                         , allIntents, allJobs
                         -- * Mutate
-                        , insert, updateState, delete, scheduleIntent, deleteIntent )
+                        , insert, updateStage, delete, scheduleIntent, deleteIntent )
                         where
 
 import Eclogues.Persist.Stage1 ()
@@ -54,7 +54,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Job
     name Job.Name
     spec Job.Spec
-    state Job.State
+    stage Job.Stage
     uuid UUID
     UniqueName name
 ScheduleIntent
@@ -92,11 +92,11 @@ insert :: Job.Status -> Action ()
 insert (Job.Status spec st uuid) = Action $ P.insert_ job where
     job = Job { jobName = spec ^. Job.name
               , jobSpec = spec
-              , jobState = st
+              , jobStage = st
               , jobUuid = uuid }
 
-updateState :: Job.Name -> Job.State -> Action ()
-updateState name st = Action $ P.updateWhere [JobName ==. name] [JobState =. st]
+updateStage :: Job.Name -> Job.Stage -> Action ()
+updateStage name st = Action $ P.updateWhere [JobName ==. name] [JobStage =. st]
 
 delete :: Job.Name -> Action ()
 delete = Action . P.deleteBy . UniqueName

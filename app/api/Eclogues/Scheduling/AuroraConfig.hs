@@ -18,13 +18,13 @@ Conversion between Aurora Thrift types and the saner "Eclogues.JobSpec" types.
 module Eclogues.Scheduling.AuroraConfig (
       ATaskExecConf, TaskConfig, Role, Name
     , auroraJobConfig, lockKey, defaultJobKey
-    , getJobName, getJobState ) where
+    , getJobName, getJobStage ) where
 
 import Api_Types hiding (DRAINING, FAILED, FINISHED)
 import Api_Types2
 
 import Eclogues.Job (
-      State (..), QueueStage (SchedulerQueue)
+      Stage (..), QueueStage (SchedulerQueue)
     , FailureReason (..), RunErrorReason (SubexecutorFailure))
 import qualified Eclogues.Job as Job
 import Units
@@ -222,31 +222,31 @@ lockKey role = LockKey . defaultJobKey role
 getJobName :: ScheduledTask -> Name
 getJobName = jobKey_name . taskConfig_job . assignedTask_task . scheduledTask_assignedTask
 
-jobState' :: ScheduleStatus -> [TaskEvent] -> Job.State
-jobState' INIT       _  = Queued SchedulerQueue
-jobState' THROTTLED  _  = Running
-jobState' PENDING    _  = Queued SchedulerQueue
-jobState' ASSIGNED   _  = Queued SchedulerQueue
-jobState' STARTING   _  = Running
-jobState' RUNNING    _  = Running
-jobState' KILLING    _  = Running
-jobState' PREEMPTING _  = Queued SchedulerQueue
-jobState' RESTARTING _  = Queued SchedulerQueue
-jobState' DRAINING   _  = Queued SchedulerQueue
-jobState' LOST       es =
+jobStage :: ScheduleStatus -> [TaskEvent] -> Job.Stage
+jobStage INIT       _  = Queued SchedulerQueue
+jobStage THROTTLED  _  = Running
+jobStage PENDING    _  = Queued SchedulerQueue
+jobStage ASSIGNED   _  = Queued SchedulerQueue
+jobStage STARTING   _  = Running
+jobStage RUNNING    _  = Running
+jobStage KILLING    _  = Running
+jobStage PREEMPTING _  = Queued SchedulerQueue
+jobStage RESTARTING _  = Queued SchedulerQueue
+jobStage DRAINING   _  = Queued SchedulerQueue
+jobStage LOST       es =
   if KILLING `notElem` (taskEvent_status <$> es)
     then Queued SchedulerQueue
     else Failed UserKilled
-jobState' KILLED     es = jobEventsToState es
-jobState' FINISHED   es = jobEventsToState es
-jobState' FAILED     es = jobEventsToState es
+jobStage KILLED     es = jobEventsToStage es
+jobStage FINISHED   es = jobEventsToStage es
+jobStage FAILED     es = jobEventsToStage es
 
-jobEventsToState :: [TaskEvent] -> Job.State
-jobEventsToState es
+jobEventsToStage :: [TaskEvent] -> Job.Stage
+jobEventsToStage es
   | any isRescheduleEvent events = Queued SchedulerQueue
   | KILLED `elem` events         = Failed UserKilled
   | Just fev <- find ((== FAILED) . taskEvent_status) es =
-      maybe (RunError SubexecutorFailure) failureState $ taskEvent_message fev
+      maybe (RunError SubexecutorFailure) failureStage $ taskEvent_message fev
   | otherwise                    = Finished
   where
     events = taskEvent_status <$> es
@@ -254,10 +254,10 @@ jobEventsToState es
     isRescheduleEvent DRAINING   = True
     isRescheduleEvent PREEMPTING = True
     isRescheduleEvent _          = False
-    failureState msg
+    failureStage msg
       | "Memory limit exceeded" `L.isPrefixOf` msg = Failed MemoryExceeded
       | "Disk limit exceeded"   `L.isPrefixOf` msg = Failed DiskExceeded
       | otherwise                                  = RunError SubexecutorFailure
 
-getJobState :: ScheduledTask -> Job.State
-getJobState st = jobState' (scheduledTask_status st) (toList $ scheduledTask_taskEvents st)
+getJobStage :: ScheduledTask -> Job.Stage
+getJobStage st = jobStage (scheduledTask_status st) (toList $ scheduledTask_taskEvents st)

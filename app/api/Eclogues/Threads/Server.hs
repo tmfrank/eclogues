@@ -73,13 +73,13 @@ serve host port conf = Warp.runSettings settings . myCors . Server.serve (Proxy 
 mainServer :: AppConfig -> TVar AppState -> Server VAPI
 mainServer conf stateV = handleExcept server' where
     server' :: ServerT VAPI (ExceptT JobError IO)
-    server' = getJobsH :<|> getJobH :<|> getJobStateH :<|> killJobH :<|>
+    server' = getJobsH :<|> getJobH :<|> getJobStageH :<|> killJobH :<|>
               mesosJob :<|> outputH :<|> deleteJobH :<|> createJobH :<|> healthH
 
     healthH = lift $ Health . isJust <$> atomically (Config.auroraURI conf)
     getJobsH = lift $ getJobs <$> atomically (readTVar stateV)
     getJobH jid = getJob jid =<< lift (atomically $ readTVar stateV)
-    getJobStateH = fmap (^. Job.state) . getJobH
+    getJobStageH = fmap (^. Job.stage) . getJobH
     createJobH spec = lift randomIO >>= runScheduler' . flip createJob spec
     deleteJobH = runScheduler' . deleteJob
     mesosJob = toMesos <=< getJobH where
@@ -96,7 +96,7 @@ mainServer conf stateV = handleExcept server' where
     killJobH jid (Job.Failed UserKilled) = runScheduler' $ killJob jid
     killJobH jid _                       = do
         _ <- getJobH jid
-        throwE $ InvalidStateTransition "Can only set state to Failed UserKilled"
+        throwE $ InvalidStageTransition "Can only set stage to Failed UserKilled"
     runScheduler' = runScheduler conf stateV
 
 handleExcept :: ServerT VAPI (ExceptT JobError IO) -> Server VAPI

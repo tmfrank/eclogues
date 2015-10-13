@@ -22,7 +22,7 @@ Portability : portable
 module Eclogues.ApiDocs (VAPIWithDocs, apiDocs, apiDocsMd, apiDocsHtml) where
 
 import Eclogues.API (VAPI, Health (Health), AbsFile)
-import Eclogues.Job (State (Failed, Running), FailureReason (..))
+import Eclogues.Job (Stage (Failed, Running), FailureReason (..))
 import qualified Eclogues.Job as Job
 import Units
 
@@ -48,7 +48,7 @@ instance ToCapture (Capture "name" Job.Name) where
 instance ToParam (QueryParam "path" AbsFile) where
     toParam _ = DocQueryParam "path" ["stdout", "JOB_SPECIFIC_PATH"] "output file path" Normal
 
-instance ToSample Job.State Job.State where
+instance ToSample Job.Stage Job.Stage where
     toSamples _ = [("A running task", Running)
                   ,("A task killed by a user", Failed UserKilled)]
 

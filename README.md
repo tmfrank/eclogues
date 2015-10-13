@@ -69,11 +69,11 @@ List all jobs.
 ### GET `/jobs/:name`
 Information about a particular job.
 
-### GET `/jobs/:name/state`
-Get only the state of a particular job.
+### GET `/jobs/:name/stage`
+Get only the stage of a particular job.
 
-### PUT `/jobs/:name/state`
-Kill a job, by putting the following state:
+### PUT `/jobs/:name/stage`
+Kill a job, by putting the following stage:
 
 ```
 {"type":"Failed","reason":"UserKilled"}
