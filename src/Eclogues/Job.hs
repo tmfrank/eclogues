@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# OPTIONS_GHC -fno-warn-type-defaults #-}
+{-# OPTIONS_GHC -fno-warn-type-defaults -fno-warn-orphans #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
 {-|
@@ -93,7 +93,10 @@ instance HasResources Spec where resources = _resources
 
 -- | The result of a job, as communicated by the subexecutor. Other failure
 -- modes are communicated by the scheduler.
-data RunResult = Ended ExitCode | Overtime deriving (Show, Read)
+data RunResult = Ended ExitCode | Overtime deriving (Show)
+
+$(deriveJSON defaultOptions ''ExitCode)
+$(deriveJSON defaultOptions ''RunResult)
 
 data FailureReason = UserKilled
                    | NonZeroExitCode Int

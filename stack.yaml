@@ -4,6 +4,11 @@ packages:
 - location:
     git: git@github.com:rimmington/thrift-hs
     commit: 6fe95c60d5085723fc49ed8e156cae8dd151456f
+  extra-dep: true
+- location:
+    git: git@github.com:rimmington/path-io
+    commit: b5e6eeab41b77b435650425e7f8c1720ff27eaeb
+  extra-dep: true
 extra-deps:
 - data-default-generics-0.3
 - hzk-2.1.0

@@ -55,7 +55,7 @@ import Data.Word (Word16)
 import Database.Zookeeper (ZKError)
 import Network.URI (URI (uriPath), escapeURIString, isUnescapedInURI)
 import Path (toFilePath)
-import System.Directory (createDirectoryIfMissing)
+import Path.IO (createDirectoryIfMissing)
 import System.IO (hPutStrLn, stderr)
 import System.Random (mkStdGen, setStdGen)
 
@@ -89,7 +89,7 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
     let jdir = getDir $ jobsDir apiConf
     schedV <- newTChanIO  -- Scheduler action channel
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
-    createDirectoryIfMissing False $ toFilePath jdir
+    createDirectoryIfMissing False jdir
     Persist.withPersistDir jdir $ \pctx' -> do
         let conf   = AppConfig jdir getURI schedV pctx' jobURI outURI user
             user   = subexecutorUser apiConf

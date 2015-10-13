@@ -19,13 +19,14 @@ Communication with the remote scheduler.
 module Eclogues.Scheduling.Command ( ScheduleCommand (..), ScheduleConf (..), AuroraURI
                                    , runScheduleCommand, getSchedulerStatuses, schedulerJobUI ) where
 
-import Prelude hiding (writeFile)
+import Prelude hiding (writeFile, readFile)
 
 import qualified Eclogues.Scheduling.AuroraAPI as A
 import Eclogues.Scheduling.AuroraConfig (Role, getJobName, getJobState)
 import Eclogues.Job (
     State (..), FailureReason (..), RunErrorReason (..), RunResult (..))
 import qualified Eclogues.Job as Job
+import Eclogues.Paths (runResult, specFile)
 
 import Control.Arrow ((&&&))
 import Control.Exception (IOException, try, tryJust)
@@ -33,19 +34,18 @@ import Control.Lens ((^.), (&), (.~), view)
 import Control.Monad ((<=<), guard, void)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..))
-import Data.Aeson (encode)
+import Data.Aeson (encode, eitherDecode')
 import Data.Aeson.TH (deriveJSON, defaultOptions)
-import Data.ByteString.Lazy (writeFile)
-import Data.Maybe (fromMaybe, catMaybes)
+import Data.ByteString.Lazy (ByteString)
+import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as L
 import Data.UUID (UUID)
 import Network.URI (URI (uriPath))
-import Path (Path, Abs, Dir, (</>), toFilePath)
-import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
+import Path ((</>), mkRelDir)
+import Path.IO (Dir, readFile, writeFile, createDirectoryIfMissing, removeDirectoryRecursive)
 import System.Exit (ExitCode (..))
 import System.IO.Error (isDoesNotExistError)
-import Text.Read.HT (maybeRead)
 
 -- | Tell the scheduler to do something.
 data ScheduleCommand = QueueJob   Job.Spec UUID
@@ -55,10 +55,10 @@ data ScheduleCommand = QueueJob   Job.Spec UUID
 $(deriveJSON defaultOptions ''ScheduleCommand)
 
 type AuroraURI = URI
-data ScheduleConf = ScheduleConf { jobsDir :: Path Abs Dir, auroraRole :: Role, auroraURI :: AuroraURI }
+data ScheduleConf = ScheduleConf { jobsDir :: Dir, auroraRole :: Role, auroraURI :: AuroraURI }
 
-jobDir :: ScheduleConf -> Job.Name -> FilePath
-jobDir conf n = toFilePath $ jobsDir conf </> Job.dirName n
+jobDir :: ScheduleConf -> Job.Name -> Dir
+jobDir conf n = jobsDir conf </> Job.dirName n
 
 runScheduleCommand :: ScheduleConf -> ScheduleCommand -> ExceptT A.UnexpectedResponse IO ()
 runScheduleCommand conf (QueueJob spec uuid) = do
@@ -67,9 +67,8 @@ runScheduleCommand conf (QueueJob spec uuid) = do
                        & Job.name    .~ Job.uuidName uuid
     lift $ do
         createDirectoryIfMissing False dir
-        createDirectoryIfMissing False $ dir ++ "/workspace"
-        createDirectoryIfMissing False $ dir ++ "/output"
-        writeFile (dir ++ "/spec.json") (encode spec)
+        createDirectoryIfMissing False $ dir </> $(mkRelDir "output")
+        writeFile (dir </> specFile) (encode spec)
     client <- lift $ A.thriftClient $ auroraURI conf
     A.createJob client (auroraRole conf) subspec
 runScheduleCommand conf (KillJob _name uuid) = do
@@ -87,13 +86,13 @@ getSchedulerStatuses conf jss = do
     where
         checkFinState :: (Job.Name, Job.State) -> IO (Job.Name, Job.State)
         checkFinState (n, Finished) = do
-            exitCodeStrM <- try $ readFile (jobDir conf n ++ "/runresult") :: IO (Either IOException String)
+            exitCodeStrM <- try $ readFile (jobDir conf n </> runResult) :: IO (Either IOException ByteString)
             case exitCodeStrM of
                 Left  _ -> pure (n, RunError SubexecutorFailure)
-                Right a -> pure . (n,) . fromMaybe (RunError SubexecutorFailure) $ checkRunResult <$> maybeRead a
+                Right a -> pure . (n,) . checkRunResult $ eitherDecode' a
         checkFinState e = pure e
-        checkRunResult :: RunResult -> Job.State
-        checkRunResult = \case
+        checkRunResult :: Either e RunResult -> Job.State
+        checkRunResult = either (const $ RunError SubexecutorFailure) $ \case
             Ended ExitSuccess     -> Finished
             Ended (ExitFailure c) -> Failed (NonZeroExitCode c)
             Overtime              -> Failed TimeExceeded

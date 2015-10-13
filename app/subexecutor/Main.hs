@@ -15,19 +15,23 @@ Entry point for the subexecutor, called by the executor on compute slaves.
 
 module Main where
 
+import Prelude hiding (writeFile)
+
 import Eclogues.Job (RunResult (..))
 import qualified Eclogues.Job as Job
+import Eclogues.Paths (runResult, specFile)
 import Eclogues.Util (AbsDir (..), readJSON, orError)
 import Units
 
 import Control.Arrow ((&&&))
 import Control.Lens ((^.))
 import Control.Monad (when)
+import Data.Aeson (encode)
 import Data.Aeson.TH (deriveFromJSON, defaultOptions)
 import qualified Data.Text as T
-import Path ( Path, Abs, Dir, File, (</>), toFilePath
-            , parseAbsDir, parseAbsFile, mkRelFile, mkRelDir )
-import qualified System.Directory as D
+import Path ( Path, Abs, Dir, (</>), toFilePath
+            , parseAbsFile, mkRelFile, mkRelDir )
+import Path.IO (getCurrentDirectory, createDirectoryIfMissing, copyFile, writeFile)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (..))
 import System.FilePath.Glob (glob)
@@ -51,37 +55,33 @@ runCommand timeout cmd = do
 copyDirContents :: Path Abs Dir -> Path Abs Dir -> IO ()
 copyDirContents from to = callProcess "/bin/cp" ["-r", toFilePath from ++ ".", toFilePath to]
 
-copyFile :: Path Abs File -> Path Abs a -> IO ()
-copyFile a = D.copyFile (toFilePath a) . toFilePath
-
 -- | Run a job from its spec.
 runJob :: AbsDir    -- ^ Shared jobs directory
        -> Job.Name  -- ^ Job name
        -> IO ()
 runJob (AbsDir shared) name = do
-    cwd <- parseAbsDir =<< D.getCurrentDirectory
+    cwd <- getCurrentDirectory
     let inputDir = cwd </> $(mkRelDir "virgil-dependencies/")
         copyDep = uncurry copyDirContents . (outputDir &&& (inputDir </>)) . Job.dirName
         copyOutput f = copyFile (Job.getOutputPath cwd f)
                                 (Job.getOutputPath (outputDir jobDirName) f)
 
-    spec <- orError =<< readJSON (toFilePath specFile) :: IO Job.Spec
+    spec <- orError =<< readJSON (toFilePath $ specDir </> specFile) :: IO Job.Spec
 
-    D.createDirectoryIfMissing False $ toFilePath inputDir
+    createDirectoryIfMissing False inputDir
     mapM_ copyDep $ spec ^. Job.dependsOn
 
     runRes <- runCommand (spec ^. Job.time) (spec ^. Job.command)
 
     -- TODO: Trigger Failed state when output doesn't exist
     mapM_ copyOutput $ spec ^. Job.outputFiles
-    writeFile (toFilePath $ specDir </> $(mkRelFile "runresult")) (show runRes)
+    writeFile (specDir </> runResult) $ encode runRes
     when (spec ^. Job.captureStdout) $ glob ".logs/*/0/stdout" >>= \case
         [fp] | Just fn <- parseAbsFile fp
              -> copyFile fn $ outputDir jobDirName </> $(mkRelFile "stdout")
         _    -> error "Stdout log file missing"
   where
     specDir = shared </> jobDirName
-    specFile = specDir </> $(mkRelFile "spec.json")
     outputDir n = shared </> n </> $(mkRelDir "output/")
     jobDirName = Job.dirName name
 
