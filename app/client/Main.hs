@@ -21,7 +21,7 @@ import Database.Zookeeper.ManagedEvents (ZKURI, withZookeeper)
 import Eclogues.Util (orShowError)
 import Eclogues.Client ( ecloguesClient, getJobs, getJobState, masterHost
                        , createJob, getHealth )
-import Eclogues.JobSpec (JobStatus, Name, majorState, majorJobStates, jobState, mkName)
+import qualified Eclogues.Job as Job
 
 import Control.Applicative (optional)
 import Control.Lens ((^.))
@@ -49,12 +49,12 @@ import System.Directory (doesFileExist)
 import System.Environment.XDG.BaseDir (getAllConfigFiles)
 
 -- | CLI options.
-data Opts = Opts { optZkUri  :: Maybe ZKURI
+data Opts = Opts { optZkUri   :: Maybe ZKURI
                  , optCommand :: Command }
 
 -- | CLI subcommand.
 data Command = ListJobs
-             | JobState Name
+             | JobState Job.Name
              | CreateJob FilePath
              | GetMaster
              | GetHealth
@@ -99,13 +99,13 @@ go opts = do
     where
         runClient :: forall a e. (Show e) => (a -> IO ()) -> ExceptT e IO a -> IO ()
         runClient f = ((f <=< orShowError) =<<) . runExceptT
-        printStats :: Bool -> [JobStatus] -> IO ()
+        printStats :: Bool -> [Job.Status] -> IO ()
         printStats as = mapM_ (putStrLn . intercalate "\t" . biList . second show) . HashMap.toList . getStats (statStart as)
         statStart :: Bool -> HashMap String Integer
         statStart False = HashMap.empty
-        statStart True  = foldl' (flip (`HashMap.insert` 0)) HashMap.empty majorJobStates
-        getStats :: HashMap String Integer -> [JobStatus] -> HashMap String Integer
-        getStats = foldl' (\m j -> HashMap.insertWith (+) (majorState $ j ^. jobState) 1 m)
+        statStart True  = foldl' (flip (`HashMap.insert` 0)) HashMap.empty Job.majorStates
+        getStats :: HashMap String Integer -> [Job.Status] -> HashMap String Integer
+        getStats = foldl' (\m j -> HashMap.insertWith (+) (Job.majorState $ j ^. Job.state) 1 m)
 
 main :: IO ()
 main = execParser opts >>= go where
@@ -126,6 +126,6 @@ main = execParser opts >>= go where
        <> command "master" (info (pure GetMaster)        (progDesc "Print Eclogues master host"))
        <> command "stats"  (info (JobStats <$> allArg)   (progDesc "Get running job stats"))
        <> command "health" (info (pure GetHealth)        (progDesc "Get service health")) )
-    nameArg = argument (mkName . T.pack =<< readerAsk) (metavar "JOB_NAME")
+    nameArg = argument (Job.mkName . T.pack =<< readerAsk) (metavar "JOB_NAME")
     specArg = strArgument (metavar "SPEC_FILE")
     allArg  = switch (long "all-states" <> help "List states with no associated jobs")

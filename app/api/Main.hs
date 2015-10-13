@@ -21,7 +21,7 @@ import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
 import Eclogues.API (AbsFile)
 import Eclogues.AppConfig (AppConfig (AppConfig))
 import qualified Eclogues.AppConfig as Config
-import qualified Eclogues.JobSpec as Job
+import qualified Eclogues.Job as Job
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
 import Eclogues.Scheduling.Command (runScheduleCommand, schedulerJobUI)

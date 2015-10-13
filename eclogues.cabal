@@ -13,10 +13,12 @@ library
         Database.Zookeeper.Election,
         Database.Zookeeper.ManagedEvents,
         Eclogues.API,
-        Eclogues.JobSpec,
+        Eclogues.Job,
         Eclogues.ServantInstances,
         Eclogues.Util
         Units
+    other-modules:
+        Eclogues.Job.Aeson
     build-depends:
         base >=4.7.0.1 && <4.9,
         text >=1.1.0.0 && <1.3,
@@ -44,8 +46,6 @@ library
                       FlexibleInstances KindSignatures MultiParamTypeClasses
                       OverloadedStrings TemplateHaskell TypeOperators
     hs-source-dirs: src
-    other-modules:
-        Eclogues.JobSpec.Aeson
     ghc-options: -Wall -Werror
 
 executable eclogues-api

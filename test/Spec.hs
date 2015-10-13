@@ -4,8 +4,8 @@ module Main where
 
 import Api_Types
 
+import qualified Eclogues.Job as Job
 import Eclogues.Scheduling.AuroraConfig
-import Eclogues.JobSpec
 import Units
 import StateSpec
 
@@ -17,8 +17,8 @@ import Data.Text.Lazy.Encoding (encodeUtf8)
 
 testThrift :: Spec
 testThrift = do
-    let task = JobSpec tn "/bin/echo" (Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)) [] False []
-        tn   = fromMaybe (error "hello is not a valid job name") $ mkName "hello"
+    let task = Job.Spec tn "/bin/echo" (Job.Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)) [] False []
+        tn   = fromMaybe (error "hello is not a valid job name") $ Job.mkName "hello"
 
     describe "ATaskExecConf" $
         it "is embedded in a JobConfiguration" $ do

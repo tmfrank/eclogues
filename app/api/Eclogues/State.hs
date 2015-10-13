@@ -25,12 +25,10 @@ import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.State.Monad (TS)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState, Jobs, jobs)
-import Eclogues.JobSpec ( Name, FailureReason (..), RunErrorReason (..)
-                        , JobSpec
-                        , JobState (..), isActiveState, isTerminationState
-                                       , isExpectedTransition, isOnScheduler
-                        , JobStatus (JobStatus), QueueStage (LocalQueue) )
-import qualified Eclogues.JobSpec as Job
+import Eclogues.Job (
+      FailureReason (..), RunErrorReason (..), QueueStage (LocalQueue), State (..)
+    , isActiveState, isTerminationState, isExpectedTransition, isOnScheduler)
+import qualified Eclogues.Job as Job
 
 import Control.Lens ((^.), view)
 import Control.Monad (when, void, unless)
@@ -44,7 +42,7 @@ import Data.UUID (UUID)
 
 -- | Try to schedule a new job. UUID must be unique; best to randomly generate
 -- it.
-createJob :: forall m. (TS m, MonadError JobError m) => UUID -> JobSpec -> m ()
+createJob :: forall m. (TS m, MonadError JobError m) => UUID -> Job.Spec -> m ()
 createJob uuid spec = do
     let name = spec ^. Job.name
         deps = spec ^. Job.dependsOn
@@ -54,38 +52,38 @@ createJob uuid spec = do
     let jstate = if activeDepCount == 0
             then Queued LocalQueue
             else Waiting activeDepCount
-    ES.insertJob $ JobStatus spec jstate uuid
+    ES.insertJob $ Job.Status spec jstate uuid
     if jstate == Queued LocalQueue
         then ES.schedule $ QueueJob spec uuid
         else pure ()
     where
-        checkDep :: Name -> Name -> WriterT (Sum Integer) m ()
+        checkDep :: Job.Name -> Job.Name -> WriterT (Sum Integer) m ()
         checkDep name depName = ES.getJob depName >>= \case
-            Just ds -> case ds ^. Job.jobState of
+            Just ds -> case ds ^. Job.state of
                 Finished            -> ES.addRevDep depName name
                 s | isActiveState s -> tell 1 *> ES.addRevDep depName name
                   | otherwise       -> throwError $ JobCannotHaveFailed depName
             Nothing -> throwError $ JobMustExist depName
 
 -- | Retrieve an existing job.
-existingJob :: (TS m, MonadError JobError m) => Name -> m JobStatus
+existingJob :: (TS m, MonadError JobError m) => Job.Name -> m Job.Status
 existingJob name = ES.getJob name >>= \case
     Just js -> pure js
     Nothing -> throwError NoSuchJob
 
 -- | Kill a job. Fails if job is already terminated.
-killJob :: (TS m, MonadError JobError m) => Name -> m ()
+killJob :: (TS m, MonadError JobError m) => Job.Name -> m ()
 killJob name = existingJob name >>= \js ->
-    if isTerminationState (js ^. Job.jobState)
+    if isTerminationState (js ^. Job.state)
         then throwError $ JobMustBeTerminated False
         else do
             ES.setJobState name Killing
             ES.schedule $ KillJob name (js ^. Job.uuid)
 
 -- | Delete a terminated job and all its output.
-deleteJob :: (TS m, MonadError JobError m) => Name -> m ()
+deleteJob :: (TS m, MonadError JobError m) => Job.Name -> m ()
 deleteJob name = existingJob name >>= \js -> do
-    when (isActiveState $ js ^. Job.jobState) . throwError $ JobMustBeTerminated True
+    when (isActiveState $ js ^. Job.state) . throwError $ JobMustBeTerminated True
     dependents <- ES.getDependents name
     unless (null dependents) . throwError $ OutstandingDependants dependents
     ES.deleteJob name
@@ -96,23 +94,23 @@ deleteJob name = existingJob name >>= \js -> do
 -- Can't use 'isOnScheduler' because 'LocalQueue' jobs may have been scheduled.
 -- | All jobs that should be queried on the scheduler.
 activeJobs :: AppState -> Jobs
-activeJobs = HashMap.filter (isNonWaitingActiveState . view Job.jobState) . view jobs where
-    isNonWaitingActiveState :: JobState -> Bool
+activeJobs = HashMap.filter (isNonWaitingActiveState . view Job.state) . view jobs where
+    isNonWaitingActiveState :: Job.State -> Bool
     isNonWaitingActiveState (Waiting _) = False
     isNonWaitingActiveState s           = isActiveState s
 
 -- | Update the status of a set of jobs with new data from the scheduler,
 -- scheduling any new actions required (eg. dependencies).
-updateJobs :: forall m. (TS m) => Jobs -> [(Name, JobState)] -> m ()
+updateJobs :: forall m. (TS m) => Jobs -> [(Job.Name, Job.State)] -> m ()
 updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeStatuses where
-    transition :: Name -> JobStatus -> m ()
+    transition :: Job.Name -> Job.Status -> m ()
     transition name pst =
-        let oldState = pst ^. Job.jobState
+        let oldState = pst ^. Job.state
             newState = checkTransition oldState $ lookup name gotStates
         in when (newState /= oldState) $ do
             ES.setJobState name newState
             handleDeps pst newState
-    checkTransition :: JobState -> Maybe JobState -> JobState
+    checkTransition :: Job.State -> Maybe Job.State -> Job.State
     checkTransition Killing Nothing    = Failed UserKilled
     checkTransition Killing (Just new)
         | Finished <- new              = Failed UserKilled
@@ -125,7 +123,7 @@ updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeSt
         | old == new                   = old
         | isExpectedTransition old new = new
         | otherwise                    = RunError BadSchedulerTransition
-    handleDeps :: JobStatus -> JobState -> m ()
+    handleDeps :: Job.Status -> Job.State -> m ()
     handleDeps pst newState
         | isTerminationState newState = do
             let name = pst ^. Job.name
@@ -138,15 +136,15 @@ updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeSt
                     rDepStatuses <- catMaybes <$> mapM ES.getJob rDepNames
                     mapM_ (cascadeDepFailure name) rDepStatuses
         | otherwise                  = pure ()
-    triggerDep :: Name -> m ()
+    triggerDep :: Job.Name -> m ()
     triggerDep rdepName = ES.getJob rdepName >>= \case
-        Just (JobStatus spec (Waiting 1) uuid) -> do
+        Just (Job.Status spec (Waiting 1) uuid) -> do
             ES.schedule $ QueueJob spec uuid
             ES.setJobState rdepName $ Queued LocalQueue
-        Just (JobStatus _    (Waiting n) _   ) ->
+        Just (Job.Status _    (Waiting n) _   ) ->
             ES.setJobState rdepName $ Waiting $ n - 1
         _         -> pure ()
-    cascadeDepFailure :: Name -> JobStatus -> m ()
+    cascadeDepFailure :: Job.Name -> Job.Status -> m ()
     cascadeDepFailure depName cst = do
         let name = cst ^. Job.name
         rDepNames <- ES.getDependents name
@@ -156,11 +154,11 @@ updateJobs activeStatuses gotStates = void $ traverseWithKey transition activeSt
         mapM_ (cascadeDepFailure name) rDepStatuses
 
 -- | All jobs.
-getJobs :: AppState -> [JobStatus]
+getJobs :: AppState -> [Job.Status]
 getJobs = elems . view jobs
 
 -- | Retrieve a job status by name.
-getJob :: (MonadError JobError m) => Name -> AppState -> m JobStatus
+getJob :: (MonadError JobError m) => Job.Name -> AppState -> m Job.Status
 getJob name state = case HashMap.lookup name (state ^. jobs) of
     Nothing -> throwError NoSuchJob
     Just js -> pure js

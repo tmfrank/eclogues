@@ -34,8 +34,7 @@ module Eclogues.Persist (
 
 import Eclogues.Persist.Stage1 ()
 import Eclogues.Scheduling.Command (ScheduleCommand)
-import Eclogues.JobSpec (Name, JobSpec, JobStatus (JobStatus))
-import qualified Eclogues.JobSpec as Job
+import qualified Eclogues.Job as Job
 
 import Control.Lens ((^.))
 import Control.Monad.Logger (LoggingT, runStderrLoggingT)
@@ -53,9 +52,9 @@ import Path (Path, Abs, Dir, toFilePath)
 -- Table definitions.
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Job
-    name Name
-    spec JobSpec
-    state Job.JobState
+    name Job.Name
+    spec Job.Spec
+    state Job.State
     uuid UUID
     UniqueName name
 ScheduleIntent
@@ -89,17 +88,17 @@ withPersistDir path f = runStderrLoggingT $ withSqlitePool ("WAL=off " <> path' 
 atomically :: Context -> Action r -> IO r
 atomically (Context pool) (Action a) = PSql.runSqlPool a pool
 
-insert :: JobStatus -> Action ()
-insert (JobStatus spec st uuid) = Action $ P.insert_ job where
+insert :: Job.Status -> Action ()
+insert (Job.Status spec st uuid) = Action $ P.insert_ job where
     job = Job { jobName = spec ^. Job.name
               , jobSpec = spec
               , jobState = st
               , jobUuid = uuid }
 
-updateState :: Name -> Job.JobState -> Action ()
+updateState :: Job.Name -> Job.State -> Action ()
 updateState name st = Action $ P.updateWhere [JobName ==. name] [JobState =. st]
 
-delete :: Name -> Action ()
+delete :: Job.Name -> Action ()
 delete = Action . P.deleteBy . UniqueName
 
 scheduleIntent :: ScheduleCommand -> Action ()
@@ -114,6 +113,6 @@ getAll f = Action $ fmap (f . P.entityVal) <$> P.selectList [] []
 allIntents :: Action [ScheduleCommand]
 allIntents = getAll scheduleIntentCommand
 
-allJobs :: Action [JobStatus]
+allJobs :: Action [Job.Status]
 allJobs = getAll toStatus where
-    toStatus (Job _ spec st uuid) = JobStatus spec st uuid
+    toStatus (Job _ spec st uuid) = Job.Status spec st uuid

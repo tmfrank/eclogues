@@ -17,7 +17,7 @@ Eclogues REST API definition.
 
 module Eclogues.API where
 
-import Eclogues.JobSpec (JobStatus, JobState, JobSpec, Name)
+import qualified Eclogues.Job as Job
 import Eclogues.ServantInstances ()
 
 import Data.Aeson.TH (deriveJSON, defaultOptions)
@@ -28,22 +28,22 @@ import Servant.API ((:>), (:<|>), Get, Post, Put, Delete, ReqBody, Capture, Quer
 type AbsFile = Path Abs File
 type Get' = Get '[JSON]
 
-type VAPI =  "jobs"   :> Get' [JobStatus]
-        :<|> "jobs"   :> Capture "name" Name :> Get' JobStatus
-        :<|> "jobs"   :> Capture "name" Name :> "state" :> Get' JobState
-        :<|> "jobs"   :> Capture "name" Name :> "state" :> ReqBody '[JSON] JobState :> Put '[JSON] ()
-        :<|> "jobs"   :> Capture "name" Name :> "scheduler" :> Get' ()
-        :<|> "jobs"   :> Capture "name" Name :> "output" :> QueryParam "path" AbsFile :> Get' ()
-        :<|> "jobs"   :> Capture "name" Name :> Delete '[JSON] ()
-        :<|> "jobs"   :> ReqBody '[JSON] JobSpec :> Post '[JSON] ()
+type VAPI =  "jobs"   :> Get' [Job.Status]
+        :<|> "jobs"   :> Capture "name" Job.Name  :> Get' Job.Status
+        :<|> "jobs"   :> Capture "name" Job.Name  :> "state" :> Get' Job.State
+        :<|> "jobs"   :> Capture "name" Job.Name  :> "state" :> ReqBody '[JSON] Job.State  :> Put '[JSON] ()
+        :<|> "jobs"   :> Capture "name" Job.Name  :> "scheduler" :> Get' ()
+        :<|> "jobs"   :> Capture "name" Job.Name  :> "output" :> QueryParam "path" AbsFile :> Get' ()
+        :<|> "jobs"   :> Capture "name" Job.Name  :> Delete '[JSON] ()
+        :<|> "jobs"   :> ReqBody '[JSON] Job.Spec :> Post '[JSON] ()
         :<|> "health" :> Get' Health
 
 data JobError = JobNameUsed
               | NoSuchJob
-              | JobMustExist Name
-              | JobCannotHaveFailed Name
+              | JobMustExist Job.Name
+              | JobCannotHaveFailed Job.Name
               | JobMustBeTerminated Bool
-              | OutstandingDependants [Name]
+              | OutstandingDependants [Job.Name]
               | InvalidStateTransition String
               | SchedulerRedirect URI
               | SchedulerInaccessible

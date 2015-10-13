@@ -18,23 +18,23 @@ Portability : portable
 Specification of jobs and the current state of submitted jobs.
 -}
 
-module Eclogues.JobSpec (
+module Eclogues.Job (
     -- * Job status
-      JobStatus (JobStatus), jobSpec, jobState, uuid
+      Status (Status), spec, state, uuid
     -- ** Job spec
-    , JobSpec (JobSpec), name, command, resources, outputFiles, captureStdout, dependsOn
+    , Spec (Spec), name, command, resources, outputFiles, captureStdout, dependsOn
     , Name, nameText, mkName, dirName, uuidName
     , Command
     , Resources (Resources), disk, ram, cpu, time
     , OutputPath (..), getOutputPath
     -- ** Job state
-    , JobState (..), RunResult (..), FailureReason (..), RunErrorReason (..), QueueStage (..)
-    , majorState, majorJobStates
+    , State (..), RunResult (..), FailureReason (..), RunErrorReason (..), QueueStage (..)
+    , majorState, majorStates
     -- * Predicates
     , isActiveState, isTerminationState, isOnScheduler, isExpectedTransition
     ) where
 
-import Eclogues.JobSpec.Aeson
+import Eclogues.Job.Aeson
 import Eclogues.Util (toRelPath)
 
 import Control.Exception (displayException)
@@ -79,17 +79,17 @@ data Resources = Resources { _disk :: Value Double MB
 $(deriveToJSON defaultOptions{fieldLabelModifier = drop 1} ''Resources)
 $(makeClassy ''Resources)
 
-data JobSpec = JobSpec { _name          :: Name
-                       , _command       :: Command
-                       , __jobResources :: Resources
-                       , _outputFiles   :: [OutputPath]
-                       , _captureStdout :: Bool
-                       , _dependsOn     :: [Name] }
-                         deriving (Show, Eq)
+data Spec = Spec { _name          :: Name
+                 , _command       :: Command
+                 , __resources    :: Resources
+                 , _outputFiles   :: [OutputPath]
+                 , _captureStdout :: Bool
+                 , _dependsOn     :: [Name] }
+                 deriving (Show, Eq)
 
-$(deriveJSON defaultOptions{fieldLabelModifier = specJName} ''JobSpec)
-$(makeClassy ''JobSpec)
-instance HasResources JobSpec where resources = _jobResources
+$(deriveJSON defaultOptions{fieldLabelModifier = specJName} ''Spec)
+$(makeClassy ''Spec)
+instance HasResources Spec where resources = _resources
 
 -- | The result of a job, as communicated by the subexecutor. Other failure
 -- modes are communicated by the scheduler.
@@ -110,32 +110,32 @@ data RunErrorReason = BadSchedulerTransition
 
 data QueueStage = LocalQueue | SchedulerQueue deriving (Show, Eq)
 
-data JobState = Queued QueueStage
-              | Waiting Integer
-              | Running
-              | Killing
-              | Finished
-              | Failed FailureReason
-              | RunError RunErrorReason
-                deriving (Show, Eq)
+data State = Queued QueueStage
+           | Waiting Integer
+           | Running
+           | Killing
+           | Finished
+           | Failed FailureReason
+           | RunError RunErrorReason
+           deriving (Show, Eq)
 
-data JobStatus = JobStatus { __jobSpec :: JobSpec
-                           , _jobState :: JobState
-                           , _uuid     :: UUID }
-                           deriving (Show, Eq)
+data Status = Status { __spec :: Spec
+                     , _state :: State
+                     , _uuid  :: UUID }
+                     deriving (Show, Eq)
 
-$(deriveJSON defaultOptions{fieldLabelModifier = statusJName} ''JobStatus)
-$(makeClassy ''JobStatus)
-instance HasJobSpec JobStatus where jobSpec = _jobSpec
+$(deriveJSON defaultOptions{fieldLabelModifier = statusJName} ''Status)
+$(makeClassy ''Status)
+instance HasSpec Status where spec = _spec
 
--- | Names of JobState constructors. Could probably be replaced by something
+-- | Names of 'State' constructors. Could probably be replaced by something
 -- from "GHC.Generics".
-majorJobStates :: [String]
-majorJobStates = ["Queued", "Waiting", "Running", "Killing", "Finished", "Failed", "RunError"]
+majorStates :: [String]
+majorStates = ["Queued", "Waiting", "Running", "Killing", "Finished", "Failed", "RunError"]
 
--- | The JobState constructor name. Could probably be replaced by something
+-- | The 'State' constructor name. Could probably be replaced by something
 -- from "GHC.Generics".
-majorState :: JobState -> String
+majorState :: State -> String
 majorState (Queued _)   = "Queued"
 majorState (Waiting _)  = "Waiting"
 majorState Running      = "Running"
@@ -145,13 +145,13 @@ majorState (Failed _)   = "Failed"
 majorState (RunError _) = "RunError"
 
 -- | Whether the constructor is 'Queued'.
-isQueueState :: JobState -> Bool
+isQueueState :: State -> Bool
 isQueueState (Queued _) = True
 isQueueState _          = False
 
 -- | Whether the state is terminal. A terminal state is steady and represents
 -- the completion (successful or not) of a job.
-isTerminationState :: JobState -> Bool
+isTerminationState :: State -> Bool
 isTerminationState (Queued _)   = False
 isTerminationState (Waiting _)  = False
 isTerminationState Running      = False
@@ -161,11 +161,11 @@ isTerminationState (Failed _)   = True
 isTerminationState (RunError _) = True
 
 -- | > isActiveState = not . 'isTerminationState'
-isActiveState :: JobState -> Bool
+isActiveState :: State -> Bool
 isActiveState = not . isTerminationState
 
 -- | Whether the job is known by the remote scheduler.
-isOnScheduler :: JobState -> Bool
+isOnScheduler :: State -> Bool
 isOnScheduler (Queued LocalQueue) = False
 isOnScheduler (Waiting _)         = False
 isOnScheduler s                   = isActiveState s
@@ -173,7 +173,7 @@ isOnScheduler s                   = isActiveState s
 -- | Whether the first JobState may transition to the second in the lifecycle.
 -- Unexpected transitions are treated as scheduler errors
 -- ('BadSchedulerTransition').
-isExpectedTransition :: JobState -> JobState -> Bool
+isExpectedTransition :: State -> State -> Bool
 isExpectedTransition (Queued LocalQueue) (Queued SchedulerQueue) = True
 isExpectedTransition (Queued _)   Running       = True
 isExpectedTransition (Waiting 0)  Running       = True
@@ -186,7 +186,7 @@ isExpectedTransition o n | isQueueState o || o == Running = case n of
                                   _            -> False
 isExpectedTransition _            _             = False
 
-instance ToJSON JobState where
+instance ToJSON State where
     toJSON (Queued LocalQueue)     = object ["type" .= "Queued", "stage" .= "local"]
     toJSON (Queued SchedulerQueue) = object ["type" .= "Queued", "stage" .= "scheduler"]
     toJSON (Waiting n) = object ["type" .= "Waiting", "for" .= n]
@@ -203,7 +203,7 @@ instance ToJSON JobState where
     toJSON (Failed TimeExceeded) = object ["type" .= "Failed", "reason" .= "TimeExceeded"]
     toJSON (Failed (DependencyFailed n)) = object ["type" .= "Failed", "reason" .= "DependencyFailed", "dependency" .= n]
 
-instance FromJSON JobState where
+instance FromJSON State where
     parseJSON (Aeson.Object v) = do
         typ <- v .: "type"
         case typ of

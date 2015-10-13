@@ -23,10 +23,9 @@ import Prelude hiding (writeFile)
 
 import qualified Eclogues.Scheduling.AuroraAPI as A
 import Eclogues.Scheduling.AuroraConfig (Role, getJobName, getJobState)
-import Eclogues.JobSpec (
-      JobSpec, JobState (..), JobStatus, Name
-    , FailureReason (..), RunErrorReason (..), RunResult (..))
-import qualified Eclogues.JobSpec as Job
+import Eclogues.Job (
+    State (..), FailureReason (..), RunErrorReason (..), RunResult (..))
+import qualified Eclogues.Job as Job
 
 import Control.Arrow ((&&&))
 import Control.Exception (IOException, try, tryJust)
@@ -49,16 +48,16 @@ import System.IO.Error (isDoesNotExistError)
 import Text.Read.HT (maybeRead)
 
 -- | Tell the scheduler to do something.
-data ScheduleCommand = QueueJob JobSpec UUID
-                     | KillJob Name UUID
-                     | CleanupJob Name UUID
+data ScheduleCommand = QueueJob   Job.Spec UUID
+                     | KillJob    Job.Name UUID
+                     | CleanupJob Job.Name UUID
 
 $(deriveJSON defaultOptions ''ScheduleCommand)
 
 type AuroraURI = URI
 data ScheduleConf = ScheduleConf { jobsDir :: Path Abs Dir, auroraRole :: Role, auroraURI :: AuroraURI }
 
-jobDir :: ScheduleConf -> Name -> FilePath
+jobDir :: ScheduleConf -> Job.Name -> FilePath
 jobDir conf n = toFilePath $ jobsDir conf </> Job.dirName n
 
 runScheduleCommand :: ScheduleConf -> ScheduleCommand -> ExceptT A.UnexpectedResponse IO ()
@@ -79,21 +78,21 @@ runScheduleCommand conf (KillJob _name uuid) = do
 runScheduleCommand conf (CleanupJob name _uuid) = lift . void $
     tryJust (guard . isDoesNotExistError) . removeDirectoryRecursive $ jobDir conf name
 
-getSchedulerStatuses :: ScheduleConf -> [JobStatus] -> ExceptT A.UnexpectedResponse IO [(Name, JobState)]
+getSchedulerStatuses :: ScheduleConf -> [Job.Status] -> ExceptT A.UnexpectedResponse IO [(Job.Name, Job.State)]
 getSchedulerStatuses conf jss = do
     client <- lift $ A.thriftClient $ auroraURI conf
     auroraTasks <- A.getTasksWithoutConfigs client (auroraRole conf) (map fst uuids)
     let newUncheckedStates = catMaybes $ extractState <$> auroraTasks
     lift $ mapM checkFinState newUncheckedStates
     where
-        checkFinState :: (Name, JobState) -> IO (Name, JobState)
+        checkFinState :: (Job.Name, Job.State) -> IO (Job.Name, Job.State)
         checkFinState (n, Finished) = do
             exitCodeStrM <- try $ readFile (jobDir conf n ++ "/runresult") :: IO (Either IOException String)
             case exitCodeStrM of
                 Left  _ -> pure (n, RunError SubexecutorFailure)
                 Right a -> pure . (n,) . fromMaybe (RunError SubexecutorFailure) $ checkRunResult <$> maybeRead a
         checkFinState e = pure e
-        checkRunResult :: RunResult -> JobState
+        checkRunResult :: RunResult -> Job.State
         checkRunResult = \case
             Ended ExitSuccess     -> Finished
             Ended (ExitFailure c) -> Failed (NonZeroExitCode c)

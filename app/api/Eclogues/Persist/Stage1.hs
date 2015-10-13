@@ -18,7 +18,7 @@ Template Haskell stage restricted definitions and orphan instances for
 module Eclogues.Persist.Stage1 where
 
 import Eclogues.Scheduling.Command (ScheduleCommand)
-import Eclogues.JobSpec (JobSpec, JobState, Name, nameText, mkName)
+import qualified Eclogues.Job as Job
 
 import Control.Monad ((<=<))
 import Data.Aeson (FromJSON, ToJSON, encode, eitherDecodeStrict)
@@ -38,18 +38,18 @@ jsonPersistParse :: (FromJSON a) => T.Text -> P.PersistValue -> Either T.Text a
 jsonPersistParse _ (P.PersistByteString bs) = mapLeft T.pack $ eitherDecodeStrict bs
 jsonPersistParse n e                        = Left . (("Invalid " <> n <> " persist value ") <>) . T.pack $ show e
 
-instance P.PersistField JobState where
+instance P.PersistField Job.State where
     toPersistValue = jsonPersistValue
-    fromPersistValue = jsonPersistParse "JobState"
+    fromPersistValue = jsonPersistParse "State"
 
-instance PSql.PersistFieldSql JobState where
+instance PSql.PersistFieldSql Job.State where
     sqlType _ = PSql.SqlBlob
 
-instance P.PersistField JobSpec where
+instance P.PersistField Job.Spec where
     toPersistValue = jsonPersistValue
-    fromPersistValue = jsonPersistParse "JobSpec"
+    fromPersistValue = jsonPersistParse "Spec"
 
-instance PSql.PersistFieldSql JobSpec where
+instance PSql.PersistFieldSql Job.Spec where
     sqlType _ = PSql.SqlBlob
 
 instance P.PersistField ScheduleCommand where
@@ -69,9 +69,9 @@ instance P.PersistField UUID where
 instance PSql.PersistFieldSql UUID where
     sqlType _ = PSql.SqlBlob
 
-instance P.PersistField Name where
-    toPersistValue = P.toPersistValue . nameText
-    fromPersistValue = mapLeft T.pack . mkName <=< P.fromPersistValue
+instance P.PersistField Job.Name where
+    toPersistValue = P.toPersistValue . Job.nameText
+    fromPersistValue = mapLeft T.pack . Job.mkName <=< P.fromPersistValue
 
-instance PSql.PersistFieldSql Name where
+instance PSql.PersistFieldSql Job.Name where
     sqlType _ = PSql.sqlType (Proxy :: Proxy T.Text)

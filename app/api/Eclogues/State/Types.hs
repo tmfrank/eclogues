@@ -15,15 +15,15 @@ Portability : portable
 
 module Eclogues.State.Types where
 
-import Eclogues.JobSpec (Name, JobStatus)
+import qualified Eclogues.Job as Job
 
 import Control.Lens.TH (makeClassy)
 import Data.Default.Generics (Default)
 import Data.HashMap.Lazy (HashMap)
 import GHC.Generics (Generic)
 
-type Jobs    = HashMap Name JobStatus
-type RevDeps = HashMap Name [Name]
+type Jobs    = HashMap Job.Name Job.Status
+type RevDeps = HashMap Job.Name [Job.Name]
 
 data AppState = AppState { -- | Map of jobs names to status.
                            _jobs    :: Jobs

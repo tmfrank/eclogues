@@ -44,8 +44,7 @@ import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.State.Types (AppState (..), jobs, revDeps)
 import qualified Eclogues.State.Types as EST
-import Eclogues.JobSpec (Name, JobState, JobStatus)
-import qualified Eclogues.JobSpec as Job
+import qualified Eclogues.Job as Job
 
 import Control.Lens ((.~), (?=), (%=), (^.), (<>=), at, ix, sans, use, non)
 import Control.Lens.TH (makeClassy)
@@ -81,42 +80,40 @@ schedule cmd = do
     scheduleCommands %= (cmd :)
     persist <>= Just (Persist.scheduleIntent cmd)
 
-insertJob :: (TS m) => JobStatus -> m ()
+insertJob :: (TS m) => Job.Status -> m ()
 insertJob st = do
     jobs . at (st ^. Job.name) ?= st
     persist <>= Just (Persist.insert st)
 
-deleteJob :: (TS m) => Name -> m ()
+deleteJob :: (TS m) => Job.Name -> m ()
 deleteJob name = do
     jobs %= sans name
     persist <>= Just (Persist.delete name)
 
-getJob :: (TS m) => Name -> m (Maybe JobStatus)
+getJob :: (TS m) => Job.Name -> m (Maybe Job.Status)
 getJob name = use $ jobs . at name
 
-setJobState :: (TS m) => Name -> JobState -> m ()
+setJobState :: (TS m) => Job.Name -> Job.State -> m ()
 setJobState name st = do
-    jobs . ix name %= (Job.jobState .~ st)
+    jobs . ix name %= (Job.state .~ st)
     persist <>= Just (Persist.updateState name st)
 
 -- | Add a reverse dependency; second name depends on first.
-addRevDep :: (TS m) => Name -> Name -> m ()
+addRevDep :: (TS m) => Job.Name -> Job.Name -> m ()
 addRevDep on by = revDeps %= HashMap.insertWith (++) on [by]
 
 -- | Remove a reverse dependency; the second name no longer depends on the first.
-removeRevDep :: (TS m) => Name -> Name -> m ()
+removeRevDep :: (TS m) => Job.Name -> Job.Name -> m ()
 removeRevDep on by = revDeps . at on %= (>>= removed) where
     removed lst = case List.delete by lst of
         [] -> Nothing
         a  -> Just a
 
-getDependents :: (TS m) => Name -> m [Name]
+getDependents :: (TS m) => Job.Name -> m [Job.Name]
 getDependents name = use $ revDeps . at name . non []
 
-loadJobs :: forall m. (TS m) => [JobStatus] -> m ()
-loadJobs = mapM_ go where
-    go :: JobStatus -> m ()
-    go j = do
-        let name = j ^. Job.name
-        jobs . at name ?= j
-        mapM_ (`addRevDep` name) $ j ^. Job.dependsOn
+loadJobs :: forall m. (TS m) => [Job.Status] -> m ()
+loadJobs = mapM_ $ \j -> do
+    let name = j ^. Job.name
+    jobs . at name ?= j
+    mapM_ (`addRevDep` name) $ j ^. Job.dependsOn

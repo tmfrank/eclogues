@@ -22,8 +22,8 @@ Portability : portable
 module Eclogues.ApiDocs (VAPIWithDocs, apiDocs, apiDocsMd, apiDocsHtml) where
 
 import Eclogues.API (VAPI, Health (Health), AbsFile)
-import Eclogues.JobSpec (JobSpec (..), Resources (..), JobState (..), JobStatus (..), FailureReason (..), Name)
-import qualified Eclogues.JobSpec as Job
+import Eclogues.Job (State (Failed, Running), FailureReason (..))
+import qualified Eclogues.Job as Job
 import Units
 
 import Control.Lens ((.~), (&))
@@ -42,45 +42,45 @@ import Servant.Docs ( API, ToCapture (..), ToSample (..), ToParam (..),
                       docs, markdown )
 import Servant.Docs.Pandoc (pandoc)
 
-instance ToCapture (Capture "name" Name) where
+instance ToCapture (Capture "name" Job.Name) where
     toCapture _ = DocCapture "name" "job name"
 
 instance ToParam (QueryParam "path" AbsFile) where
     toParam _ = DocQueryParam "path" ["stdout", "JOB_SPECIFIC_PATH"] "output file path" Normal
 
-instance ToSample JobState JobState where
+instance ToSample Job.State Job.State where
     toSamples _ = [("A running task", Running)
                   ,("A task killed by a user", Failed UserKilled)]
 
-res :: Resources
-res = Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)
+res :: Job.Resources
+res = Job.Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)
 
-helloName :: Name
+helloName :: Job.Name
 helloName = fromJust $ Job.mkName "hello"
 
-spec :: JobSpec
-spec = JobSpec helloName "echo hello world > hello.txt" res [Job.OutputPath $(mkAbsFile "/hello.txt")] False []
+spec :: Job.Spec
+spec = Job.Spec helloName "echo hello world > hello.txt" res [Job.OutputPath $(mkAbsFile "/hello.txt")] False []
 
-depSpec :: JobSpec
-depSpec = JobSpec n "cat virgil-dependencies/hello/hello.txt" res [] True [helloName]
+depSpec :: Job.Spec
+depSpec = Job.Spec n "cat virgil-dependencies/hello/hello.txt" res [] True [helloName]
   where
     n = fromJust $ Job.mkName "cat-hello"
 
-instance ToSample JobSpec JobSpec where
+instance ToSample Job.Spec Job.Spec where
     toSamples _ = [("A job with output", spec)
                   ,("A job depending on previous output", depSpec)]
 
-failedSpec :: JobStatus
-failedSpec = JobStatus deadSpec (Failed $ NonZeroExitCode 1) nil where
-    deadSpec = JobSpec n "exit 1" res [] False []
+failedSpec :: Job.Status
+failedSpec = Job.Status deadSpec (Failed $ NonZeroExitCode 1) nil where
+    deadSpec = Job.Spec n "exit 1" res [] False []
     n = fromJust $ Job.mkName "i-fail"
 
-instance ToSample JobStatus JobStatus where
+instance ToSample Job.Status Job.Status where
     toSample _ = Just failedSpec
 
-instance ToSample [JobStatus] [JobStatus] where
-    toSample _ = Just [ JobStatus (spec & Job.command .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) nil
-                      , JobStatus depSpec (Failed $ DependencyFailed helloName) nil]
+instance ToSample [Job.Status] [Job.Status] where
+    toSample _ = Just [ Job.Status (spec & Job.command .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) nil
+                      , Job.Status depSpec (Failed $ DependencyFailed helloName) nil]
 
 instance ToSample () () where
     toSample _ = Nothing

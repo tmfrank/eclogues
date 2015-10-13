@@ -23,9 +23,10 @@ module Eclogues.Scheduling.AuroraConfig (
 import Api_Types hiding (DRAINING, FAILED, FINISHED)
 import Api_Types2
 
-import Eclogues.JobSpec ( JobSpec (JobSpec), Resources (Resources), JobState (..)
-                        , FailureReason (..), RunErrorReason (..), QueueStage (SchedulerQueue) )
-import qualified Eclogues.JobSpec as Job
+import Eclogues.Job (
+      State (..), QueueStage (SchedulerQueue)
+    , FailureReason (..), RunErrorReason (SubexecutorFailure))
+import qualified Eclogues.Job as Job
 import Units
 
 import Data.Aeson (ToJSON (toJSON))
@@ -153,11 +154,14 @@ defaultHealthCheckConfig = AHealthCheckConfig  { initial_interval_secs    = 15
 defaultCronCollisionPolicy :: CronCollisionPolicy
 defaultCronCollisionPolicy = KILL_EXISTING
 
-aResources :: Resources -> AResources
-aResources (Resources disk ram cpu _) = AResources (ceiling $ disk `asVal` byte) (ceiling $ ram `asVal` byte) (cpu `asVal` core)
+aResources :: Job.Resources -> AResources
+aResources (Job.Resources disk ram cpu _) =
+    AResources (ceiling $ disk `asVal` byte)
+               (ceiling $ ram `asVal` byte)
+               (cpu `asVal` core)
 
-auroraJobConfig :: Role -> JobSpec -> JobConfiguration
-auroraJobConfig role (JobSpec name cmd resources@(Resources disk ram cpu _) _ _ _) = job where
+auroraJobConfig :: Role -> Job.Spec -> JobConfiguration
+auroraJobConfig role (Job.Spec name cmd resources@(Job.Resources disk ram cpu _) _ _ _) = job where
     jobKey = defaultJobKey role name'
     owner = Identity role role
     job = JobConfiguration  { jobConfiguration_key                 = jobKey
@@ -218,7 +222,7 @@ lockKey role = LockKey . defaultJobKey role
 getJobName :: ScheduledTask -> Name
 getJobName = jobKey_name . taskConfig_job . assignedTask_task . scheduledTask_assignedTask
 
-jobState' :: ScheduleStatus -> [TaskEvent] -> JobState
+jobState' :: ScheduleStatus -> [TaskEvent] -> Job.State
 jobState' INIT       _  = Queued SchedulerQueue
 jobState' THROTTLED  _  = Running
 jobState' PENDING    _  = Queued SchedulerQueue
@@ -237,7 +241,7 @@ jobState' KILLED     es = jobEventsToState es
 jobState' FINISHED   es = jobEventsToState es
 jobState' FAILED     es = jobEventsToState es
 
-jobEventsToState :: [TaskEvent] -> JobState
+jobEventsToState :: [TaskEvent] -> Job.State
 jobEventsToState es
   | any isRescheduleEvent events = Queued SchedulerQueue
   | KILLED `elem` events         = Failed UserKilled
@@ -255,5 +259,5 @@ jobEventsToState es
       | "Disk limit exceeded"   `L.isPrefixOf` msg = Failed DiskExceeded
       | otherwise                                  = RunError SubexecutorFailure
 
-getJobState :: ScheduledTask -> JobState
+getJobState :: ScheduledTask -> Job.State
 getJobState st = jobState' (scheduledTask_status st) (toList $ scheduledTask_taskEvents st)

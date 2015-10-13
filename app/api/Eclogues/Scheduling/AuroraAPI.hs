@@ -30,8 +30,8 @@ import Api_Types2 (ResponseCode (OK))
 import qualified AuroraSchedulerManager_Client as AClient
 import qualified ReadOnlyScheduler_Client as ROClient
 
+import qualified Eclogues.Job as Job
 import Eclogues.Scheduling.AuroraConfig (Role, auroraJobConfig, lockKey, defaultJobKey)
-import Eclogues.JobSpec (JobSpec, Name, nameText)
 
 import Control.Exception (Exception)
 import Control.Monad (void)
@@ -66,12 +66,12 @@ getJobs client = do
     res <- ExceptT $ onlyRes <$> ROClient.getJobs client ""
     pure . getJobsResult_configs $ result_getJobsResult res
 
-taskQuery :: Role -> [Name] -> TaskQuery
+taskQuery :: Role -> [Job.Name] -> TaskQuery
 taskQuery role names = default_TaskQuery { taskQuery_jobKeys = Just . HashSet.fromList $ key <$> names }
   where
-    key = defaultJobKey role . L.fromStrict . nameText
+    key = defaultJobKey role . L.fromStrict . Job.nameText
 
-getTasksWithoutConfigs :: Client -> Role -> [Name] -> Result [ScheduledTask]
+getTasksWithoutConfigs :: Client -> Role -> [Job.Name] -> Result [ScheduledTask]
 getTasksWithoutConfigs client role names = do
     res <- ExceptT $ onlyRes <$> ROClient.getTasksWithoutConfigs client q
     pure $ tasks res
@@ -82,19 +82,19 @@ getTasksWithoutConfigs client role names = do
 unauthenticated :: SessionKey
 unauthenticated = SessionKey (Just "UNAUTHENTICATED") (Just "UNAUTHENTICATED")
 
-acquireLock :: Client -> Role -> Name -> Result Lock
+acquireLock :: Client -> Role -> Job.Name -> Result Lock
 acquireLock client role name = do
-    let name' = L.fromStrict . nameText $ name
+    let name' = L.fromStrict . Job.nameText $ name
     res <- ExceptT $ onlyRes <$> AClient.acquireLock client (lockKey role name') unauthenticated
     pure . acquireLockResult_lock $ result_acquireLockResult res
 
 releaseLock :: Client -> Lock -> Result ()
 releaseLock client lock = void . ExceptT $ onlyOK <$> AClient.releaseLock client lock UNCHECKED unauthenticated
 
-createJob :: Client -> Role -> JobSpec -> Result ()
+createJob :: Client -> Role -> Job.Spec -> Result ()
 createJob client role spec = void . ExceptT $ onlyOK <$> AClient.createJob client (auroraJobConfig role spec) Nothing unauthenticated
 
-killTasks :: Client -> Role -> [Name] -> Result ()
+killTasks :: Client -> Role -> [Job.Name] -> Result ()
 killTasks client role names = void . ExceptT $ onlyOK <$> AClient.killTasks client (taskQuery role names) Nothing unauthenticated
 
 thriftClient :: URI -> IO Client

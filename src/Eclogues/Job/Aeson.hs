@@ -12,15 +12,14 @@ Portability : portable
 Template Haskell stage restricted definitions for JobSpec Aeson instances.
 -}
 
-module Eclogues.JobSpec.Aeson where
+module Eclogues.Job.Aeson where
 
 import Data.Char (toLower)
 
 specJName :: String -> String
-specJName "__jobResources" = "resources"
-specJName x                = toLower <$> drop 1 x
+specJName "__resources" = "resources"
+specJName x             = toLower <$> drop 1 x
 
 statusJName :: String -> String
-statusJName "__jobSpec" = "spec"
-statusJName "_jobState" = "state"
-statusJName x           = toLower <$> drop 1 x
+statusJName "__spec" = "spec"
+statusJName x        = toLower <$> drop 1 x

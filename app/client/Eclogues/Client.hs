@@ -27,7 +27,7 @@ import Database.Zookeeper.Election (ZKError, getLeaderInfo)
 import Database.Zookeeper.ManagedEvents (ManagedZK)
 import Eclogues.API (VAPI, JobError, Health)
 import Eclogues.ServantInstances ()
-import Eclogues.JobSpec (JobStatus, JobState, Name, JobSpec)
+import qualified Eclogues.Job as Job
 
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Either (runEitherT)
@@ -42,33 +42,33 @@ import Servant.Client (BaseUrl (..), Scheme (Http), ServantError (..), client)
 type Result a = ExceptT (Either ServantError JobError) IO a
 
 -- | Functions for interacting with an Eclogues master. See 'ecloguesClient'.
-data EcloguesClient = EcloguesClient { _getJobs      ::            Result [JobStatus]
-                                     , _getJobStatus :: Name    -> Result JobStatus
-                                     , _getJobState  :: Name    -> Result JobState
-                                     , _setJobState  :: Name    -> JobState -> Result ()
-                                     , _deleteJob    :: Name    -> Result ()
-                                     , _createJob    :: JobSpec -> Result ()
-                                     , _getHealth    ::            Result Health
+data EcloguesClient = EcloguesClient { _getJobs      ::             Result [Job.Status]
+                                     , _getJobStatus :: Job.Name -> Result Job.Status
+                                     , _getJobState  :: Job.Name -> Result Job.State
+                                     , _setJobState  :: Job.Name -> Job.State -> Result ()
+                                     , _deleteJob    :: Job.Name -> Result ()
+                                     , _createJob    :: Job.Spec -> Result ()
+                                     , _getHealth    ::             Result Health
                                      , _masterHost   :: (String, Word16) }
 
 -- Have to redefine these so they're not exported as record fields.
 
-getJobs :: EcloguesClient -> Result [JobStatus]
-getJobs = _getJobs
-getJobStatus :: EcloguesClient -> Name -> Result JobStatus
-getJobStatus = _getJobStatus
-getJobState :: EcloguesClient -> Name -> Result JobState
-getJobState = _getJobState
-setJobState :: EcloguesClient -> Name -> JobState -> Result ()
-setJobState = _setJobState
-deleteJob :: EcloguesClient -> Name -> Result ()
-deleteJob = _deleteJob
-createJob :: EcloguesClient -> JobSpec -> Result ()
-createJob = _createJob
-getHealth :: EcloguesClient -> Result Health
-getHealth = _getHealth
-masterHost :: EcloguesClient -> (String, Word16)
-masterHost = _masterHost
+getJobs      :: EcloguesClient -> Result [Job.Status]
+getJobs       = _getJobs
+getJobStatus :: EcloguesClient -> Job.Name -> Result Job.Status
+getJobStatus  = _getJobStatus
+getJobState  :: EcloguesClient -> Job.Name -> Result Job.State
+getJobState   = _getJobState
+setJobState  :: EcloguesClient -> Job.Name -> Job.State -> Result ()
+setJobState   = _setJobState
+deleteJob    :: EcloguesClient -> Job.Name -> Result ()
+deleteJob     = _deleteJob
+createJob    :: EcloguesClient -> Job.Spec -> Result ()
+createJob     = _createJob
+getHealth    :: EcloguesClient -> Result Health
+getHealth     = _getHealth
+masterHost   :: EcloguesClient -> (String, Word16)
+masterHost    = _masterHost
 
 -- | Lookup the Eclogues master and return a set of functions for interacting
 -- with it.

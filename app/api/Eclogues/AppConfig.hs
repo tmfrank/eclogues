@@ -17,7 +17,7 @@ module Eclogues.AppConfig (AppConfig (..), requireSchedConf) where
 import Eclogues.API (AbsFile)
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.Command (ScheduleCommand, ScheduleConf (ScheduleConf), AuroraURI)
-import Eclogues.JobSpec (Name)
+import qualified Eclogues.Job as Job
 
 import Control.Concurrent.AdvSTM (AdvSTM, retry)
 import Control.Concurrent.AdvSTM.TChan (TChan)
@@ -37,7 +37,7 @@ data AppConfig = AppConfig {
                            -- | Scheduler web UI for the provided job UUID.
                            , schedJobURI     :: URI -> UUID -> URI
                            -- | Job file output URI.
-                           , outputURI       :: Name -> AbsFile -> URI
+                           , outputURI       :: Job.Name -> AbsFile -> URI
                            -- | User the subexecutor is run as.
                            , subexecutorUser :: Text }
 

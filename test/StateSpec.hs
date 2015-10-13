@@ -4,14 +4,16 @@
 module StateSpec where
 
 import Eclogues.API (JobError(..))
-import Eclogues.JobSpec
+import Eclogues.Job (
+    State (..), QueueStage (..), RunErrorReason (..), FailureReason (..))
+import qualified Eclogues.Job as Job
 import Eclogues.State (createJob, killJob, deleteJob, updateJobs)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types
 import Units
 
 import Control.Lens (view, at, (^.), (.~))
-import Control.Monad.State (State)
+import qualified Control.Monad.State as St
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Data.Default.Generics (def)
@@ -21,11 +23,11 @@ import Data.UUID (nil)
 
 import Test.Hspec
 
-type Scheduler = ExceptT JobError (State ES.TransitionaryState) ()
+type Scheduler = ExceptT JobError (St.State ES.TransitionaryState) ()
 
 data TestError = EncounteredError JobError
-               | JobNotFound Name
-               | RevDepNotFound Name
+               | JobNotFound Job.Name
+               | RevDepNotFound Job.Name
                | ExpectedError JobError
                | UnexpectedError TestError
                  deriving (Show)
@@ -51,46 +53,46 @@ packageResult (_, effect) = Right (effect ^. appState)
 shouldHave :: EitherError AppState -> (EitherError AppState -> EitherError Bool) -> Expectation
 shouldHave result f = result `shouldSatisfy` either (const False) id . f
 
-createJob' :: JobSpec -> Scheduler
+createJob' :: Job.Spec -> Scheduler
 createJob' = createJob nil
 
-forceName :: Text -> Name
-forceName jName = fromMaybe (error $ "invalid test name " ++ show jName) $ mkName jName
+forceName :: Text -> Job.Name
+forceName name = fromMaybe (error $ "invalid test name " ++ show name) $ Job.mkName name
 
-job :: Name
+job :: Job.Name
 job = forceName "job"
 
-dep :: Name
+dep :: Job.Name
 dep = forceName "dep"
 
-isolatedJob :: Name -> JobSpec
-isolatedJob jName = JobSpec jName "/bin/echo" res [] False []
+isolatedJob :: Job.Name -> Job.Spec
+isolatedJob name = Job.Spec name "/bin/echo" res [] False []
   where
-    res = Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)
+    res = Job.Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)
 
-dependentJob :: Name -> [Name] -> JobSpec
-dependentJob jobName depNames = dependsOn .~ depNames $ isolatedJob jobName
+dependentJob :: Job.Name -> [Job.Name] -> Job.Spec
+dependentJob jobName depNames = Job.dependsOn .~ depNames $ isolatedJob jobName
 
-getJob :: Name -> AppState -> Maybe JobStatus
-getJob jName aState = aState ^. jobs ^. at jName
+getJob :: Job.Name -> AppState -> Maybe Job.Status
+getJob name aState = aState ^. jobs ^. at name
 
-noJob :: Name -> EitherError AppState -> EitherError Bool
-noJob jName = fmap (isNothing . getJob jName)
+noJob :: Job.Name -> EitherError AppState -> EitherError Bool
+noJob name = fmap (isNothing . getJob name)
 
-jobInState :: Name -> JobState -> EitherError AppState -> EitherError Bool
-jobInState jName jState result = return . inState =<< eitherGetJob =<< result
-    where eitherGetJob = maybeToEither (JobNotFound jName) . getJob jName
-          inState = (== jState) . view jobState
+jobInState :: Job.Name -> Job.State -> EitherError AppState -> EitherError Bool
+jobInState name jState result = return . inState =<< eitherGetJob =<< result
+    where eitherGetJob = maybeToEither (JobNotFound name) . getJob name
+          inState = (== jState) . view Job.state
 
-getRevDep :: Name -> AppState -> Maybe [Name]
-getRevDep jName aState = aState ^. revDeps ^. at jName
+getRevDep :: Job.Name -> AppState -> Maybe [Job.Name]
+getRevDep name aState = aState ^. revDeps ^. at name
 
-jobWithRevDep :: Name -> [Name] -> EitherError AppState -> EitherError Bool
-jobWithRevDep jName jRevDeps result = return . (== jRevDeps) =<< eitherGetRevDep =<< result
-    where eitherGetRevDep = maybeToEither (RevDepNotFound jName) . getRevDep jName
+jobWithRevDep :: Job.Name -> [Job.Name] -> EitherError AppState -> EitherError Bool
+jobWithRevDep name jRevDeps result = return . (== jRevDeps) =<< eitherGetRevDep =<< result
+    where eitherGetRevDep = maybeToEither (RevDepNotFound name) . getRevDep name
 
-noRevDep :: Name -> EitherError AppState -> EitherError Bool
-noRevDep jName result = return . isNothing . getRevDep jName =<< result
+noRevDep :: Job.Name -> EitherError AppState -> EitherError Bool
+noRevDep name result = return . isNothing . getRevDep name =<< result
 
 producedError :: JobError -> EitherError AppState -> EitherError Bool
 producedError jError (Left err) = case err of
@@ -98,7 +100,7 @@ producedError jError (Left err) = case err of
     e                  -> Left (UnexpectedError e)
 producedError jError (Right _) = Left (ExpectedError jError)
 
-createJobWithDep :: JobState -> Scheduler
+createJobWithDep :: Job.State -> Scheduler
 createJobWithDep depState = do
     createJob' $ isolatedJob dep
     ES.setJobState dep depState
@@ -195,7 +197,7 @@ testDeleteJob = do
 
 testUpdateJobs :: Spec
 testUpdateJobs = let
-        updated :: Scheduler -> [(Name, JobState)] -> EitherError AppState
+        updated :: Scheduler -> [(Job.Name, Job.State)] -> EitherError AppState
         updated m statuses = scheduler' m >>= \s -> scheduler s $ lift (updateJobs (s ^. jobs) statuses)
     in do
         describe "updateJobs" $

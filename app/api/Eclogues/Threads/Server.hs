@@ -24,8 +24,8 @@ import Eclogues.API (VAPI, JobError (..), Health (Health))
 import Eclogues.ApiDocs (VAPIWithDocs, apiDocsHtml)
 import Eclogues.AppConfig (AppConfig)
 import qualified Eclogues.AppConfig as Config
-import Eclogues.JobSpec (JobState (Failed), FailureReason (UserKilled))
-import qualified Eclogues.JobSpec as Job
+import Eclogues.Job (FailureReason (UserKilled))
+import qualified Eclogues.Job as Job
 import qualified Eclogues.Persist as Persist
 import Eclogues.ServantInstances ()
 import Eclogues.State (getJobs, createJob, killJob, deleteJob, getJob)
@@ -79,11 +79,11 @@ mainServer conf stateV = handleExcept server' where
     healthH = lift $ Health . isJust <$> atomically (Config.auroraURI conf)
     getJobsH = lift $ getJobs <$> atomically (readTVar stateV)
     getJobH jid = getJob jid =<< lift (atomically $ readTVar stateV)
-    getJobStateH = fmap (^. Job.jobState) . getJobH
+    getJobStateH = fmap (^. Job.state) . getJobH
     createJobH spec = lift randomIO >>= runScheduler' . flip createJob spec
     deleteJobH = runScheduler' . deleteJob
     mesosJob = toMesos <=< getJobH where
-        toMesos :: Job.JobStatus -> ExceptT JobError IO ()
+        toMesos :: Job.Status -> ExceptT JobError IO ()
         toMesos js = (lift . atomically $ Config.auroraURI conf) >>= \case
             Nothing  -> throwE SchedulerInaccessible
             Just uri -> throwE . SchedulerRedirect . Config.schedJobURI conf uri $ js ^. Job.uuid
@@ -93,8 +93,10 @@ mainServer conf stateV = handleExcept server' where
       where
         path = fromMaybe $(mkAbsFile "/stdout") pathM
 
-    killJobH jid (Failed UserKilled) = runScheduler' $ killJob jid
-    killJobH jid _                   = throwE (InvalidStateTransition "Can only set state to Failed UserKilled") <* getJobH jid
+    killJobH jid (Job.Failed UserKilled) = runScheduler' $ killJob jid
+    killJobH jid _                       = do
+        _ <- getJobH jid
+        throwE $ InvalidStateTransition "Can only set state to Failed UserKilled"
     runScheduler' = runScheduler conf stateV
 
 handleExcept :: ServerT VAPI (ExceptT JobError IO) -> Server VAPI

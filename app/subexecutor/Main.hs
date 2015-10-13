@@ -15,8 +15,8 @@ Entry point for the subexecutor, called by the executor on compute slaves.
 
 module Main where
 
-import Eclogues.JobSpec (Command, RunResult (..), JobSpec)
-import qualified Eclogues.JobSpec as Job
+import Eclogues.Job (RunResult (..))
+import qualified Eclogues.Job as Job
 import Eclogues.Util (AbsDir (..), readJSON, orError)
 import Units
 
@@ -39,7 +39,7 @@ data SubexecutorConfig = SubexecutorConfig { jobsDir :: AbsDir }
 $(deriveFromJSON defaultOptions ''SubexecutorConfig)
 
 -- | Run a bash command with a time limit.
-runCommand :: Value Int Second -> Command -> IO RunResult
+runCommand :: Value Int Second -> Job.Command -> IO RunResult
 runCommand timeout cmd = do
     proc <- spawnProcess "/usr/bin/timeout" [show (val timeout), "/bin/bash", "-c", T.unpack cmd]
     code <- waitForProcess proc
@@ -65,7 +65,7 @@ runJob (AbsDir shared) name = do
         copyOutput f = copyFile (Job.getOutputPath cwd f)
                                 (Job.getOutputPath (outputDir jobDirName) f)
 
-    spec <- orError =<< readJSON (toFilePath specFile) :: IO JobSpec
+    spec <- orError =<< readJSON (toFilePath specFile) :: IO Job.Spec
 
     D.createDirectoryIfMissing False $ toFilePath inputDir
     mapM_ copyDep $ spec ^. Job.dependsOn
