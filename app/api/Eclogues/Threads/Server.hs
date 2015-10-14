@@ -59,16 +59,17 @@ import qualified Servant.Server as Server
 import System.Random (randomIO)
 
 -- | Start serving.
-serve :: String        -- ^ Host interface to bind to
+serve :: IO ()         -- ^ Action to run when listening has begun
+      -> String        -- ^ Host interface to bind to
       -> Int           -- ^ Port to listen on
       -> AppConfig     -- ^ App config
       -> TVar AppState -- ^ Mutable app state
       -> IO ()
-serve host port conf = Warp.runSettings settings . myCors . Server.serve (Proxy :: (Proxy VAPIWithDocs)) . server conf
+serve bla host port conf = Warp.runSettings settings . myCors . Server.serve (Proxy :: (Proxy VAPIWithDocs)) . server conf
   where
     myCors = cors . const $ Just corsPolicy
     server c = otherwiseShowDocs . mainServer c
-    settings = Warp.setHost (fromString host) $ Warp.setPort port Warp.defaultSettings
+    settings = Warp.setBeforeMainLoop bla $ Warp.setHost (fromString host) $ Warp.setPort port Warp.defaultSettings
 
 mainServer :: AppConfig -> TVar AppState -> Server VAPI
 mainServer conf stateV = handleExcept server' where

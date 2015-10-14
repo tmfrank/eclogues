@@ -7,6 +7,7 @@ import Api_Types
 import qualified Eclogues.Job as Job
 import Eclogues.Scheduling.AuroraConfig
 import Units
+import MockSpec (testMock)
 import StateSpec
 
 import Test.Hspec
@@ -51,3 +52,4 @@ main = hspec $ do
     testThrift
     testUnits
     testState
+    testMock

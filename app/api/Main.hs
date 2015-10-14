@@ -103,7 +103,7 @@ withPersist :: String -> Int -> AppConfig -> Lock -> Async ZKError -> IO ZKError
 withPersist host port conf webLock followAuroraFailure = do
     st <- loadFromDB conf
     stateV <- newTVarIO st
-    let web = Lock.with webLock $ serve host port conf stateV
+    let web = Lock.with webLock $ serve (pure ()) host port conf stateV
         updater = forever $ do
             loadSchedulerState conf stateV
             threadDelay . floor $ second (1 :: Double) `asVal` micro second
