@@ -54,9 +54,10 @@ Running
 -------
 
 ```
-cabal build
-cp dist/build/eclogues-subexecutor/eclogues-subexecutor dist/build/eclogues-client/eclogues-client SLAVE_PATH
-dist/build/eclogues-api/eclogues-api &
+stack build
+export DIST_DIR=$(stack path --local-install-root)/bin
+cp $DIST_DIR/eclogues-subexecutor $DIST_DIR/eclogues-client SLAVE_PATH
+$DIST_DIR/eclogues-api &
 xdg-open http://localhost:8000
 ```
 
