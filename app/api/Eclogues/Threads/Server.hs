@@ -26,13 +26,13 @@ import Eclogues.AppConfig (AppConfig)
 import qualified Eclogues.AppConfig as Config
 import Eclogues.Job (FailureReason (UserKilled))
 import qualified Eclogues.Job as Job
+import Eclogues.Monitoring.Cluster as CM
 import qualified Eclogues.Persist as Persist
 import Eclogues.ServantInstances ()
 import Eclogues.State (getJobs, createJob, killJob, deleteJob, getJob)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState)
 import Eclogues.Util (maybeDo)
-import Eclogues.Monitoring.Cluster as CM
 
 import Control.Category ((.))
 import Control.Concurrent.AdvSTM (atomically, onCommit)

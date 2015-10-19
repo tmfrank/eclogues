@@ -57,9 +57,9 @@ loadSchedulerState conf stateV = do
         Right (Left resp)         -> throwIO resp
 
 -- | Obtain estimated resources for all available sources and update job satisfiability.
-monitorCluster :: AppConfig -> STM.TVar AppState -> STM.TVar (Maybe CM.Cluster) -> IO ()
-monitorCluster conf stateV clusterV = do
-    clusterRes <- try . runReaderT Graphite.getCluster $ Config.monitorUrl conf
+monitorCluster :: String -> STM.TVar AppState -> STM.TVar (Maybe CM.Cluster) -> IO ()
+monitorCluster url stateV clusterV = do
+    clusterRes <- try $ runReaderT Graphite.getCluster url
     case clusterRes of
         Right cluster -> STM.atomically $ do
             STM.writeTVar clusterV (Just cluster)
@@ -67,7 +67,7 @@ monitorCluster conf stateV clusterV = do
             let (_, ts) = ES.runState state $ updateSatisfiabilities cluster state
             STM.writeTVar stateV $ ts ^. ES.appState
         Left (ex :: IOException) -> do
-            hPutStrLn stderr $ "Error connecting to health monitor at " ++ Config.monitorUrl conf ++ "; retrying: " ++ show ex
+            hPutStrLn stderr $ "Error connecting to health monitor at " ++ url ++ "; retrying: " ++ show ex
             STM.atomically $ do
                 STM.writeTVar clusterV Nothing
                 state <- STM.readTVar stateV

@@ -66,7 +66,7 @@ data ApiConfig = ApiConfig { jobsDir :: AbsDir
                            , bindPort :: Word16
                            , subexecutorUser :: T.Text
                            , outputUrlPrefix :: URI
-                           , graphiteUrl :: String }
+                           , graphiteUrl :: Maybe String }
 
 $(deriveFromJSON defaultOptions ''ApiConfig)
 
@@ -110,15 +110,20 @@ withPersist host port conf webLock followAuroraFailure = do
         updater = forever $ do
             loadSchedulerState conf stateV
             threadDelay . floor $ second (1 :: Double) `asVal` micro second
-        monitor = forever $ do
-            monitorCluster conf stateV clusterV
+        monitor url = forever $ do
+            monitorCluster url stateV clusterV
             threadDelay . floor $ second (30 :: Double) `asVal` micro second
         -- TODO: catch run error and reschedule
         enacter = forever . STM.atomically $ runSingleCommand conf
 
+    -- Configure threads ignoring monitoring if the relevant configuration is not provided
     hPutStrLn stderr $ "Starting server on " ++ host ++ ':':show port
-    withAsync web $ \webA -> withAsync updater $ \monMon -> withAsync monitor $ \updaterA -> withAsync enacter $ \enacterA ->
-        snd <$> waitAny [followAuroraFailure, const undefined <$> webA, const undefined <$> monMon, updaterA, enacterA]
+    withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA -> do
+        let results = [followAuroraFailure, const undefined <$> webA, updaterA, enacterA]
+        case Config.monitorUrl conf of
+            Just url -> withAsync (monitor url) $ \mon -> snd <$> waitAny (results ++ [const undefined <$> mon])
+            Nothing -> hPutStrLn stderr warningMsg >> (snd <$> waitAny results)
+                where warningMsg = "Unable to monitor cluster due to absent configuration"
 
 -- | Contest Zookeeper election with the provided node data, and perform some
 -- action while elected. If leadership is lost, wait until re-elected and

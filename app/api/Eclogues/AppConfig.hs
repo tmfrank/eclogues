@@ -41,7 +41,7 @@ data AppConfig = AppConfig {
                            -- | User the subexecutor is run as.
                            , subexecutorUser :: Text
                            -- | URL for Graphite server monitoring cluster.
-                           , monitorUrl      :: String }
+                           , monitorUrl      :: Maybe String }
 
 -- | Wait until the scheduler is available.
 requireSchedConf :: AppConfig -> AdvSTM ScheduleConf
