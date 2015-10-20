@@ -93,7 +93,7 @@ noJob :: Job.Name -> EitherError AppState -> EitherError Bool
 noJob jName = fmap (isNothing . getJob jName)
 
 jobInStage :: Job.Name -> Job.Stage -> EitherError AppState -> EitherError Bool
-jobInStage jName jState result = return . inState =<< eitherGetJob jName =<< result
+jobInStage jName jState result = inState <$> (eitherGetJob jName =<< result)
     where eitherGetJob n = maybeToEither (JobNotFound n) . getJob n
           inState = (== jState) . view stage
 
@@ -101,11 +101,11 @@ getRevDep :: Job.Name -> AppState -> Maybe [Name]
 getRevDep jName aState = aState ^. revDeps ^. at jName
 
 jobWithRevDep :: Job.Name -> [Job.Name] -> EitherError AppState -> EitherError Bool
-jobWithRevDep jName jRevDeps result = return . (== jRevDeps) =<< eitherGetRevDep jName =<< result
+jobWithRevDep jName jRevDeps result = (== jRevDeps) <$> (eitherGetRevDep jName =<< result)
     where eitherGetRevDep n = maybeToEither (RevDepNotFound n) . getRevDep n
 
 noRevDep :: Job.Name -> EitherError AppState -> EitherError Bool
-noRevDep jName result = return . isNothing . getRevDep jName =<< result
+noRevDep jName result = isNothing . getRevDep jName <$> result
 
 producedError :: JobError -> EitherError AppState -> EitherError Bool
 producedError jError (Left e) = case e of

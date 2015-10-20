@@ -37,7 +37,7 @@ testUpdateSatisfiabilities = let
         satisfiability jName jSatis aState = do
             state <- aState
             let status = HashMap.lookup jName $ state ^. jobs
-            return $ maybe False ((== jSatis) . view satis) status
+            pure $ maybe False ((== jSatis) . view satis) status
 
         testCluster :: Cluster
         testCluster = [nodeResources fullResources]
