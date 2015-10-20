@@ -37,7 +37,8 @@ Configuration
     "bindPort": 8000,
     "subexecutorUser": "vagrant",
     "outputUrlPrefix": "http://localhost:9000/",
-    "graphiteUrl": "http://localhost:8888/"
+    "aegleUrl": "localhost",
+    "aeglePort": 4201
 }
 ```
 

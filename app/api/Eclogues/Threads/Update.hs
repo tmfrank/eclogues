@@ -18,7 +18,7 @@ module Eclogues.Threads.Update (loadSchedulerState, monitorCluster) where
 import Eclogues.AppConfig (AppConfig)
 import qualified Eclogues.AppConfig as Config
 import Eclogues.Monitoring.Cluster as CM
-import Eclogues.Monitoring.Graphite as Graphite
+import Eclogues.Monitoring.Monitor (slaveResources)
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.Command (ScheduleConf (auroraURI), getSchedulerStatuses)
 import Eclogues.State (activeJobs, updateJobs)
@@ -29,11 +29,13 @@ import Eclogues.Util (maybeDo)
 import qualified Control.Concurrent.AdvSTM as STM
 import qualified Control.Concurrent.AdvSTM.TChan as STM
 import qualified Control.Concurrent.AdvSTM.TVar as STM
+import Control.Monad.Trans.Either (runEitherT)
 import Control.Exception (IOException, throwIO, try)
 import Control.Lens ((^.))
 import Control.Monad.Trans.Except (runExceptT)
-import Control.Monad.Trans.Reader (runReaderT)
 import qualified Data.HashMap.Lazy as HashMap
+import Servant.Client (ServantError)
+import Servant.Common.BaseUrl (BaseUrl)
 import System.IO (hPutStrLn, stderr)
 
 -- | Query the scheduler and run 'updateJobs'.
@@ -57,17 +59,17 @@ loadSchedulerState conf stateV = do
         Right (Left resp)         -> throwIO resp
 
 -- | Obtain estimated resources for all available sources and update job satisfiability.
-monitorCluster :: String -> STM.TVar AppState -> STM.TVar (Maybe CM.Cluster) -> IO ()
+monitorCluster :: BaseUrl -> STM.TVar AppState -> STM.TVar (Maybe CM.Cluster) -> IO ()
 monitorCluster url stateV clusterV = do
-    clusterRes <- try $ runReaderT Graphite.getCluster url
+    clusterRes <- runEitherT $ slaveResources url
     case clusterRes of
         Right cluster -> STM.atomically $ do
             STM.writeTVar clusterV (Just cluster)
             state <- STM.readTVar stateV
             let (_, ts) = ES.runState state $ updateSatisfiabilities cluster state
             STM.writeTVar stateV $ ts ^. ES.appState
-        Left (ex :: IOException) -> do
-            hPutStrLn stderr $ "Error connecting to health monitor at " ++ url ++ "; retrying: " ++ show ex
+        Left (ex :: ServantError) -> do
+            hPutStrLn stderr $ "Error connecting to health monitor at " ++ show url ++ "; retrying: " ++ show ex
             STM.atomically $ do
                 STM.writeTVar clusterV Nothing
                 state <- STM.readTVar stateV

@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
@@ -12,13 +11,12 @@ Maintainer  : Shannon Pace <space@swin.edu.au>
 Stability   : unstable
 Portability : portable
 
-Types representing machines/cluster and functions for determing
-satisfiability of jobs.
+Functionality for determining the satisfiability of jobs.
 -}
 
 module Eclogues.Monitoring.Cluster (
                                    -- * Types
-                                     Cluster,
+                                     Cluster, NodeResources(..),
                                    -- * Satisfiability updates
                                      updateSatisfiabilities, updateSatisfy, allSatisfyUnknown,
                                    -- * Satisfiability checking
@@ -30,17 +28,23 @@ import Eclogues.Job (Name, Resources, Spec, Status, Satisfiability(..), Unsatisf
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Monad (TS)
 import Eclogues.State.Types (AppState, jobs)
+import Units as U
 
 import Control.Lens (view, (^.))
 import Control.Lens.TH (makeClassy)
 import Data.Bool (bool)
-import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Graph (Graph, Vertex, graphFromEdges, topSort)
 import Data.Maybe (catMaybes, fromMaybe)
 import Control.Monad (void, when)
 
-type Cluster = HashMap String Resources
+data NodeResources = NodeResources { _disk :: U.Value Double U.MB
+                                   , _ram  :: U.Value Double U.MiB
+                                   , _cpu  :: U.Value Double U.Core }
+
+$(makeClassy ''NodeResources)
+
+type Cluster = [NodeResources]
 
 type Node = (Status, Name, [Name])
 
@@ -52,12 +56,12 @@ $(makeClassy ''Satisfiabilities)
 
 -- | Return whether the given resources can be accommodated within the cluster.
 verifyResources :: Cluster -> Resources -> Bool
-verifyResources cluster jobRes = not . null $ HashMap.filter sufficientRes cluster
+verifyResources cluster jobRes = not . null $ filter sufficientRes cluster
     where
-        sufficientRes mRes = suffCpu mRes && suffRam mRes && suffDisk mRes
-        suffCpu mRes = mRes ^. Job.cpu >= jobRes ^. Job.cpu
-        suffRam mRes = mRes ^. Job.ram >= jobRes ^. Job.ram
-        suffDisk mRes = mRes ^. Job.disk >= jobRes ^. Job.disk
+        sufficientRes nodeRes = suffCpu nodeRes && suffRam nodeRes && suffDisk nodeRes
+        suffCpu nodeRes = nodeRes ^. cpu >= jobRes ^. Job.cpu
+        suffRam nodeRes = nodeRes ^. ram >= jobRes ^. Job.ram
+        suffDisk nodeRes = nodeRes ^. disk >= jobRes ^. Job.disk
 
 -- | Return the satisfiability of a job with respect to cluster resources.
 specSatisfy :: Cluster -> Spec -> Satisfiability

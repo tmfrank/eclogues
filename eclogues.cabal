@@ -63,6 +63,7 @@ executable eclogues-api
         thrift >=0.9.2 && <0.10,
         aeson >=0.8 && <0.10,
         servant >=0.4.1 && <0.5,
+        servant-client >=0.4.2,
         servant-server ==0.4.*,
         servant-docs >=0.4.1 && <0.5,
         servant-pandoc >=0.4.0 && <0.5,
@@ -117,7 +118,7 @@ executable eclogues-api
         Eclogues.State.Types,
         Eclogues.Threads.Server,
         Eclogues.Threads.Update,
-        Eclogues.Monitoring.Graphite,
+        Eclogues.Monitoring.Monitor,
         Eclogues.Monitoring.Cluster
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 

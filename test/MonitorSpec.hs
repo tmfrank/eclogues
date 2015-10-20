@@ -40,7 +40,7 @@ testUpdateSatisfiabilities = let
             return $ maybe False ((== jSatis) . view satis) status
 
         testCluster :: Cluster
-        testCluster = HashMap.insert "testMachine" fullResources HashMap.empty
+        testCluster = [nodeResources fullResources]
     in do
         describe "updateSatisfy" $
             it "should tag satisfiable jobs involving a dependency as Satisfiable" $

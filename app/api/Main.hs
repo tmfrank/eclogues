@@ -56,6 +56,7 @@ import Database.Zookeeper (ZKError)
 import Network.URI (URI (uriPath), escapeURIString, isUnescapedInURI)
 import Path (toFilePath)
 import Path.IO (createDirectoryIfMissing)
+import Servant.Common.BaseUrl (BaseUrl(BaseUrl), Scheme(Http))
 import System.IO (hPutStrLn, stderr)
 import System.Random (mkStdGen, setStdGen)
 
@@ -66,7 +67,8 @@ data ApiConfig = ApiConfig { jobsDir :: AbsDir
                            , bindPort :: Word16
                            , subexecutorUser :: T.Text
                            , outputUrlPrefix :: URI
-                           , graphiteUrl :: Maybe String }
+                           , aegleUrl :: Maybe String
+                           , aeglePort :: Maybe Int }
 
 $(deriveFromJSON defaultOptions ''ApiConfig)
 
@@ -92,13 +94,13 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
     (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
     createDirectoryIfMissing False jdir
     Persist.withPersistDir jdir $ \pctx' -> do
-        let conf   = AppConfig jdir getURI schedV pctx' jobURI outURI user grphUrl
+        let conf   = AppConfig jdir getURI schedV pctx' jobURI outURI user monUrl
             user   = subexecutorUser apiConf
             jobURI = schedulerJobUI $ T.unpack user
             outURI = mkOutputURI $ outputUrlPrefix apiConf
             host   = bindAddress apiConf
             port   = fromIntegral $ bindPort apiConf
-            grphUrl = graphiteUrl apiConf
+            monUrl = BaseUrl Http <$> aegleUrl apiConf <*> aeglePort apiConf
         lift $ withPersist host port conf webLock followAuroraFailure
 
 withPersist :: String -> Int -> AppConfig -> Lock -> Async ZKError -> IO ZKError
@@ -136,7 +138,7 @@ whileLeader zk advertisedHost act =
 
 -- | Create encoded (host, port) to advertise via Zookeeper.
 advertisedData :: ApiConfig -> BSS.ByteString
-advertisedData (ApiConfig _ _ host port _ _ _) = BSL.toStrict $ encode (host, port)
+advertisedData (ApiConfig _ _ host port _ _ _ _) = BSL.toStrict $ encode (host, port)
 
 -- | Append the job name and file path to the path of the job output server URI.
 mkOutputURI :: URI -> Job.Name -> AbsFile -> URI

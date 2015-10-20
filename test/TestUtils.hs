@@ -17,7 +17,7 @@ module TestUtils where
 
 import Eclogues.API (JobError(..))
 import Eclogues.Job as Job
-import Eclogues.Monitoring.Cluster (Cluster)
+import Eclogues.Monitoring.Cluster (Cluster, NodeResources(..))
 import Eclogues.State.Types
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State (createJob)
@@ -51,6 +51,9 @@ halfResources, fullResources, overResources :: Job.Resources
 halfResources = Job.Resources (mega byte 5000)  (mebi byte 1024) (core 1) (second 0)
 fullResources = Job.Resources (mega byte 10000) (mebi byte 2048) (core 2) (second 0)
 overResources = Job.Resources (mega byte 20000) (mebi byte 4096) (core 4) (second 0)
+
+nodeResources :: Job.Resources -> NodeResources
+nodeResources (Job.Resources d r c _) = NodeResources d r c
 
 scheduler' :: Scheduler -> EitherError AppState
 scheduler' = scheduler def

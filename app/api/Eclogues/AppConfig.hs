@@ -26,6 +26,7 @@ import Data.Text.Lazy (fromStrict)
 import Data.UUID (UUID)
 import Network.URI (URI)
 import Path (Path, Abs, Dir)
+import Servant.Common.BaseUrl (BaseUrl)
 
 data AppConfig = AppConfig {
                            -- | The mount point of the shared jobs directory.
@@ -41,7 +42,7 @@ data AppConfig = AppConfig {
                            -- | User the subexecutor is run as.
                            , subexecutorUser :: Text
                            -- | URL for Graphite server monitoring cluster.
-                           , monitorUrl      :: Maybe String }
+                           , monitorUrl      :: Maybe BaseUrl }
 
 -- | Wait until the scheduler is available.
 requireSchedConf :: AppConfig -> AdvSTM ScheduleConf
