@@ -9,10 +9,25 @@ packages:
     git: git@github.com:rimmington/path-io
     commit: b5e6eeab41b77b435650425e7f8c1720ff27eaeb
   extra-dep: true
+- location:
+    git: git@github.com:ssilab/digital-metrology-frontiers
+    commit: 87053f6e5892df1f1d7dc3bf85ee2677e7a41bf8
+  extra-dep: true
+- location:
+    git: git@github.com:ssilab/aegle
+    commit: e0d0feb92cd6abb3b64af20e55da92b754c485e4
+  extra-dep: true
 extra-deps:
 - data-default-generics-0.3
 - hzk-2.1.0
 - stm-io-hooks-1.1.0
 - uuid-aeson-0.1.0.0
 - xdg-basedir-0.2.2
+- units-2.3
+- units-attoparsec-1.0
+- units-defs-2.0.0.1
+- units-parser-0.1.0.0
+- microlens-0.3.4.0
+- protobuf-0.2.1.0
+- pipes-cereal-0.1.0.0
 resolver: lts-3.9

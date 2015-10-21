@@ -21,13 +21,16 @@ import Eclogues.Job (RunResult (..))
 import qualified Eclogues.Job as Job
 import Eclogues.Paths (runResult, specFile)
 import Eclogues.Util (AbsDir (..), readJSON, orError)
-import Units
 
 import Control.Arrow ((&&&))
 import Control.Lens ((^.))
 import Control.Monad (when)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveFromJSON, defaultOptions)
+import Data.Maybe (fromMaybe)
+import Data.Metrology.SI (Second (Second))
+import Data.Metrology.Computing ((#>), Time)
+import Data.Scientific.Suspicious (toBoundedInteger)
 import qualified Data.Text as T
 import Path ( Path, Abs, Dir, (</>), toFilePath
             , parseAbsFile, mkRelFile, mkRelDir )
@@ -43,9 +46,10 @@ data SubexecutorConfig = SubexecutorConfig { jobsDir :: AbsDir }
 $(deriveFromJSON defaultOptions ''SubexecutorConfig)
 
 -- | Run a bash command with a time limit.
-runCommand :: Value Int Second -> Job.Command -> IO RunResult
+runCommand :: Time -> Job.Command -> IO RunResult
 runCommand timeout cmd = do
-    proc <- spawnProcess "/usr/bin/timeout" [show (val timeout), "/bin/bash", "-c", T.unpack cmd]
+    let time = fromMaybe maxBound . toBoundedInteger $ timeout #> Second :: Int
+    proc <- spawnProcess "/usr/bin/timeout" [show time, "/bin/bash", "-c", T.unpack cmd]
     code <- waitForProcess proc
     pure $ case code of
         ExitFailure 124 -> Overtime

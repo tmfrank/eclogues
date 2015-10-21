@@ -24,11 +24,12 @@ module Eclogues.ApiDocs (VAPIWithDocs, apiDocs, apiDocsMd, apiDocsHtml) where
 import Eclogues.API (VAPI, Health (Health), AbsFile)
 import Eclogues.Job (Stage (Failed, Running), FailureReason (..), Satisfiability (Satisfiable))
 import qualified Eclogues.Job as Job
-import Units
 
 import Control.Lens ((.~), (&))
 import qualified Data.ByteString.Lazy as L
 import Data.Maybe (fromJust)
+import Data.Metrology.Computing (Byte (Byte), Core (Core), (%>))
+import Data.Metrology.SI (Second (Second), mega, centi)
 import Data.Proxy (Proxy (..))
 import Data.Text.Lazy (pack)
 import Data.Text.Lazy.Encoding (encodeUtf8)
@@ -53,7 +54,7 @@ instance ToSample Job.Stage Job.Stage where
                   ,("A task killed by a user", Failed UserKilled)]
 
 res :: Job.Resources
-res = Job.Resources (mega byte 10) (mebi byte 10) (core 0.1) (second 5)
+res = fromJust $ Job.mkResources (10 %> mega Byte) (10 %> mega Byte) (10 %> centi Core) (5 %> Second)
 
 helloName :: Job.Name
 helloName = fromJust $ Job.mkName "hello"

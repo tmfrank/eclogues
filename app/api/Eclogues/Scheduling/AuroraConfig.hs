@@ -27,8 +27,8 @@ import Eclogues.Job (
       Stage (..), QueueStage (SchedulerQueue)
     , FailureReason (..), RunErrorReason (SubexecutorFailure))
 import qualified Eclogues.Job as Job
-import Units
 
+import Control.Lens ((^.))
 import Data.Aeson (ToJSON (toJSON))
 import Data.Aeson.Encode (encodeToTextBuilder)
 import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
@@ -155,13 +155,12 @@ defaultCronCollisionPolicy :: CronCollisionPolicy
 defaultCronCollisionPolicy = KILL_EXISTING
 
 aResources :: Job.Resources -> AResources
-aResources (Job.Resources disk ram cpu _) =
-    AResources (ceiling $ disk `asVal` byte)
-               (ceiling $ ram `asVal` byte)
-               (cpu `asVal` core)
+aResources r = AResources (r ^. Job.diskBytes)
+                          (r ^. Job.ramBytes)
+                          (r ^. Job.cpuCores)
 
 auroraJobConfig :: Role -> Job.Spec -> JobConfiguration
-auroraJobConfig role (Job.Spec name cmd resources@(Job.Resources disk ram cpu _) _ _ _) = job where
+auroraJobConfig role spec = job where
     jobKey = defaultJobKey role name'
     owner = Identity role role
     job = JobConfiguration  { jobConfiguration_key                 = jobKey
@@ -175,9 +174,9 @@ auroraJobConfig role (Job.Spec name cmd resources@(Job.Resources disk ram cpu _)
                                 , taskConfig_environment     = defaultEnvironment
                                 , taskConfig_jobName         = name'
                                 , taskConfig_isService       = defaultIsService
-                                , taskConfig_numCpus         = cpu `asVal` core
-                                , taskConfig_ramMb           = ceiling $ ram `asVal` mebi byte
-                                , taskConfig_diskMb          = ceiling $ disk `asVal` mega byte
+                                , taskConfig_numCpus         = spec ^. Job.cpuCores
+                                , taskConfig_ramMb           = spec ^. Job.ramMB
+                                , taskConfig_diskMb          = spec ^. Job.diskMB
                                 , taskConfig_priority        = defaultPriority
                                 , taskConfig_maxTaskFailures = defaultMaxTaskFailures
                                 , taskConfig_constraints     = HashSet.empty -- defaultConstraints
@@ -203,7 +202,7 @@ auroraJobConfig role (Job.Spec name cmd resources@(Job.Resources disk ram cpu _)
                   , task_finalization_wait  = defaultFinalisationWait
                   , task_max_failures       = defaultMaxTaskFailures
                   , task_max_concurrency    = defaultMaxConcurrency
-                  , task_resources          = aResources resources
+                  , task_resources          = aResources $ spec ^. Job.resources
                   , task_constraints        = [orderConstraint] }
     orderConstraint = ATaskConstraint { order = [name'] }
     aProcess = AProcess { p_daemon       = False
@@ -213,8 +212,8 @@ auroraJobConfig role (Job.Spec name cmd resources@(Job.Resources disk ram cpu _)
                         , p_min_duration = defaultMinDuration
                         , p_cmdline      = cmd'
                         , p_final        = False }
-    name' = L.fromStrict $ Job.nameText name
-    cmd' = L.fromStrict cmd
+    name' = L.fromStrict . Job.nameText $ spec ^. Job.name
+    cmd' = L.fromStrict $ spec ^. Job.command
 
 lockKey :: Role -> Name -> LockKey
 lockKey role = LockKey . defaultJobKey role

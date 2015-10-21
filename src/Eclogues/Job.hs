@@ -22,13 +22,14 @@ module Eclogues.Job (
     -- * Job satisfiability
       Satisfiability (..), UnsatisfiableReason (..), isUnsatisfiable
     -- * Job status
-    , Status (Status), spec, stage, satis, uuid
+    , Status (Status), HasStatus (..)
     -- ** Job spec
-    , Spec (Spec), name, command, resources, outputFiles, captureStdout, dependsOn
+    , Spec (Spec), HasSpec (..)
     , Name, nameText, mkName, dirName, uuidName
     , Command
-    , Resources (Resources), disk, ram, cpu, time
     , OutputPath (..), getOutputPath
+    -- ** Resources
+    , module Eclogues.Job.Resources
     -- ** Job lifecycle stage
     , Stage (..), RunResult (..), FailureReason (..), RunErrorReason (..), QueueStage (..)
     , majorStage, majorStages
@@ -37,14 +38,15 @@ module Eclogues.Job (
     ) where
 
 import Eclogues.Job.Aeson
+import Eclogues.Job.Resources
 import Eclogues.Util (toRelPath)
 
 import Control.Exception (displayException)
 import Control.Lens.TH (makeClassy)
-import Control.Monad (MonadPlus, (<=<))
+import Control.Monad (MonadPlus)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
 import qualified Data.Aeson as Aeson
-import Data.Aeson.TH (deriveJSON, deriveToJSON, defaultOptions, fieldLabelModifier)
+import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import Data.Hashable (Hashable)
 import Data.Ord (comparing)
 import qualified Data.Text as T
@@ -54,8 +56,6 @@ import Path (Path, Abs, Rel, File, Dir, (</>), parseAbsFile, parseAbsDir, toFile
 import Servant.Common.Text (FromText (..), ToText (..))
 import System.Exit (ExitCode)
 import Text.Regex.PCRE.Heavy ((=~), re)
-
-import Units
 
 default (T.Text)
 
@@ -76,15 +76,6 @@ type Command = T.Text
 newtype OutputPath = OutputPath { getPath :: Path Abs File }
                      deriving (Show, Eq)
 
-data Resources = Resources { _disk :: Value Double MB
-                           , _ram  :: Value Double MiB
-                           , _cpu  :: Value Double Core
-                           , _time :: Value Int Second }
-                           deriving (Show, Eq)
-
-$(deriveToJSON defaultOptions{fieldLabelModifier = drop 1} ''Resources)
-$(makeClassy ''Resources)
-
 data Spec = Spec { _name          :: Name
                  , _command       :: Command
                  , __resources    :: Resources
@@ -93,16 +84,9 @@ data Spec = Spec { _name          :: Name
                  , _dependsOn     :: [Name] }
                  deriving (Show, Eq)
 
-$(deriveJSON defaultOptions{fieldLabelModifier = specJName} ''Spec)
-$(makeClassy ''Spec)
-instance HasResources Spec where resources = _resources
-
 -- | The result of a job, as communicated by the subexecutor. Other failure
 -- modes are communicated by the scheduler.
 data RunResult = Ended ExitCode | Overtime deriving (Show)
-
-$(deriveJSON defaultOptions ''ExitCode)
-$(deriveJSON defaultOptions ''RunResult)
 
 data FailureReason = UserKilled
                    | NonZeroExitCode Int
@@ -142,10 +126,6 @@ data Status = Status { __spec :: Spec
                      , _satis :: Satisfiability
                      , _uuid  :: UUID }
                      deriving (Show, Eq)
-
-$(deriveJSON defaultOptions{fieldLabelModifier = statusJName} ''Status)
-$(makeClassy ''Status)
-instance HasSpec Status where spec = _spec
 
 -- | Names of 'Stage' constructors. Could probably be replaced by something
 -- from "GHC.Generics".
@@ -211,10 +191,21 @@ isExpectedTransition o n | isQueueStage o || o == Running = case n of
                                   _            -> False
 isExpectedTransition _            _             = False
 
+
 -- | Whether the Satisfiability is Unsatisfiable.
 isUnsatisfiable :: Satisfiability -> Bool
 isUnsatisfiable (Unsatisfiable _) = True
 isUnsatisfiable _                 = False
+
+$(deriveJSON defaultOptions ''ExitCode)
+$(deriveJSON defaultOptions ''RunResult)
+$(deriveJSON defaultOptions{fieldLabelModifier = specJName} ''Spec)
+$(deriveJSON defaultOptions{fieldLabelModifier = statusJName} ''Status)
+
+$(makeClassy ''Spec)
+$(makeClassy ''Status)
+instance HasResources Spec where resources = _resources
+instance HasSpec Status where spec = _spec
 
 instance ToJSON Stage where
     toJSON (Queued LocalQueue)     = object ["type" .= "Queued", "substage" .= "local"]
@@ -286,15 +277,6 @@ instance FromJSON Satisfiability where
             "SatisfiabilityUnknown" -> pure SatisfiabilityUnknown
             _ -> fail "Invalid job satisfiability type"
     parseJSON _ = fail "Invalid job satisfiability value"
-
-instance FromJSON Resources where
-    parseJSON = validate <=< getJSON where
-        getJSON (Aeson.Object v) = Resources <$> v .: "disk" <*> v .: "ram" <*> v .: "cpu" <*> v .: "time"
-        getJSON _                = fail "Invalid resources value"
-        validate res@(Resources dsk rm cu te) =
-            if any ((== -1) . signum) [val dsk, val rm, val cu, fromIntegral (val te)]
-                then fail "Negative resource value"
-                else pure res
 
 instance FromJSON OutputPath where
     parseJSON (Aeson.String s) = toP $ parseAbsFile $ T.unpack s

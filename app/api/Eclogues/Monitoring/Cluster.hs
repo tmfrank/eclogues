@@ -28,19 +28,19 @@ import Eclogues.Job (Name, Resources, Spec, Status, Satisfiability (..), Unsatis
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Monad (TS)
 import Eclogues.State.Types (AppState, jobs)
-import qualified Units as U
 
 import Control.Lens ((^.), (<&>), view, itraverse_)
 import Control.Lens.TH (makeClassy)
+import Control.Monad (when)
 import Data.Bool (bool)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Graph (Graph, Vertex, graphFromEdges, topSort)
 import Data.Maybe (catMaybes, fromMaybe)
-import Control.Monad (when)
+import Data.Metrology.Computing (Data, Parallelism)
 
-data NodeResources = NodeResources { _disk :: U.Value Double U.MB
-                                   , _ram  :: U.Value Double U.MiB
-                                   , _cpu  :: U.Value Double U.Core }
+data NodeResources = NodeResources { _disk :: Data
+                                   , _ram  :: Data
+                                   , _cpu  :: Parallelism }
 
 $(makeClassy ''NodeResources)
 

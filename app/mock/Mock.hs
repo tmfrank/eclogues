@@ -12,7 +12,6 @@ import Eclogues.State (updateJobs)
 import Eclogues.State.Monad (runState, appState)
 import Eclogues.State.Types (AppState, jobs)
 import Eclogues.Threads.Server (serve)
-import Units (asVal, micro, second)
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.AdvSTM (atomically)
@@ -24,6 +23,8 @@ import Control.Monad (forever)
 import Control.Monad.Trans (lift)
 import Data.Default.Generics (def)
 import Data.Maybe (fromJust)
+import Data.Metrology ((%), (#))
+import Data.Metrology.SI (Second (Second), micro)
 import qualified Data.Text as T
 import Data.Word (Word16)
 import Network.URI (URI (uriPath), escapeURIString, isUnescapedInURI, parseURI)
@@ -48,7 +49,7 @@ run bla host port' = withSystemTempDirectory "em" $ \d -> withPersistDir d $ \pc
     let web = serve bla host port conf stateV clusterV
         updater = forever $ do
             update stateV
-            threadDelay . floor $ second (1 :: Double) `asVal` micro second
+            threadDelay . floor $ ((1 % Second) # micro Second :: Double)
 
     putStrLn $ "Starting server on " ++ host ++ ':':show port
     withAsync web $ \webA -> withAsync updater $ \updaterA ->

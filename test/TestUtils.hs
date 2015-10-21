@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {-|
 Module      : $Header$
@@ -21,7 +23,6 @@ import Eclogues.Monitoring.Cluster (Cluster, NodeResources(..))
 import Eclogues.State.Types
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State (createJob)
-import Units
 
 import Control.Lens (view, at, (^.), (.~))
 import Control.Monad.State (State)
@@ -29,10 +30,14 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Data.Default.Generics (def)
 import qualified Data.HashMap.Lazy as HM
 import Data.Maybe (fromMaybe, isNothing)
+import Data.Metrology.Computing (Byte (Byte), Core (Core), (%>))
+import Data.Metrology.SI (Second (Second), mega)
+import Data.Scientific.Suspicious (Sustific, fromFloatDigits)
 import Data.Text (Text)
 import Data.UUID (nil)
 
 import Test.Hspec (Expectation, shouldSatisfy)
+import Test.QuickCheck (Arbitrary (arbitrary), getNonZero)
 
 type Scheduler = ExceptT JobError (State ES.TransitionaryState) ()
 
@@ -48,13 +53,17 @@ type EitherError a = Either TestError a
 maybeToEither :: a -> Maybe b -> Either a b
 maybeToEither x = maybe (Left x) Right
 
+mkResources :: Sustific -> Sustific -> Sustific -> Sustific -> Job.Resources
+mkResources d r c t = fromMaybe (error "invalid test resources") $
+    Job.mkResources (d %> mega Byte) (r %> mega Byte) (c %> Core) (t %> Second)
+
 halfResources, fullResources, overResources :: Job.Resources
-halfResources = Job.Resources (mega byte 5000)  (mebi byte 1024) (core 1) (second 0)
-fullResources = Job.Resources (mega byte 10000) (mebi byte 2048) (core 2) (second 0)
-overResources = Job.Resources (mega byte 20000) (mebi byte 4096) (core 4) (second 0)
+halfResources = mkResources 5000  1024 1 1
+fullResources = mkResources 10000 2048 2 1
+overResources = mkResources 20000 4096 4 1
 
 nodeResources :: Job.Resources -> NodeResources
-nodeResources (Job.Resources d r c _) = NodeResources d r c
+nodeResources res = NodeResources (res ^. Job.disk) (res ^. Job.ram) (res ^. Job.cpu)
 
 scheduler' :: Scheduler -> EitherError AppState
 scheduler' = scheduler def
@@ -122,3 +131,13 @@ satisfiability jName jSatis aState = do
 
 forceName :: Text -> Job.Name
 forceName jName = fromMaybe (error $ "invalid test name " ++ show jName) $ Job.mkName jName
+
+instance Arbitrary Job.Resources where
+    arbitrary = mk <$> v (mega Byte) <*> v (mega Byte) <*> v Core <*> v Second
+      where
+        v t = (%> t) . dblToSus . pos . getNonZero <$> arbitrary
+        pos :: Double -> Double
+        pos = (+ 1) . abs
+        dblToSus :: Double -> Sustific
+        dblToSus = fromFloatDigits
+        mk d r c t = fromMaybe (error "arb resources failed somehow") $ Job.mkResources d r c t

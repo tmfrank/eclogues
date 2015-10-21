@@ -17,9 +17,9 @@ library
         Eclogues.Paths,
         Eclogues.ServantInstances,
         Eclogues.Util
-        Units
     other-modules:
-        Eclogues.Job.Aeson
+        Eclogues.Job.Aeson,
+        Eclogues.Job.Resources
     build-depends:
         base >=4.7.0.1 && <4.9,
         text >=1.1.0.0 && <1.3,
@@ -40,12 +40,18 @@ library
         path >=0.5,
         network-uri >=2.6,
         pcre-heavy,
-        hashable
+        hashable,
+        units,
+        units-defs,
+        units-attoparsec,
+        digital-metrology-frontiers,
+        attoparsec
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
-    other-extensions: DataKinds EmptyDataDecls ExtendedDefaultRules
-                      FlexibleInstances KindSignatures MultiParamTypeClasses
-                      OverloadedStrings TemplateHaskell TypeOperators
+    other-extensions: CPP DataKinds EmptyDataDecls ExtendedDefaultRules
+                      FlexibleContexts FlexibleInstances KindSignatures
+                      MultiParamTypeClasses OverloadedStrings TemplateHaskell
+                      TypeOperators
     hs-source-dirs: src
     ghc-options: -Wall -Werror
 
@@ -91,6 +97,10 @@ executable eclogues-api
         path >=0.5,
         path-io,
         containers >= 0.5.6.2,
+        units,
+        units-defs,
+        digital-metrology-frontiers,
+        aegle,
         eclogues ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
@@ -129,6 +139,8 @@ executable eclogues-subexecutor
         Glob >=0.7.5 && <0.8,
         path,
         path-io,
+        units-defs,
+        digital-metrology-frontiers,
         eclogues ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
@@ -206,6 +218,9 @@ executable eclogues-mock
         path-io,
         containers >= 0.5.6.2,
         servant-client >=0.4.2,
+        units,
+        units-defs,
+        digital-metrology-frontiers,
         eclogues ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
@@ -254,6 +269,10 @@ test-suite spec
         path >=0.5,
         path-io,
         containers >= 0.5.6.2,
+        units,
+        units-defs,
+        digital-metrology-frontiers,
+        eclogues ==0.1.0.0,
         servant-client >=0.4.1 && <0.5,
         eclogues ==0.1.0.0,
         hspec <2.2
@@ -263,6 +282,8 @@ test-suite spec
     hs-source-dirs: gen-hs app/api app/mock test
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
     other-modules:
+        MockSpec,
+        Spec,
         StateSpec
         MonitorSpec
         TestUtils

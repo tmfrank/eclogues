@@ -1,6 +1,4 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
 
 {-|
@@ -18,44 +16,25 @@ Client for Aegle API consuming machine resource data.
 module Eclogues.Monitoring.Monitor (slaveResources) where
 
 import Eclogues.Monitoring.Cluster (Cluster, NodeResources (..))
-import qualified Units as U
 
+import qualified Aegle.API as A
+import Control.Lens ((^.), view)
 import Control.Monad.Trans.Either (EitherT)
-import Data.Aeson.TH (Options (fieldLabelModifier), defaultOptions, deriveFromJSON)
-import Data.Char (toLower)
 import qualified Data.HashMap.Lazy as HM
-import Data.HashMap.Lazy (HashMap)
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
-import Data.Text (Text)
-import Servant.API ((:>), Get, JSON, QueryParams)
+import Servant.API ((:<|>) ((:<|>)))
 import Servant.Client (client)
 import Servant.Common.BaseUrl (BaseUrl (..))
 import Servant.Common.Req (ServantError)
 
-type Host = Text
-type Group = Text
-
-data MonitorRes = MonitorRes { mDisk :: Maybe Double
-                             , mRam  :: Maybe Double
-                             , mCpu  :: Maybe Double }
-                             deriving (Show, Eq)
-
-$(deriveFromJSON defaultOptions { fieldLabelModifier = fmap toLower . drop 1 } ''MonitorRes)
-
-type ResMap = HashMap Host MonitorRes
-
-type HealthAPI = "resources" :> QueryParams "hosts" Host :> QueryParams "groups" Group :> Get '[JSON] ResMap
-
-toNodeRes :: MonitorRes -> Maybe NodeResources
-toNodeRes res = NodeResources <$> d <*> r <*> c
-    where
-        d = U.mega U.byte <$> mDisk res
-        r = U.mebi U.byte <$> mRam res
-        c = U.core <$> mCpu res
+toNodeRes :: A.Resources -> Maybe NodeResources
+toNodeRes res = NodeResources <$> res ^. A.disk
+                              <*> res ^. A.ram
+                              <*> res ^. A.cpu
 
 slaveResources :: BaseUrl -> EitherT ServantError IO Cluster
 slaveResources host = toCluster <$> getRes [] ["mesos-slave"]
     where
-        getRes = client (Proxy :: Proxy HealthAPI) host
-        toCluster = catMaybes . fmap toNodeRes . HM.elems
+        (_ :<|> getRes :<|> _) = client (Proxy :: Proxy A.API) host
+        toCluster = catMaybes . fmap (toNodeRes . view A.total) . HM.elems

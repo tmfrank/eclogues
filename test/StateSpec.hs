@@ -29,6 +29,7 @@ import TestUtils
 
 import Control.Lens ((^.))
 import Control.Monad.Trans (lift)
+
 import Test.Hspec
 
 job :: Job.Name

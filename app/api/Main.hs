@@ -30,7 +30,6 @@ import Eclogues.State.Types (AppState)
 import Eclogues.Threads.Update (loadSchedulerState, monitorCluster)
 import Eclogues.Threads.Server (serve)
 import Eclogues.Util (AbsDir (getDir), readJSON, orError)
-import Units
 
 import Control.Concurrent (threadDelay)
 import qualified Control.Concurrent.AdvSTM as STM
@@ -49,6 +48,8 @@ import Data.Aeson.TH (deriveFromJSON, defaultOptions)
 import qualified Data.ByteString as BSS
 import qualified Data.ByteString.Lazy as BSL
 import Data.Default.Generics (def)
+import Data.Metrology ((%), (#))
+import Data.Metrology.SI (Second (Second), micro)
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Word (Word16)
@@ -111,10 +112,10 @@ withPersist host port conf webLock followAuroraFailure = do
     let web = Lock.with webLock $ serve (pure ()) host port conf stateV clusterV
         updater = forever $ do
             loadSchedulerState conf stateV
-            threadDelay . floor $ second (1 :: Double) `asVal` micro second
+            threadDelay . floor $ ((1 % Second) # micro Second :: Double)
         monitor url = forever $ do
             monitorCluster url stateV clusterV
-            threadDelay . floor $ second (30 :: Double) `asVal` micro second
+            threadDelay . floor $ ((30 % Second) # micro Second :: Double)
         -- TODO: catch run error and reschedule
         enacter = forever . STM.atomically $ runSingleCommand conf
 
