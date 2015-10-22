@@ -15,10 +15,13 @@ Tests for state functionality.
 
 module StateSpec where
 
-import Eclogues.API (JobError(..))
-import Eclogues.Job (
-    Stage (..), QueueStage (..), RunErrorReason (..), FailureReason (..))
+import Eclogues.API (JobError (..))
 import qualified Eclogues.Job as Job
+import Eclogues.Job (
+    Stage (..), QueueStage (..),
+    RunErrorReason (..), FailureReason (..),
+    Satisfiability (..), UnsatisfiableReason (..))
+import Eclogues.Monitoring.Cluster
 import Eclogues.State (killJob, deleteJob, updateJobs)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types
@@ -26,7 +29,6 @@ import TestUtils
 
 import Control.Lens ((^.))
 import Control.Monad.Trans (lift)
-
 import Test.Hspec
 
 job :: Job.Name
@@ -42,48 +44,99 @@ createJobWithDep depStage = do
     createJob' $ dependentJob' job [dep]
 
 testCreateJob :: Spec
-testCreateJob = do
-    describe "createJob" $
-        it "should succeed when given a unique, valid job" $
-            let result = createJob' $ isolatedJob' job
-            in scheduler' result `shouldHave` jobInStage job (Queued LocalQueue)
+testCreateJob = let
+        testCluster :: Cluster
+        testCluster = [nodeResources fullResources]
+    in do
+        describe "createJob" $
+            it "should succeed when given a unique, valid job" $
+                let result = createJob' $ isolatedJob' job
+                in scheduler' result `shouldHave` jobInStage job (Queued LocalQueue)
 
-    context "when provided with dependency in Finished stage" $
-        it "should be placed in the Queued stage" $
-            let result = createJobWithDep Finished
-            in scheduler' result `shouldHave` jobInStage job (Queued LocalQueue)
+        context "when provided with dependency in Finished stage" $
+            it "should be placed in the Queued stage" $
+                let result = createJobWithDep Finished
+                in scheduler' result `shouldHave` jobInStage job (Queued LocalQueue)
 
-    context "when provided with dependency in an active stage" $
-        it "should be waiting on one job" $
-            let result = createJobWithDep Running
-            in scheduler' result `shouldHave` jobInStage job (Waiting 1)
+        context "when provided with dependency in an active stage" $
+            it "should be waiting on one job" $
+                let result = createJobWithDep Running
+                in scheduler' result `shouldHave` jobInStage job (Waiting 1)
 
-    context "when provided with a dependency" $
-        it "should update dependants list for that dependency" $
-            let result = do
-                    createJob' $ isolatedJob' dep
-                    createJob' $ dependentJob' job [dep]
-            in scheduler' result `shouldHave` jobWithRevDep dep [job]
+        context "when provided with a dependency" $
+            it "should update dependants list for that dependency" $
+                let result = do
+                        createJob' $ isolatedJob' dep
+                        createJob' $ dependentJob' job [dep]
+                in scheduler' result `shouldHave` jobWithRevDep dep [job]
 
-    context "when provided a job with a name that already exists" $
-        it "should return JobNameUsed error" $
-            let result = do
-                    createJob' $ isolatedJob' job
-                    createJob' $ isolatedJob' job
-            in scheduler' result `shouldHave` producedError JobNameUsed
+        context "when provided a job with a name that already exists" $
+            it "should return JobNameUsed error" $
+                let result = do
+                        createJob' $ isolatedJob' job
+                        createJob' $ isolatedJob' job
+                in scheduler' result `shouldHave` producedError JobNameUsed
 
-    context "when provided a dependency that doesn't exist" $
-        it "should return JobMustExist error" $
-            let result = createJob' $ dependentJob' job [dep]
-            in scheduler' result `shouldHave` producedError (JobMustExist dep)
+        context "when provided a dependency that doesn't exist" $
+            it "should return JobMustExist error" $
+                let result = createJob' $ dependentJob' job [dep]
+                in scheduler' result `shouldHave` producedError (JobMustExist dep)
 
-    context "when provided a dependency that has failed" $
-        it "should return JobCannotHaveFailed error" $
-            let result = do
-                    createJob' $ isolatedJob' dep
-                    lift $ ES.setJobStage dep (Failed UserKilled)
-                    createJob' $ dependentJob' job [dep]
-            in scheduler' result `shouldHave` producedError (JobCannotHaveFailed dep)
+        context "when provided a dependency that has failed" $
+            it "should return JobCannotHaveFailed error" $
+                let result = do
+                        createJob' $ isolatedJob' dep
+                        lift $ ES.setJobStage dep (Failed UserKilled)
+                        createJob' $ dependentJob' job [dep]
+                in scheduler' result `shouldHave` producedError (JobCannotHaveFailed dep)
+            
+        context "when a job and its dependency are both satisfiable" $
+            it "should tag both jobs as Satisfiable" $
+                let createdJobs = do
+                        createWithCluster testCluster $ isolatedJob  dep       halfResources
+                        createWithCluster testCluster $ dependentJob job [dep] halfResources
+                in do
+                    scheduler' createdJobs `shouldHave` satisfiability dep Satisfiable
+                    scheduler' createdJobs `shouldHave` satisfiability job Satisfiable
+
+        context "when a dependency requires unsatisfiable resources" $
+            it "should mark the dependency unsatisfiable due to resources and the dependent unsatisfiable due to the dependency" $
+                let createdJobs = do
+                        createWithCluster testCluster $ isolatedJob  dep       overResources
+                        createWithCluster testCluster $ dependentJob job [dep] halfResources
+                in do
+                    scheduler' createdJobs `shouldHave` satisfiability dep (Unsatisfiable InsufficientResources)
+                    scheduler' createdJobs `shouldHave` satisfiability job (Unsatisfiable $ DependenciesUnsatisfiable [dep])
+
+        context "when a dependent requires unsatisfiable resources" $
+            it "should mark the dependency satisfiable and the dependent unsatisfiable due to resources" $
+                let createdJobs = do
+                        createWithCluster testCluster $ isolatedJob  dep       halfResources
+                        createWithCluster testCluster $ dependentJob job [dep] overResources
+                in do
+                    scheduler' createdJobs `shouldHave` satisfiability dep Satisfiable
+                    scheduler' createdJobs `shouldHave` satisfiability job (Unsatisfiable InsufficientResources)
+
+        context "when a dependency and dependent both require unsatisfiable resources" $
+            it "should mark both jobs unsatisfiable due to resources" $
+                let createdJobs = do
+                        createWithCluster testCluster $ isolatedJob  dep       overResources
+                        createWithCluster testCluster $ dependentJob job [dep] overResources
+                in do
+                    scheduler' createdJobs `shouldHave` satisfiability dep (Unsatisfiable InsufficientResources)
+                    scheduler' createdJobs `shouldHave` satisfiability job (Unsatisfiable InsufficientResources)
+
+        context "when one dependency is satisfiable and another requires unsatisfiable resources" $
+            it "should mark the dependent job as unsatisfiable due to the unsatisfiable dependency" $
+                let createdJobs = do
+                        createWithCluster testCluster $ isolatedJob  dep             overResources
+                        createWithCluster testCluster $ isolatedJob  job             halfResources
+                        createWithCluster testCluster $ dependentJob job2 [dep, job] halfResources
+                    job2 = forceName "job2"
+                in do
+                    scheduler' createdJobs `shouldHave` satisfiability dep  (Unsatisfiable InsufficientResources)
+                    scheduler' createdJobs `shouldHave` satisfiability job  Satisfiable
+                    scheduler' createdJobs `shouldHave` satisfiability job2 (Unsatisfiable $ DependenciesUnsatisfiable [dep])
 
 testKillJob :: Spec
 testKillJob = do

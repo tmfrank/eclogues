@@ -15,15 +15,14 @@ Tests for monitoring functionality.
 
 module MonitorSpec where
 
-import Eclogues.Job as Job
+import qualified Eclogues.Job as Job
+import Eclogues.Job (Satisfiability (..), UnsatisfiableReason (..))
 import Eclogues.State.Types
 import Eclogues.Monitoring.Cluster
 import TestUtils
 
 import qualified Test.Hspec as Hspec
 import Test.Hspec (describe, context, it)
-import Control.Lens (view, (^.))
-import qualified Data.HashMap.Lazy as HashMap
 
 job :: Job.Name
 job = forceName "job"
@@ -33,62 +32,62 @@ dep = forceName "dep"
 
 testUpdateSatisfiabilities :: Hspec.Spec
 testUpdateSatisfiabilities = let
-        satisfiability :: Name -> Satisfiability -> EitherError AppState -> EitherError Bool
-        satisfiability jName jSatis aState = do
-            state <- aState
-            let status = HashMap.lookup jName $ state ^. jobs
-            pure $ maybe False ((== jSatis) . view satis) status
+        monitored :: Scheduler -> Cluster -> EitherError AppState
+        monitored sched cluster = do
+            state <- scheduler' sched
+            let monitor = updateSatisfiabilities cluster state
+            scheduler state monitor
 
         testCluster :: Cluster
         testCluster = [nodeResources fullResources]
     in do
-        describe "updateSatisfy" $
+        describe "updateSatisfiabilities" $
             it "should tag satisfiable jobs involving a dependency as Satisfiable" $
                 let createdJobs = do
-                        createWithCluster testCluster $ isolatedJob  dep       halfResources
-                        createWithCluster testCluster $ dependentJob job [dep] halfResources
+                        createJob' $ isolatedJob  dep       overResources
+                        createJob' $ dependentJob job [dep] overResources
                 in do
-                    scheduler' createdJobs `shouldHave` satisfiability dep Satisfiable
-                    scheduler' createdJobs `shouldHave` satisfiability job Satisfiable
+                    monitored createdJobs testCluster `shouldHave` satisfiability dep (Unsatisfiable InsufficientResources)
+                    monitored createdJobs testCluster `shouldHave` satisfiability job (Unsatisfiable InsufficientResources)
 
         context "when a dependency requires unsatisfiable resources" $
             it "should mark the dependency unsatisfiable due to resources and the dependent unsatisfiable due to the dependency" $
                 let createdJobs = do
-                        createWithCluster testCluster $ isolatedJob  dep       overResources
-                        createWithCluster testCluster $ dependentJob job [dep] halfResources
+                        createJob' $ isolatedJob  dep       overResources
+                        createJob' $ dependentJob job [dep] halfResources
                 in do
-                    scheduler' createdJobs `shouldHave` satisfiability dep (Unsatisfiable InsufficientResources)
-                    scheduler' createdJobs `shouldHave` satisfiability job (Unsatisfiable $ DependenciesUnsatisfiable [dep])
+                    monitored createdJobs testCluster `shouldHave` satisfiability dep (Unsatisfiable InsufficientResources)
+                    monitored createdJobs testCluster `shouldHave` satisfiability job (Unsatisfiable $ DependenciesUnsatisfiable [dep])
 
         context "when a dependent requires unsatisfiable resources" $
             it "should mark the dependency satisfiable and the dependent unsatisfiable due to resources" $
                 let createdJobs = do
-                        createWithCluster testCluster $ isolatedJob  dep       halfResources
-                        createWithCluster testCluster $ dependentJob job [dep] overResources
+                        createJob' $ isolatedJob  dep       halfResources
+                        createJob' $ dependentJob job [dep] overResources
                 in do
-                    scheduler' createdJobs `shouldHave` satisfiability dep Satisfiable
-                    scheduler' createdJobs `shouldHave` satisfiability job (Unsatisfiable InsufficientResources)
+                    monitored createdJobs testCluster `shouldHave` satisfiability dep Satisfiable
+                    monitored createdJobs testCluster `shouldHave` satisfiability job (Unsatisfiable InsufficientResources)
 
         context "when a dependency and dependent both require unsatisfiable resources" $
             it "should mark both jobs unsatisfiable due to resources" $
                 let createdJobs = do
-                        createWithCluster testCluster $ isolatedJob  dep       overResources
-                        createWithCluster testCluster $ dependentJob job [dep] overResources
+                        createJob' $ isolatedJob  dep       overResources
+                        createJob' $ dependentJob job [dep] overResources
                 in do
-                    scheduler' createdJobs `shouldHave` satisfiability dep (Unsatisfiable InsufficientResources)
-                    scheduler' createdJobs `shouldHave` satisfiability job (Unsatisfiable InsufficientResources)
+                    monitored createdJobs testCluster `shouldHave` satisfiability dep (Unsatisfiable InsufficientResources)
+                    monitored createdJobs testCluster `shouldHave` satisfiability job (Unsatisfiable InsufficientResources)
 
         context "when one dependency is satisfiable and another requires unsatisfiable resources" $
             it "should mark the dependent job as unsatisfiable due to the unsatisfiable dependency" $
                 let createdJobs = do
-                        createWithCluster testCluster $ isolatedJob  dep             overResources
-                        createWithCluster testCluster $ isolatedJob  job             halfResources
-                        createWithCluster testCluster $ dependentJob job2 [dep, job] halfResources
+                        createJob' $ isolatedJob  dep             overResources
+                        createJob' $ isolatedJob  job             halfResources
+                        createJob' $ dependentJob job2 [dep, job] halfResources
                     job2 = forceName "job2"
                 in do
-                    scheduler' createdJobs `shouldHave` satisfiability dep  (Unsatisfiable InsufficientResources)
-                    scheduler' createdJobs `shouldHave` satisfiability job  Satisfiable
-                    scheduler' createdJobs `shouldHave` satisfiability job2 (Unsatisfiable $ DependenciesUnsatisfiable [dep])
+                    monitored createdJobs testCluster `shouldHave` satisfiability dep  (Unsatisfiable InsufficientResources)
+                    monitored createdJobs testCluster `shouldHave` satisfiability job  Satisfiable
+                    monitored createdJobs testCluster `shouldHave` satisfiability job2 (Unsatisfiable $ DependenciesUnsatisfiable [dep])
 
 testMonitor :: Hspec.Spec
 testMonitor = testUpdateSatisfiabilities

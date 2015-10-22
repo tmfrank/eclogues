@@ -16,28 +16,29 @@ Utilities for testing Eclogues functionality.
 module TestUtils where
 
 import Eclogues.API (JobError(..))
-import Eclogues.Job as Job
+import qualified Eclogues.Job as Job
 import Eclogues.Monitoring.Cluster (Cluster, NodeResources(..))
 import Eclogues.State.Types
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State (createJob)
 import Units
 
-import Data.Default.Generics (def)
+import Control.Lens (view, at, (^.), (.~))
 import Control.Monad.State (State)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
-import Data.UUID (nil)
-import Control.Lens (view, at, (^.), (.~))
+import Data.Default.Generics (def)
+import qualified Data.HashMap.Lazy as HM
 import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text)
+import Data.UUID (nil)
 
 import Test.Hspec (Expectation, shouldSatisfy)
 
 type Scheduler = ExceptT JobError (State ES.TransitionaryState) ()
 
 data TestError = EncounteredError JobError
-               | JobNotFound Name
-               | RevDepNotFound Name
+               | JobNotFound Job.Name
+               | RevDepNotFound Job.Name
                | ExpectedError JobError
                | UnexpectedError TestError
                  deriving (Show)
@@ -75,18 +76,18 @@ createWithCluster :: Cluster -> Job.Spec -> Scheduler
 createWithCluster cluster = createJob nil (Just cluster)
 
 isolatedJob' :: Job.Name -> Job.Spec
-isolatedJob' x = Spec x "/bin/echo" halfResources [] False []
+isolatedJob' x = Job.Spec x "/bin/echo" halfResources [] False []
 
 isolatedJob :: Job.Name -> Job.Resources -> Job.Spec
 isolatedJob x res = Job.Spec x "/bin/echo" res [] False []
 
 dependentJob' :: Job.Name -> [Job.Name] -> Job.Spec
-dependentJob' job deps = dependsOn .~ deps $ isolatedJob' job
+dependentJob' job deps = Job.dependsOn .~ deps $ isolatedJob' job
 
 dependentJob :: Job.Name -> [Job.Name] -> Job.Resources -> Job.Spec
-dependentJob job deps res = dependsOn .~ deps $ isolatedJob job res
+dependentJob job deps res = Job.dependsOn .~ deps $ isolatedJob job res
 
-getJob :: Job.Name -> AppState -> Maybe Status
+getJob :: Job.Name -> AppState -> Maybe Job.Status
 getJob jName aState = aState ^. jobs ^. at jName
 
 noJob :: Job.Name -> EitherError AppState -> EitherError Bool
@@ -95,9 +96,9 @@ noJob jName = fmap (isNothing . getJob jName)
 jobInStage :: Job.Name -> Job.Stage -> EitherError AppState -> EitherError Bool
 jobInStage jName jState result = inState <$> (eitherGetJob jName =<< result)
     where eitherGetJob n = maybeToEither (JobNotFound n) . getJob n
-          inState = (== jState) . view stage
+          inState = (== jState) . view Job.stage
 
-getRevDep :: Job.Name -> AppState -> Maybe [Name]
+getRevDep :: Job.Name -> AppState -> Maybe [Job.Name]
 getRevDep jName aState = aState ^. revDeps ^. at jName
 
 jobWithRevDep :: Job.Name -> [Job.Name] -> EitherError AppState -> EitherError Bool
@@ -113,5 +114,11 @@ producedError jError (Left e) = case e of
     ex                  -> Left (UnexpectedError ex)
 producedError jError (Right _) = Left (ExpectedError jError)
 
+satisfiability :: Job.Name -> Job.Satisfiability -> EitherError AppState -> EitherError Bool
+satisfiability jName jSatis aState = do
+    state <- aState
+    let status = HM.lookup jName $ state ^. jobs
+    pure $ maybe False ((== jSatis) . view Job.satis) status
+
 forceName :: Text -> Job.Name
-forceName jName = fromMaybe (error $ "invalid test name " ++ show jName) $ mkName jName
+forceName jName = fromMaybe (error $ "invalid test name " ++ show jName) $ Job.mkName jName
