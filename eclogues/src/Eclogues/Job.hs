@@ -52,7 +52,7 @@ import Data.Aeson.TH (deriveJSON, defaultOptions, fieldLabelModifier)
 import Data.Hashable (Hashable)
 import Data.Ord (comparing)
 import qualified Data.Text as T
-import Data.UUID (UUID)
+import Data.UUID.Types (UUID)
 import Data.UUID.Aeson ()
 import Lens.Micro (Lens')
 import Lens.Micro.TH (makeLenses)
@@ -60,7 +60,7 @@ import GHC.Generics (Generic)
 import Path (Path, Abs, File, parseAbsFile, toFilePath)
 import Servant.Common.Text (FromText (..), ToText (..))
 import System.Exit (ExitCode)
-import Text.Regex.PCRE.Heavy ((=~), re)
+import Text.Regex.Cross ((=~), re)
 
 default (T.Text)
 
