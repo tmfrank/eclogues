@@ -44,12 +44,12 @@ import qualified Data.Aeson as Aeson
 import Data.Aeson.TH (deriveJSON, deriveToJSON, defaultOptions, fieldLabelModifier)
 import Data.Hashable (Hashable)
 import qualified Data.Text as T
-import Data.UUID (UUID)
+import Data.UUID.Types (UUID)
 import Data.UUID.Aeson ()
 import Path (Path, Abs, File, parseAbsFile, toFilePath)
 import Servant.Common.Text (FromText (..), ToText (..))
 import System.Exit (ExitCode)
-import Text.Regex.PCRE.Heavy ((=~), re)
+import Text.Regex.Cross ((=~), re)
 
 import Units
 
