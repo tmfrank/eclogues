@@ -27,6 +27,7 @@ import Eclogues.Job (
     Stage (..), FailureReason (..), RunErrorReason (..), RunResult (..))
 import qualified Eclogues.Job as Job
 import Eclogues.Paths (runResult, specFile)
+import Eclogues.Util (dirName)
 
 import Control.Arrow ((&&&))
 import Control.Exception (IOException, try, tryJust)
@@ -58,7 +59,7 @@ type AuroraURI = URI
 data ScheduleConf = ScheduleConf { jobsDir :: Dir, auroraRole :: Role, auroraURI :: AuroraURI }
 
 jobDir :: ScheduleConf -> Job.Name -> Dir
-jobDir conf n = jobsDir conf </> Job.dirName n
+jobDir conf n = jobsDir conf </> dirName n
 
 runScheduleCommand :: ScheduleConf -> ScheduleCommand -> ExceptT A.UnexpectedResponse IO ()
 runScheduleCommand conf (QueueJob spec uuid) = do

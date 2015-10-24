@@ -20,7 +20,7 @@ import Prelude hiding (writeFile)
 import Eclogues.Job (RunResult (..))
 import qualified Eclogues.Job as Job
 import Eclogues.Paths (runResult, specFile)
-import Eclogues.Util (AbsDir (..), readJSON, orError)
+import Eclogues.Util (AbsDir (..), readJSON, orError, dirName, getOutputPath)
 import Units
 
 import Control.Arrow ((&&&))
@@ -62,9 +62,9 @@ runJob :: AbsDir    -- ^ Shared jobs directory
 runJob (AbsDir shared) name = do
     cwd <- getCurrentDirectory
     let inputDir = cwd </> $(mkRelDir "virgil-dependencies/")
-        copyDep = uncurry copyDirContents . (outputDir &&& (inputDir </>)) . Job.dirName
-        copyOutput f = copyFile (Job.getOutputPath cwd f)
-                                (Job.getOutputPath (outputDir jobDirName) f)
+        copyDep = uncurry copyDirContents . (outputDir &&& (inputDir </>)) . dirName
+        copyOutput f = copyFile (getOutputPath cwd f)
+                                (getOutputPath (outputDir jobDirName) f)
 
     spec <- orError =<< readJSON (toFilePath $ specDir </> specFile) :: IO Job.Spec
 
@@ -83,7 +83,7 @@ runJob (AbsDir shared) name = do
   where
     specDir = shared </> jobDirName
     outputDir n = shared </> n </> $(mkRelDir "output/")
-    jobDirName = Job.dirName name
+    jobDirName = dirName name
 
 main :: IO ()
 main = do

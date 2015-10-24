@@ -23,10 +23,10 @@ module Eclogues.Job (
       Status (Status), spec, stage, uuid
     -- ** Job spec
     , Spec (Spec), name, command, resources, outputFiles, captureStdout, dependsOn
-    , Name, nameText, mkName, dirName, uuidName
+    , Name, nameText, mkName, uuidName
     , Command
     , Resources (Resources), disk, ram, cpu, time
-    , OutputPath (..), getOutputPath
+    , OutputPath (..)
     -- ** Job lifecycle stage
     , Stage (..), RunResult (..), FailureReason (..), RunErrorReason (..), QueueStage (..)
     , majorStage, majorStages
@@ -35,7 +35,6 @@ module Eclogues.Job (
     ) where
 
 import Eclogues.Job.Aeson
-import Eclogues.Util (toRelPath)
 
 import Control.Exception (displayException)
 import Control.Lens.TH (makeClassy)
@@ -47,7 +46,7 @@ import Data.Hashable (Hashable)
 import qualified Data.Text as T
 import Data.UUID (UUID)
 import Data.UUID.Aeson ()
-import Path (Path, Abs, Rel, File, Dir, (</>), parseAbsFile, parseAbsDir, toFilePath)
+import Path (Path, Abs, File, parseAbsFile, toFilePath)
 import Servant.Common.Text (FromText (..), ToText (..))
 import System.Exit (ExitCode)
 import Text.Regex.PCRE.Heavy ((=~), re)
@@ -67,7 +66,7 @@ instance Show Name where
 
 type Command = T.Text
 
-newtype OutputPath = OutputPath { getPath :: Path Abs File }
+newtype OutputPath = OutputPath { getOutputPath :: Path Abs File }
                      deriving (Show, Eq)
 
 data Resources = Resources { _disk :: Value Double MB
@@ -250,7 +249,7 @@ instance FromJSON OutputPath where
     parseJSON _                = fail "Output path must be string"
 
 instance ToJSON OutputPath where
-    toJSON = Aeson.String . T.pack . toFilePath . getPath
+    toJSON = Aeson.String . T.pack . toFilePath . getOutputPath
 
 instance FromJSON Name where
     parseJSON (Aeson.String s) = mkName s
@@ -265,16 +264,9 @@ instance FromText Name where
 instance ToText Name where
     toText = nameText
 
-getOutputPath :: Path Abs Dir -> OutputPath -> Path Abs File
-getOutputPath dir = (dir </>) . toRelPath . getPath
-
 mkName :: (MonadPlus m) => T.Text -> m Name
 mkName s | s =~ [re|^[a-zA-Z0-9\._\-]+$|] = pure $ Name s
          | otherwise                      = fail "invalid name"
-
--- TODO: make this signature not a lie
-dirName :: Name -> Path Rel Dir
-dirName = toRelPath . either (error . displayException) id . parseAbsDir . ("/" ++) . (++ "/") . T.unpack . nameText
 
 uuidName :: UUID -> Name
 uuidName = Name . T.pack . show

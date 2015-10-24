@@ -1,9 +1,9 @@
-name: eclogues
+name: eclogues-impl
 version: 0.1.0.0
 cabal-version: >=1.10
 build-type: Simple
 license: BSD3
-license-file: LICENSE
+license-file: ../LICENSE
 copyright: (c) 2015 Swinburne Software Innovation Lab
 maintainer: Rhys Adams <rhysadams@swin.edu.au>
 synopsis: API and controller for Apache Aurora.
@@ -12,40 +12,25 @@ library
     exposed-modules:
         Database.Zookeeper.Election,
         Database.Zookeeper.ManagedEvents,
-        Eclogues.API,
-        Eclogues.Job,
         Eclogues.Paths,
-        Eclogues.ServantInstances,
         Eclogues.Util
-        Units
-    other-modules:
-        Eclogues.Job.Aeson
     build-depends:
         base >=4.7.0.1 && <4.9,
         text >=1.1.0.0 && <1.3,
         bytestring >=0.10.4.0 && <0.11,
         aeson >=0.8 && <0.10,
-        servant >=0.4.1 && <0.5,
         transformers >=0.4.0.0 && <0.5,
         async >=2.0.1.5 && <2.1,
         hzk >=2.1.0 && <2.2,
-        uuid >=1.3.10 && <1.4,
-        uuid-aeson >=0.1 && <0.2,
         stm-io-hooks >=1.1.0,
         concurrent-extra >=0.7.0.9 && <0.8,
         lifted-base >=0.2.3.6 && <0.3,
-        lens >=4.7.0.1 && <4.12,
         either >=4.3.4.1 && <4.5,
         mmorph >=1.0.4 && <1.1,
         path >=0.5,
-        network-uri >=2.6,
-        pcre-heavy,
-        hashable
+        eclogues ==0.1.0.0
     default-language: Haskell2010
-    default-extensions: LambdaCase ScopedTypeVariables
-    other-extensions: DataKinds EmptyDataDecls ExtendedDefaultRules
-                      FlexibleInstances KindSignatures MultiParamTypeClasses
-                      OverloadedStrings TemplateHaskell TypeOperators
+    other-extensions: LambdaCase ScopedTypeVariables TemplateHaskell Trustworthy
     hs-source-dirs: src
     ghc-options: -Wall -Werror
 
@@ -89,7 +74,8 @@ executable eclogues-api
         mtl >=2.2,
         path >=0.5,
         path-io,
-        eclogues ==0.1.0.0
+        eclogues ==0.1.0.0,
+        eclogues-impl ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
     other-extensions: ConstraintKinds DataKinds DeriveDataTypeable DeriveGeneric
@@ -126,7 +112,8 @@ executable eclogues-subexecutor
         Glob >=0.7.5 && <0.8,
         path,
         path-io,
-        eclogues ==0.1.0.0
+        eclogues ==0.1.0.0,
+        eclogues-impl ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
     other-extensions: TemplateHaskell
@@ -152,7 +139,8 @@ executable eclogues-client
         bifunctors >=4.1.1.1 && <6,
         unordered-containers >=0.2.4.0 && <0.3,
         lens,
-        eclogues ==0.1.0.0
+        eclogues ==0.1.0.0,
+        eclogues-impl ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
     other-extensions: TemplateHaskell
@@ -201,7 +189,8 @@ executable eclogues-mock
         mtl >=2.2,
         path >=0.5,
         path-io,
-        eclogues ==0.1.0.0
+        eclogues ==0.1.0.0,
+        eclogues-impl ==0.1.0.0
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
     hs-source-dirs: gen-hs app/api app/mock
@@ -248,7 +237,7 @@ test-suite spec
         mtl >=2.2,
         path >=0.5,
         path-io,
-        eclogues ==0.1.0.0,
+        eclogues-impl ==0.1.0.0,
         servant-client >=0.4.1 && <0.5,
         hspec <2.2
     default-language: Haskell2010
