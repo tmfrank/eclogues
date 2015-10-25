@@ -4,8 +4,9 @@
 module Text.Regex.Cross (Regex, (=~), re) where
 
 #ifdef GhcjsBase
+{-# LANGUAGE JavascriptFFI #-}
 
-import Data.JSString (pack)
+import Data.JSString (JSString, pack)
 import qualified Data.JSString.RegExp as R
 import qualified Data.Text as T
 import Language.Haskell.TH.Quote (QuasiQuoter (..))
@@ -13,8 +14,11 @@ import Language.Haskell.TH.Lib (ExpQ)
 
 type Regex = R.RegExp
 
+foreign import javascript unsafe
+  "new RegExp($1)" js_createRE :: JSString -> R.RegExp
+
 quoteExpRegex :: String -> ExpQ
-quoteExpRegex txt = [| R.create (R.REFlags False False) (pack txt) |]
+quoteExpRegex txt = [| js_createRE (pack txt) |]
 
 re :: QuasiQuoter
 re = QuasiQuoter { quoteExp  = quoteExpRegex
