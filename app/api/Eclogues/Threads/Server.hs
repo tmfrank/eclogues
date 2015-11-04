@@ -84,9 +84,9 @@ mainServer conf stateV clusterV = handleExcept server' where
     getJobH jid = getJob jid =<< lift (atomically $ readTVar stateV)
     getJobStageH = fmap (^. Job.stage) . getJobH
     createJobH jobSpec = do
-        uuid <- lift randomIO
+        uuid    <- lift randomIO
         cluster <- lift . atomically $ readTVar clusterV
-        spec <- pure jobSpec
+        spec    <- pure jobSpec
         runScheduler' $ createJob uuid cluster spec
     deleteJobH = runScheduler' . deleteJob
     mesosJob = toMesos <=< getJobH where

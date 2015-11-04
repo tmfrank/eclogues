@@ -1,5 +1,5 @@
-{-# OPTIONS_HADDOCK show-extensions #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
 
 {-|
 Module      : $Header$
@@ -17,7 +17,7 @@ module Eclogues.Threads.Update (loadSchedulerState, monitorCluster) where
 
 import Eclogues.AppConfig (AppConfig)
 import qualified Eclogues.AppConfig as Config
-import Eclogues.Monitoring.Cluster as CM
+import qualified Eclogues.Monitoring.Cluster as CM
 import Eclogues.Monitoring.Monitor (slaveResources)
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.Command (ScheduleConf (auroraURI), getSchedulerStatuses)
@@ -66,12 +66,12 @@ monitorCluster url stateV clusterV = do
         Right cluster -> STM.atomically $ do
             STM.writeTVar clusterV (Just cluster)
             state <- STM.readTVar stateV
-            let (_, ts) = ES.runState state $ updateSatisfiabilities cluster state
+            let (_, ts) = ES.runState state $ CM.updateSatisfiabilities cluster state
             STM.writeTVar stateV $ ts ^. ES.appState
         Left (ex :: ServantError) -> do
             hPutStrLn stderr $ "Error connecting to health monitor at " ++ show url ++ "; retrying: " ++ show ex
             STM.atomically $ do
                 STM.writeTVar clusterV Nothing
                 state <- STM.readTVar stateV
-                let (_, ts) = ES.runState state $ allSatisfyUnknown state
+                let (_, ts) = ES.runState state $ CM.allSatisfyUnknown state
                 STM.writeTVar stateV $ ts ^. ES.appState

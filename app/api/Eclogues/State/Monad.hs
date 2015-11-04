@@ -19,27 +19,27 @@ Functions for altering 'AppState' with appropriate side effects in a
 -}
 
 module Eclogues.State.Monad (
-                            -- * 'TransitionaryState'
-                              TransitionaryState (..)
-                            , HasTransitionaryState (..)
-                            -- ** In a 'MonadState'
-                            , TS
-                            , runStateTS
-                            , runState
-                            -- * View
-                            , getJob
-                            , getDependents
-                            -- * Mutate
-                            , insertJob
-                            , deleteJob
-                            , setJobStage
-                            , setJobSatis
-                            , addRevDep
-                            , removeRevDep
-                            , schedule
-                            -- * Load
-                            , loadJobs
-                            ) where
+    -- * 'TransitionaryState'
+      TransitionaryState (..)
+    , HasTransitionaryState (..)
+    -- ** In a 'MonadState'
+    , TS
+    , runStateTS
+    , runState
+    -- * View
+    , getJob
+    , getDependents
+    -- * Mutate
+    , insertJob
+    , deleteJob
+    , setJobStage
+    , setJobSatis
+    , addRevDep
+    , removeRevDep
+    , schedule
+    -- * Load
+    , loadJobs
+    ) where
 
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.Command (ScheduleCommand (..))

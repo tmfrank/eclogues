@@ -20,7 +20,7 @@ Specification of jobs and the current state of submitted jobs.
 
 module Eclogues.Job (
     -- * Job satisfiability
-      Satisfiability(..), UnsatisfiableReason(..), isUnsatisfiable
+      Satisfiability (..), UnsatisfiableReason (..), isUnsatisfiable
     -- * Job status
     , Status (Status), spec, stage, satis, uuid
     -- ** Job spec
@@ -214,7 +214,7 @@ isExpectedTransition _            _             = False
 -- | Whether the Satisfiability is Unsatisfiable.
 isUnsatisfiable :: Satisfiability -> Bool
 isUnsatisfiable (Unsatisfiable _) = True
-isUnsatisfiable _ = False
+isUnsatisfiable _                 = False
 
 instance ToJSON Stage where
     toJSON (Queued LocalQueue)     = object ["type" .= "Queued", "substage" .= "local"]
@@ -262,10 +262,17 @@ instance FromJSON Stage where
     parseJSON _ = fail "Invalid job stage value"
 
 instance ToJSON Satisfiability where
-    toJSON Satisfiable = object ["type" .= "Satisfiable"]
-    toJSON (Unsatisfiable InsufficientResources) = object ["type" .= "Unsatisfiable", "reason" .= "InsufficientResources"]
-    toJSON (Unsatisfiable (DependenciesUnsatisfiable d)) = object ["type" .= "Unsatisfiable", "reason" .= "DependenciesUnsatisfiable", "dependencies" .= d]
-    toJSON SatisfiabilityUnknown = object ["type" .= "SatisfiabilityUnknown"]
+    toJSON Satisfiable                                   =
+        object [ "type" .= "Satisfiable" ]
+    toJSON (Unsatisfiable InsufficientResources)         =
+        object [ "type" .= "Unsatisfiable"
+               , "reason" .= "InsufficientResources" ]
+    toJSON (Unsatisfiable (DependenciesUnsatisfiable d)) =
+        object [ "type" .= "Unsatisfiable"
+               , "reason" .= "DependenciesUnsatisfiable"
+               , "dependencies" .= d ]
+    toJSON SatisfiabilityUnknown                         =
+        object ["type" .= "SatisfiabilityUnknown"]
 
 instance FromJSON Satisfiability where
     parseJSON (Aeson.Object v) = do

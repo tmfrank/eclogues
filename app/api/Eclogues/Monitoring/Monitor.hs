@@ -17,20 +17,20 @@ Client for Aegle API consuming machine resource data.
 
 module Eclogues.Monitoring.Monitor (slaveResources) where
 
-import Eclogues.Monitoring.Cluster (Cluster, NodeResources(..))
+import Eclogues.Monitoring.Cluster (Cluster, NodeResources (..))
 import qualified Units as U
 
 import Control.Monad.Trans.Either (EitherT)
-import Data.Aeson.TH (Options(fieldLabelModifier), defaultOptions, deriveFromJSON)
+import Data.Aeson.TH (Options (fieldLabelModifier), defaultOptions, deriveFromJSON)
 import Data.Char (toLower)
 import qualified Data.HashMap.Lazy as HM
 import Data.HashMap.Lazy (HashMap)
 import Data.Maybe (catMaybes)
-import Data.Proxy (Proxy(..))
-import Data.Text (Text, pack)
+import Data.Proxy (Proxy (..))
+import Data.Text (Text)
 import Servant.API ((:>), Get, JSON, QueryParams)
 import Servant.Client (client)
-import Servant.Common.BaseUrl (BaseUrl(..))
+import Servant.Common.BaseUrl (BaseUrl (..))
 import Servant.Common.Req (ServantError)
 
 type Host = Text
@@ -55,7 +55,7 @@ toNodeRes res = NodeResources <$> d <*> r <*> c
         c = U.core <$> mCpu res
 
 slaveResources :: BaseUrl -> EitherT ServantError IO Cluster
-slaveResources host = toCluster <$> getRes [] [pack "mesos-slave"]
+slaveResources host = toCluster <$> getRes [] ["mesos-slave"]
     where
-        getRes = client (Proxy::Proxy HealthAPI) host
+        getRes = client (Proxy :: Proxy HealthAPI) host
         toCluster = catMaybes . fmap toNodeRes . HM.elems

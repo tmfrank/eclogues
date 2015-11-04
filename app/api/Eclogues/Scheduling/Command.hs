@@ -16,8 +16,10 @@ Portability : portable
 Communication with the remote scheduler.
 -}
 
-module Eclogues.Scheduling.Command ( ScheduleCommand (..), ScheduleConf (..), AuroraURI
-                                   , runScheduleCommand, getSchedulerStatuses, schedulerJobUI ) where
+module Eclogues.Scheduling.Command (
+      ScheduleCommand (..), ScheduleConf (..), AuroraURI
+    , runScheduleCommand, getSchedulerStatuses, schedulerJobUI
+    ) where
 
 import Prelude hiding (writeFile, readFile)
 

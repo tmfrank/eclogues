@@ -15,17 +15,18 @@ Job(s) state views and transformation. Actions are actually scheduled in 'TS'.
 -}
 
 module Eclogues.State (
-                      -- * View
-                        getJob, getJobs, activeJobs
-                      -- * Mutate
-                      , createJob, updateJobs, killJob, deleteJob) where
+    -- * View
+      getJob, getJobs, activeJobs
+    -- * Mutate
+    , createJob, updateJobs, killJob, deleteJob
+    ) where
 
 import Eclogues.API (JobError (..))
 import Eclogues.Job (
       FailureReason (..), RunErrorReason (..), QueueStage (LocalQueue), Stage (..)
     , isActiveStage, isTerminationStage, isExpectedTransition, isOnScheduler)
 import qualified Eclogues.Job as Job
-import Eclogues.Monitoring.Cluster (Cluster, specSatisfy, depSatisfy)
+import Eclogues.Monitoring.Cluster (Cluster, jobDepSatisfy)
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Monad (TS)
@@ -37,7 +38,7 @@ import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.Trans.Writer.Lazy (WriterT, tell, execWriterT)
 import Data.HashMap.Lazy (elems, traverseWithKey)
 import qualified Data.HashMap.Lazy as HashMap
-import Data.Maybe (catMaybes, isJust, fromMaybe)
+import Data.Maybe (catMaybes, isJust)
 import Data.Monoid (Sum (Sum))
 import Data.UUID (UUID)
 
@@ -51,11 +52,7 @@ createJob uuid cluster spec = do
     existing <- ES.getJob name
     when (isJust existing) $ throwError JobNameUsed
     Sum activeDepCount <- execWriterT $ mapM_ (checkDep name) deps
-    satis <- case flip specSatisfy spec <$> cluster of
-        Just resSatis -> case resSatis of
-            Job.Unsatisfiable reason -> pure $ Job.Unsatisfiable reason
-            x -> pure . fromMaybe x =<< depSatisfy deps
-        Nothing -> pure Job.SatisfiabilityUnknown
+    satis <- maybe (pure Job.SatisfiabilityUnknown) (jobDepSatisfy spec) cluster
     let jstage = if activeDepCount == 0
             then Queued LocalQueue
             else Waiting activeDepCount

@@ -41,7 +41,7 @@ data AppConfig = AppConfig {
                            , outputURI       :: Job.Name -> AbsFile -> URI
                            -- | User the subexecutor is run as.
                            , subexecutorUser :: Text
-                           -- | URL for Graphite server monitoring cluster.
+                           -- | URL for Aegle server monitoring cluster.
                            , monitorUrl      :: Maybe BaseUrl }
 
 -- | Wait until the scheduler is available.

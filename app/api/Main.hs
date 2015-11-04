@@ -56,7 +56,7 @@ import Database.Zookeeper (ZKError)
 import Network.URI (URI (uriPath), escapeURIString, isUnescapedInURI)
 import Path (toFilePath)
 import Path.IO (createDirectoryIfMissing)
-import Servant.Common.BaseUrl (BaseUrl(BaseUrl), Scheme(Http))
+import Servant.Common.BaseUrl (BaseUrl (BaseUrl), Scheme (Http))
 import System.IO (hPutStrLn, stderr)
 import System.Random (mkStdGen, setStdGen)
 
@@ -67,7 +67,7 @@ data ApiConfig = ApiConfig { jobsDir :: AbsDir
                            , bindPort :: Word16
                            , subexecutorUser :: T.Text
                            , outputUrlPrefix :: URI
-                           , aegleUrl :: Maybe String
+                           , aegleAddress :: Maybe String
                            , aeglePort :: Maybe Int }
 
 $(deriveFromJSON defaultOptions ''ApiConfig)
@@ -100,7 +100,7 @@ withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
             outURI = mkOutputURI $ outputUrlPrefix apiConf
             host   = bindAddress apiConf
             port   = fromIntegral $ bindPort apiConf
-            monUrl = BaseUrl Http <$> aegleUrl apiConf <*> aeglePort apiConf
+            monUrl = BaseUrl Http <$> aegleAddress apiConf <*> aeglePort apiConf
         lift $ withPersist host port conf webLock followAuroraFailure
 
 withPersist :: String -> Int -> AppConfig -> Lock -> Async ZKError -> IO ZKError
@@ -124,7 +124,7 @@ withPersist host port conf webLock followAuroraFailure = do
         let results = [followAuroraFailure, const undefined <$> webA, updaterA, enacterA]
         case Config.monitorUrl conf of
             Just url -> withAsync (monitor url) $ \mon -> snd <$> waitAny (results ++ [const undefined <$> mon])
-            Nothing -> hPutStrLn stderr warningMsg >> (snd <$> waitAny results)
+            Nothing  -> hPutStrLn stderr warningMsg *> (snd <$> waitAny results)
                 where warningMsg = "Unable to monitor cluster due to absent configuration"
 
 -- | Contest Zookeeper election with the provided node data, and perform some
