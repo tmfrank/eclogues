@@ -12,14 +12,7 @@ packages:
 extra-deps:
 - data-default-generics-0.3
 - hzk-2.1.0
-- servant-0.4.2
-- servant-client-0.4.2
-- servant-docs-0.4.2
-- servant-pandoc-0.4.1.1
-- servant-server-0.4.2
 - stm-io-hooks-1.1.0
-- utility-ht-0.0.10
 - uuid-aeson-0.1.0.0
-- wai-cors-0.2.2
 - xdg-basedir-0.2.2
-resolver: nightly-2015-07-23
+resolver: lts-3.9
