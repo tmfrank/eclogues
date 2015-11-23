@@ -100,12 +100,12 @@ Post a job spec of the form:
     "name": "hello",
     "command": "echo hello world > hello.txt",
     "resources": {
-        "disk": "10",
-        "ram": "10",
-        "cpu": "0.1",
-        "time": "5"
+        "disk": "10 MB",
+        "ram": "10 MB",
+        "cpu": "0.1 cores",
+        "time": "5 s"
     },
-    "outputfiles": ["hello.txt"],
+    "outputfiles": ["/hello.txt"],
     "capturestdout": false,
     "dependson": []
 }
