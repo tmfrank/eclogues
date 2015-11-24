@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Mock where
+module Eclogues.Mock where
 
 import Eclogues.API (AbsFile)
 import Eclogues.AppConfig (AppConfig (AppConfig))

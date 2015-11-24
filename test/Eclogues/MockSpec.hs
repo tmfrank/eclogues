@@ -1,8 +1,8 @@
-module MockSpec (testMock) where
+module Eclogues.MockSpec (spec) where
 
 import Eclogues.API (VAPI)
 import qualified Eclogues.Job as Job
-import qualified Mock
+import qualified Eclogues.Mock as Mock
 
 import Control.Concurrent.MVar (putMVar, takeMVar, newEmptyMVar)
 import Control.Concurrent.Async (withAsync)
@@ -46,8 +46,7 @@ shouldGive ma b = runEitherT ma >>= \case
     Left e  -> expectationFailure $ show e
     Right a -> a `shouldBe` b
 
-testMock :: Spec
-testMock =
-    describe "the mock API" $
-        it "returns an empty list of jobs" $ runningAPI $
-            getJobs `shouldGive` []
+spec :: Spec
+spec = describe "the mock API" $
+    it "returns an empty list of jobs" $ runningAPI $
+        getJobs `shouldGive` []

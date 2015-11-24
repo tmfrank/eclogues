@@ -13,7 +13,7 @@ Portability : portable
 Tests for state functionality.
 -}
 
-module StateSpec where
+module Eclogues.StateSpec (spec) where
 
 import Eclogues.API (JobError (..))
 import qualified Eclogues.Job as Job
@@ -21,11 +21,18 @@ import Eclogues.Job (
     Stage (..), QueueStage (..),
     RunErrorReason (..), FailureReason (..),
     Satisfiability (..), UnsatisfiableReason (..))
-import Eclogues.Monitoring.Cluster
+import Eclogues.Monitoring.Cluster (Cluster)
 import Eclogues.State (killJob, deleteJob, updateJobs)
 import qualified Eclogues.State.Monad as ES
-import Eclogues.State.Types
-import TestUtils
+import Eclogues.State.Types (AppState, jobs)
+import TestUtils (
+      EitherError, Scheduler
+    , nodeResources, halfResources, fullResources, overResources
+    , isolatedJob, isolatedJob', dependentJob, dependentJob', createJob'
+    , scheduler', scheduler, createWithCluster
+    , shouldHave, satisfiability, noJob, noRevDep, jobWithRevDep, jobInStage
+    , producedError
+    , forceName)
 
 import Control.Lens ((^.))
 import Control.Monad.Trans (lift)
@@ -339,8 +346,8 @@ testUpdateJobs = do
                 updated result statuses `shouldHave` jobInStage job (Failed (DependencyFailed dep))
                 updated result statuses `shouldHave` jobInStage job2 (Failed (DependencyFailed job))
 
-testState :: Spec
-testState = do
+spec :: Spec
+spec = do
     testCreateJob
     testKillJob
     testDeleteJob

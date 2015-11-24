@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 {-|
@@ -13,16 +12,19 @@ Portability : portable
 Tests for monitoring functionality.
 -}
 
-module MonitorSpec where
+module Eclogues.Monitoring.ClusterSpec (spec) where
 
 import qualified Eclogues.Job as Job
 import Eclogues.Job (Satisfiability (..), UnsatisfiableReason (..))
-import Eclogues.State.Types
-import Eclogues.Monitoring.Cluster
-import TestUtils
+import Eclogues.State.Types (AppState)
+import Eclogues.Monitoring.Cluster (Cluster, updateSatisfiabilities)
+import TestUtils (
+      EitherError, Scheduler
+    , nodeResources, halfResources, fullResources, overResources
+    , isolatedJob, dependentJob, scheduler', scheduler, createJob'
+    , shouldHave, satisfiability, forceName)
 
-import qualified Test.Hspec as Hspec
-import Test.Hspec (describe, context, it)
+import Test.Hspec
 
 job :: Job.Name
 job = forceName "job"
@@ -39,8 +41,8 @@ monitored sched cluster = do
 testCluster :: Cluster
 testCluster = [nodeResources fullResources]
 
-testUpdateSatisfiabilities :: Hspec.Spec
-testUpdateSatisfiabilities = do
+spec :: Spec
+spec = do
     describe "updateSatisfiabilities" $
         it "should tag satisfiable jobs involving a dependency as Satisfiable" $
             let createdJobs = do
@@ -88,6 +90,3 @@ testUpdateSatisfiabilities = do
                 monitored createdJobs testCluster `shouldHave` satisfiability dep  (Unsatisfiable InsufficientResources)
                 monitored createdJobs testCluster `shouldHave` satisfiability job  Satisfiable
                 monitored createdJobs testCluster `shouldHave` satisfiability job2 (Unsatisfiable $ DependenciesUnsatisfiable [dep])
-
-testMonitor :: Hspec.Spec
-testMonitor = testUpdateSatisfiabilities

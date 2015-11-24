@@ -282,10 +282,12 @@ test-suite spec
     hs-source-dirs: gen-hs app/api app/mock test
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
     other-modules:
-        MockSpec,
+        Eclogues.JobSpec,
+        Eclogues.MockSpec,
+        Eclogues.Monitoring.ClusterSpec,
+        Eclogues.Scheduling.AuroraConfigSpec,
+        Eclogues.StateSpec,
         Spec,
-        StateSpec
-        MonitorSpec
         TestUtils
 
 source-repository head
