@@ -16,7 +16,7 @@ Conversion between Aurora Thrift types and the saner "Eclogues.JobSpec" types.
 -}
 
 module Eclogues.Scheduling.AuroraConfig (
-      ATaskExecConf, TaskConfig, Role, Name
+      ATaskExecConf, TaskConfig, Role, Name, ScheduledTask
     , auroraJobConfig, lockKey, defaultJobKey
     , getJobName, getJobStage ) where
 

@@ -19,14 +19,18 @@ Communication with the remote scheduler.
 module Eclogues.Scheduling.Command (
       ScheduleCommand (..), ScheduleConf (..), AuroraURI
     , runScheduleCommand, getSchedulerStatuses, schedulerJobUI
+    -- * Exports for testing
+    , lookupNewStages
     ) where
 
 import Prelude hiding (writeFile, readFile)
 
 import qualified Eclogues.Scheduling.AuroraAPI as A
-import Eclogues.Scheduling.AuroraConfig (Role, getJobName, getJobStage)
+import Eclogues.Scheduling.AuroraConfig (
+    Role, ScheduledTask, getJobName, getJobStage)
 import Eclogues.Job (
-    Stage (..), FailureReason (..), RunErrorReason (..), RunResult (..))
+      Stage (..), QueueStage (..), RunResult (..)
+    , FailureReason (..), RunErrorReason (..))
 import qualified Eclogues.Job as Job
 import Eclogues.Paths (runResult, specFile)
 
@@ -39,7 +43,8 @@ import Control.Monad.Trans.Except (ExceptT (..))
 import Data.Aeson (encode, eitherDecode')
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Data.ByteString.Lazy (ByteString)
-import Data.Maybe (catMaybes)
+import qualified Data.HashMap.Strict as HM
+import Data.List (foldl')
 import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as L
 import Data.UUID (UUID)
@@ -83,7 +88,7 @@ getSchedulerStatuses :: ScheduleConf -> [Job.Status] -> ExceptT A.UnexpectedResp
 getSchedulerStatuses conf jss = do
     client <- lift $ A.thriftClient $ auroraURI conf
     auroraTasks <- A.getTasksWithoutConfigs client (auroraRole conf) (map fst uuids)
-    let newUncheckedStages = catMaybes $ extractStage <$> auroraTasks
+    let newUncheckedStages = lookupNewStages uuids auroraTasks
     lift $ mapM checkFinStage newUncheckedStages
     where
         checkFinStage :: (Job.Name, Job.Stage) -> IO (Job.Name, Job.Stage)
@@ -99,8 +104,21 @@ getSchedulerStatuses conf jss = do
             Ended (ExitFailure c) -> Failed (NonZeroExitCode c)
             Overtime              -> Failed TimeExceeded
         uuids = map (Job.uuidName . view Job.uuid &&& view Job.name) jss
-        aUuidToName = flip lookup uuids <=< Job.mkName . L.toStrict . getJobName
-        extractStage at = (, getJobStage at) <$> aUuidToName at
+
+lookupNewStages ::
+       [(Job.Name, Job.Name)]  -- ^ Mapping of job UUID to name
+    -> [ScheduledTask]         -- ^ Aurora responses
+    -> [(Job.Name, Job.Stage)] -- ^ Mapping of job name to new stage
+lookupNewStages uuids auroraTasks = HM.toList $ foldl' go HM.empty auroraTasks
+  where
+    go acc task = case extractStage task of
+        Nothing      -> acc
+        Just (n, st) -> HM.insertWith resolv n st acc
+    resolv (Queued SchedulerQueue) x = x
+    resolv x (Queued SchedulerQueue) = x
+    resolv new _old                  = new
+    extractStage at = (, getJobStage at) <$> aUuidToName at
+    aUuidToName = flip lookup uuids <=< Job.mkName . L.toStrict . getJobName
 
 schedulerJobUI :: String -> URI -> UUID -> URI
 schedulerJobUI user uri uuid = uri { uriPath = "/scheduler/" ++ user ++ "/devel/" ++ show uuid }
