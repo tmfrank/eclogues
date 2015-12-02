@@ -1,6 +1,7 @@
 flags: {}
 packages:
-- '.'
+- 'eclogues'
+- 'eclogues-impl'
 - location:
     git: git@github.com:rimmington/thrift-hs
     commit: 6fe95c60d5085723fc49ed8e156cae8dd151456f
