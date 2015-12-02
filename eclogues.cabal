@@ -227,7 +227,7 @@ executable eclogues-mock
     hs-source-dirs: gen-hs app/api app/mock
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
-test-suite spec
+test-suite hspec
     type: exitcode-stdio-1.0
     main-is: Spec.hs
     build-depends:
