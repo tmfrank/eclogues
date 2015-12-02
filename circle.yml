@@ -1,18 +1,11 @@
 dependencies:
   cache_directories:
     - "~/.stack"
-  pre:
-    - wget https://github.com/commercialhaskell/stack/releases/download/v0.1.8.0/stack-0.1.8.0-linux-x86_64.tar.gz -O /tmp/stack.tar.gz
-    - tar xvf /tmp/stack.tar.gz stack-0.1.8.0-linux-x86_64/stack -O > /tmp/stack && chmod +x /tmp/stack
-    - sudo mv /tmp/stack /usr/bin/stack
+    - "~/.cache/circle-stack"
   override:
-    - stack setup
     - sudo apt-get install libzookeeper-mt-dev
-    - stack build --dependencies-only --test
-  post:
-    - stack install hlint
+    - wget https://raw.githubusercontent.com/ssilab/circle-stack/master/bootstrap.sh -O - | bash
 
 test:
   override:
-    - stack test
-    - stack exec hlint src/ app/
+    - circle-stack-test
