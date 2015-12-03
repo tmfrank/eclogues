@@ -19,7 +19,7 @@ import Prelude hiding (readFile)
 
 import Database.Zookeeper.ManagedEvents (ZKURI, withZookeeper)
 import Eclogues.Util (orShowError)
-import Eclogues.Client ( ecloguesClient, getJobs, getJobStage, masterHost
+import Eclogues.Client ( ecloguesClient, getJobs, getJobStage, baseUrl
                        , createJob, getHealth )
 import qualified Eclogues.Job as Job
 
@@ -86,7 +86,7 @@ go opts = do
     when (isNothing clientM) $ error "No Eclogues server advertised"
     let Just client = clientM
     case optCommand opts of
-        GetMaster     -> let (h,p) = masterHost client in putStrLn (h ++ ':':show p)
+        GetMaster     -> print $ baseUrl client
         GetHealth     -> runClient (BSLC.putStrLn . encode) $ getHealth client
         ListJobs      -> runClient print $ getJobs client
         JobStats as   -> runClient (printStats as) $ getJobs client

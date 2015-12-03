@@ -14,9 +14,9 @@ Interaction with an Eclogues web service.
 
 module Eclogues.Client (
     -- * Client
-      EcloguesClient, Result, ecloguesClient
+      EcloguesClient, Result, mkClient, ecloguesClient
     -- ** View
-    , getJobs, getJobStatus, getJobStage, getHealth, masterHost
+    , getJobs, getJobStatus, getJobStage, getHealth, baseUrl
     -- ** Mutate
     , createJob, deleteJob, setJobStage
     -- * Zookeeper
@@ -49,7 +49,7 @@ data EcloguesClient = EcloguesClient { _getJobs      ::             Result [Job.
                                      , _deleteJob    :: Job.Name -> Result ()
                                      , _createJob    :: Job.Spec -> Result ()
                                      , _getHealth    ::             Result Health
-                                     , _masterHost   :: (String, Word16) }
+                                     , _baseUrl      :: BaseUrl }
 
 -- Have to redefine these so they're not exported as record fields.
 
@@ -67,37 +67,42 @@ createJob    :: EcloguesClient -> Job.Spec -> Result ()
 createJob     = _createJob
 getHealth    :: EcloguesClient -> Result Health
 getHealth     = _getHealth
-masterHost   :: EcloguesClient -> (String, Word16)
-masterHost    = _masterHost
+baseUrl      :: EcloguesClient -> BaseUrl
+baseUrl       = _baseUrl
 
--- | Lookup the Eclogues master and return a set of functions for interacting
--- with it.
-ecloguesClient :: ManagedZK -> ExceptT (Either ZKError String) IO (Maybe EcloguesClient)
-ecloguesClient = mkClient <=< getEcloguesLeader where
-    mkClient :: Maybe (String, Word16) -> ExceptT (Either ZKError String) IO (Maybe EcloguesClient)
-    mkClient hostM = pure . flip fmap hostM $ \(host, port) ->
-        let (     getJobs'
-             :<|> jobStatus'
-             :<|> jobStage'
-             :<|> sJobStage'
-             :<|> deleteJob'
-             :<|> _  -- scheduler redirect
-             :<|> _  -- output redirect
-             :<|> createJob'
-             :<|> getHealth') = client (Proxy :: Proxy API) (BaseUrl Http host $ fromIntegral port)
-        in EcloguesClient
-            (err getJobs')
-            (err . jobStatus')
-            (err . jobStage')
-            (fmap err . sJobStage')
-            (err . deleteJob')
-            (err . createJob')
-            (err getHealth')
-            (host, port)
+mkClient :: BaseUrl -> EcloguesClient
+mkClient url =
+    EcloguesClient
+        (err getJobs')
+        (err . jobStatus')
+        (err . jobStage')
+        (fmap err . sJobStage')
+        (err . deleteJob')
+        (err . createJob')
+        (err getHealth')
+        url
+  where
+    (     getJobs'
+     :<|> jobStatus'
+     :<|> jobStage'
+     :<|> sJobStage'
+     :<|> deleteJob'
+     :<|> _  -- scheduler redirect
+     :<|> _  -- output redirect
+     :<|> createJob'
+     :<|> getHealth') = client (Proxy :: Proxy API) url
     err = withExceptT tryParseErr . ExceptT . runEitherT
     tryParseErr :: ServantError -> Either ServantError JobError
     tryParseErr serr@(FailureResponse _ _ bs) = mapLeft (const serr) $ eitherDecode bs
     tryParseErr other                         = Left other
+
+-- | Lookup the Eclogues master and return a set of functions for interacting
+-- with it.
+ecloguesClient :: ManagedZK -> ExceptT (Either ZKError String) IO (Maybe EcloguesClient)
+ecloguesClient = go <=< getEcloguesLeader where
+    go :: Maybe (String, Word16) -> ExceptT (Either ZKError String) IO (Maybe EcloguesClient)
+    go hostM = pure . flip fmap hostM $
+        \(host, port) -> mkClient $ BaseUrl Http host $ fromIntegral port
 
 -- | Query Zookeeper for the Eclogues master host details, if any.
 getEcloguesLeader :: ManagedZK -> ExceptT (Either ZKError String) IO (Maybe (String, Word16))
