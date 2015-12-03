@@ -1,6 +1,6 @@
 module Eclogues.MockSpec (spec) where
 
-import Eclogues.API (VAPI)
+import Eclogues.API (API)
 import qualified Eclogues.Job as Job
 import qualified Eclogues.Mock as Mock
 
@@ -32,7 +32,7 @@ getJobs :: Call [Job.Status]
  :<|> _  -- output redirect
  :<|> _  -- createJob
  :<|> _  -- getHealth
- ) = client (Proxy :: Proxy VAPI) (BaseUrl Http apiHost $ fromIntegral apiPort)
+ ) = client (Proxy :: Proxy API) (BaseUrl Http apiHost $ fromIntegral apiPort)
 
 runningAPI :: Expectation -> Expectation
 runningAPI a = do

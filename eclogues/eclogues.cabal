@@ -43,3 +43,23 @@ library
                       Trustworthy TypeFamilies TypeOperators
     hs-source-dirs: src
     ghc-options: -Wall -Werror
+
+test-suite hspec
+    type: exitcode-stdio-1.0
+    main-is: Spec.hs
+    build-depends:
+        base >=4.7.0.1 && <4.9,
+        aeson >=0.8 && <0.10,
+        bytestring >=0.10.4.0 && <0.11,
+        units-defs,
+        digital-metrology-frontiers,
+        eclogues ==0.1.0.0,
+        QuickCheck >=2.6 && <2.9,
+        hspec <2.2
+    default-language: Haskell2010
+    default-extensions: LambdaCase ScopedTypeVariables
+    other-extensions: FlexibleContexts OverloadedStrings TypeFamilies
+    hs-source-dirs: test
+    ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
+    other-modules:
+        Eclogues.JobSpec

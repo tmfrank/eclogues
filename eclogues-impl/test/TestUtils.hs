@@ -1,7 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {-|
 Module      : $Header$
@@ -32,12 +29,11 @@ import qualified Data.HashMap.Lazy as HM
 import Data.Maybe (fromMaybe, isNothing)
 import Data.Metrology.Computing (Byte (Byte), Core (Core), (%>))
 import Data.Metrology.SI (Second (Second), mega)
-import Data.Scientific.Suspicious (Sustific, fromFloatDigits)
+import Data.Scientific.Suspicious (Sustific)
 import Data.Text (Text)
 import Data.UUID (nil)
 
 import Test.Hspec (Expectation, shouldSatisfy)
-import Test.QuickCheck (Arbitrary (arbitrary), getNonZero)
 
 type Scheduler = ExceptT JobError (State ES.TransitionaryState) ()
 
@@ -85,10 +81,10 @@ createWithCluster :: Cluster -> Job.Spec -> Scheduler
 createWithCluster cluster = createJob nil (Just cluster)
 
 isolatedJob' :: Job.Name -> Job.Spec
-isolatedJob' x = Job.Spec x "/bin/echo" halfResources [] False []
+isolatedJob' x = Job.mkSpec x "/bin/echo" halfResources [] False []
 
 isolatedJob :: Job.Name -> Job.Resources -> Job.Spec
-isolatedJob x res = Job.Spec x "/bin/echo" res [] False []
+isolatedJob x res = Job.mkSpec x "/bin/echo" res [] False []
 
 dependentJob' :: Job.Name -> [Job.Name] -> Job.Spec
 dependentJob' job deps = Job.dependsOn .~ deps $ isolatedJob' job
@@ -131,13 +127,3 @@ satisfiability jName jSatis aState = do
 
 forceName :: Text -> Job.Name
 forceName jName = fromMaybe (error $ "invalid test name " ++ show jName) $ Job.mkName jName
-
-instance Arbitrary Job.Resources where
-    arbitrary = mk <$> v (mega Byte) <*> v (mega Byte) <*> v Core <*> v Second
-      where
-        v t = (%> t) . dblToSus . pos . getNonZero <$> arbitrary
-        pos :: Double -> Double
-        pos = (+ 1) . abs
-        dblToSus :: Double -> Sustific
-        dblToSus = fromFloatDigits
-        mk d r c t = fromMaybe (error "arb resources failed somehow") $ Job.mkResources d r c t

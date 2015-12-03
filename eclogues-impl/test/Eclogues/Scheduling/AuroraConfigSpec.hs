@@ -17,7 +17,7 @@ import Test.Hspec
 
 spec :: Spec
 spec = do
-    let task = Job.Spec tn "/bin/echo" res [] False []
+    let task = Job.mkSpec tn "/bin/echo" res [] False []
         tn   = fromMaybe (error "hello is not a valid job name") $ Job.mkName "hello"
         res  = fromMaybe (error "hardcoded resources are invalid") $
                    Job.mkResources (10 %> mega Byte) (10 %> mega Byte) (10 %> centi Core) (5 %> Second)
