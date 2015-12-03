@@ -19,9 +19,9 @@ Portability : portable
 "Eclogues.API" documentation via "Servant.Docs.Pandoc" and associates.
 -}
 
-module Eclogues.ApiDocs (VAPIWithDocs, apiDocs, apiDocsMd, apiDocsHtml) where
+module Eclogues.ApiDocs (APIWithDocs, apiDocs, apiDocsMd, apiDocsHtml) where
 
-import Eclogues.API (VAPI, Health (Health), AbsFile)
+import Eclogues.API (API, Health, AbsFile, mkHealth)
 import Eclogues.Job (Stage (Failed, Running), FailureReason (..), Satisfiability (Satisfiable))
 import qualified Eclogues.Job as Job
 
@@ -38,7 +38,8 @@ import Network.HTTP.Media ((//), (/:))
 import Path (mkAbsFile)
 import Text.Pandoc (writeHtmlString, def)
 import Servant.API (Capture, QueryParam, Get, Accept (..), MimeRender (..), (:>), (:<|>))
-import Servant.Docs ( API, ToCapture (..), ToSample (..), ToParam (..),
+import qualified Servant.Docs as Docs
+import Servant.Docs ( ToCapture (..), ToSample (..), ToParam (..),
                       DocCapture (..), DocQueryParam (..), ParamKind (Normal),
                       docs, markdown )
 import Servant.Docs.Pandoc (pandoc)
@@ -60,10 +61,10 @@ helloName :: Job.Name
 helloName = fromJust $ Job.mkName "hello"
 
 spec :: Job.Spec
-spec = Job.Spec helloName "echo hello world > hello.txt" res [Job.OutputPath $(mkAbsFile "/hello.txt")] False []
+spec = Job.mkSpec helloName "echo hello world > hello.txt" res [Job.OutputPath $(mkAbsFile "/hello.txt")] False []
 
 depSpec :: Job.Spec
-depSpec = Job.Spec n "cat virgil-dependencies/hello/hello.txt" res [] True [helloName]
+depSpec = Job.mkSpec n "cat virgil-dependencies/hello/hello.txt" res [] True [helloName]
   where
     n = fromJust $ Job.mkName "cat-hello"
 
@@ -72,24 +73,24 @@ instance ToSample Job.Spec Job.Spec where
                   ,("A job depending on previous output", depSpec)]
 
 failedSpec :: Job.Status
-failedSpec = Job.Status deadSpec (Failed $ NonZeroExitCode 1) Satisfiable nil where
-    deadSpec = Job.Spec n "exit 1" res [] False []
+failedSpec = Job.mkStatus deadSpec (Failed $ NonZeroExitCode 1) Satisfiable nil where
+    deadSpec = Job.mkSpec n "exit 1" res [] False []
     n = fromJust $ Job.mkName "i-fail"
 
 instance ToSample Job.Status Job.Status where
     toSample _ = Just failedSpec
 
 instance ToSample [Job.Status] [Job.Status] where
-    toSample _ = Just [ Job.Status (spec & Job.command .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) Satisfiable nil
-                      , Job.Status depSpec (Failed $ DependencyFailed helloName) Satisfiable nil]
+    toSample _ = Just [ Job.mkStatus (spec & Job.command .~ "cat /dev/zero > hello.txt") (Failed TimeExceeded) Satisfiable nil
+                      , Job.mkStatus depSpec (Failed $ DependencyFailed helloName) Satisfiable nil]
 
 instance ToSample () () where
     toSample _ = Nothing
 
-instance ToSample Health Health where toSample _ = Just $ Health True
+instance ToSample Health Health where toSample _ = Just $ mkHealth True
 
-apiDocs :: API
-apiDocs = docs (Proxy :: Proxy VAPI)
+apiDocs :: Docs.API
+apiDocs = docs (Proxy :: Proxy API)
 
 apiDocsMd :: L.ByteString
 apiDocsMd = encodeUtf8 . pack $ markdown apiDocs
@@ -97,7 +98,7 @@ apiDocsMd = encodeUtf8 . pack $ markdown apiDocs
 apiDocsHtml :: L.ByteString
 apiDocsHtml = encodeUtf8 . pack . writeHtmlString def $ pandoc apiDocs
 
-type VAPIWithDocs = VAPI :<|> "api" :> Get '[HTML] L.ByteString
+type APIWithDocs = API :<|> "api" :> Get '[HTML] L.ByteString
 
 data HTML
 

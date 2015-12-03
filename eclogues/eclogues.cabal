@@ -36,9 +36,9 @@ library
         digital-metrology-frontiers,
         attoparsec
     default-language: Haskell2010
-    default-extensions: LambdaCase ScopedTypeVariables
     other-extensions: DataKinds ExtendedDefaultRules FlexibleInstances
-                      GeneralizedNewtypeDeriving OverloadedStrings QuasiQuotes
-                      TemplateHaskell TypeOperators
+                      GeneralizedNewtypeDeriving LambdaCase OverloadedStrings
+                      QuasiQuotes ScopedTypeVariables TemplateHaskell
+                      Trustworthy TypeFamilies TypeOperators
     hs-source-dirs: src
     ghc-options: -Wall -Werror

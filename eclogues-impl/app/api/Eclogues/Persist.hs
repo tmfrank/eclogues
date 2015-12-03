@@ -90,12 +90,12 @@ atomically :: Context -> Action r -> IO r
 atomically (Context pool) (Action a) = PSql.runSqlPool a pool
 
 insert :: Job.Status -> Action ()
-insert (Job.Status spec st satis uuid) = Action $ P.insert_ job where
-    job = Job { jobName = spec ^. Job.name
-              , jobSpec = spec
-              , jobStage = st
-              , jobSatis = satis
-              , jobUuid = uuid }
+insert status = Action $ P.insert_ job where
+    job = Job { jobName  = status ^. Job.name
+              , jobSpec  = status ^. Job.spec
+              , jobStage = status ^. Job.stage
+              , jobSatis = status ^. Job.satis
+              , jobUuid  = status ^. Job.uuid }
 
 updateStage :: Job.Name -> Job.Stage -> Action ()
 updateStage name st = Action $ P.updateWhere [JobName ==. name] [JobStage =. st]
@@ -120,4 +120,4 @@ allIntents = getAll scheduleIntentCommand
 
 allJobs :: Action [Job.Status]
 allJobs = getAll toStatus where
-    toStatus (Job _ spec st satis uuid) = Job.Status spec st satis uuid
+    toStatus (Job _ spec st satis uuid) = Job.mkStatus spec st satis uuid

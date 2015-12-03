@@ -13,19 +13,19 @@ Interaction with an Eclogues web service.
 -}
 
 module Eclogues.Client (
-                       -- * Client
-                         EcloguesClient, Result, ecloguesClient
-                       -- ** View
-                       , getJobs, getJobStatus, getJobStage, getHealth, masterHost
-                       -- ** Mutate
-                       , createJob, deleteJob, setJobStage
-                       -- * Zookeeper
-                       , getEcloguesLeader
-                       ) where
+    -- * Client
+      EcloguesClient, Result, ecloguesClient
+    -- ** View
+    , getJobs, getJobStatus, getJobStage, getHealth, masterHost
+    -- ** Mutate
+    , createJob, deleteJob, setJobStage
+    -- * Zookeeper
+    , getEcloguesLeader
+    ) where
 
 import Database.Zookeeper.Election (ZKError, getLeaderInfo)
 import Database.Zookeeper.ManagedEvents (ManagedZK)
-import Eclogues.API (VAPI, JobError, Health)
+import Eclogues.API (API, JobError, Health)
 import Eclogues.ServantInstances ()
 import qualified Eclogues.Job as Job
 
@@ -84,7 +84,7 @@ ecloguesClient = mkClient <=< getEcloguesLeader where
              :<|> _  -- scheduler redirect
              :<|> _  -- output redirect
              :<|> createJob'
-             :<|> getHealth') = client (Proxy :: Proxy VAPI) (BaseUrl Http host $ fromIntegral port)
+             :<|> getHealth') = client (Proxy :: Proxy API) (BaseUrl Http host $ fromIntegral port)
         in EcloguesClient
             (err getJobs')
             (err . jobStatus')

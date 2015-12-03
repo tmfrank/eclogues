@@ -29,11 +29,11 @@ import qualified Eclogues.Scheduling.AuroraAPI as A
 import Eclogues.Scheduling.AuroraConfig (
     Role, ScheduledTask, getJobName, getJobStage)
 import Eclogues.Job (
-      Stage (..), QueueStage (..), RunResult (..)
+      Stage (..), QueueStage (..)
     , FailureReason (..), RunErrorReason (..))
 import qualified Eclogues.Job as Job
 import Eclogues.Paths (runResult, specFile)
-import Eclogues.Util (dirName)
+import Eclogues.Util (RunResult (..), dirName)
 
 import Control.Arrow ((&&&))
 import Control.Exception (IOException, try, tryJust)

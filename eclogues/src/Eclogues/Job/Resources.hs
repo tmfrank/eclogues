@@ -26,8 +26,8 @@ module Eclogues.Job.Resources (
     ) where
 
 import Control.Monad (MonadPlus, join)
-import Control.Lens (Getter, (^.), to)
-import Control.Lens.TH (makeClassy)
+import Control.Lens (Lens', Getter, (^.), to)
+import Control.Lens.TH (makeLenses)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
@@ -45,14 +45,31 @@ import Data.Scientific.Suspicious (
 import Data.Text (Text, pack)
 import qualified Data.Units.SI.Units.Attoparsec.Text as A
 
-data Resources = Resources { _disk :: Data
-                           , _ram  :: Data
-                           , _cpu  :: Parallelism
-                           , _time :: Time }
+-- | A set of resources required to run a job.
+data Resources = Resources { __disk :: Data
+                           , __ram  :: Data
+                           , __cpu  :: Parallelism
+                           , __time :: Time }
                            deriving (Show, Eq)
 
-$(makeClassy ''Resources)
+$(makeLenses ''Resources)
 
+-- | Most of these are 'Getter's to enforce 'mkResources' constraints.
+class HasResources c where
+    resources :: Lens' c Resources
+    disk :: Getter c Data
+    disk = resources . _disk
+    ram :: Getter c Data
+    ram = resources . _ram
+    cpu :: Getter c Parallelism
+    cpu = resources . _cpu
+    time :: Getter c Time
+    time = resources . _time
+
+instance HasResources Resources where resources = id
+
+-- | 'Resources' smart constructor. Checks all resource values are positive and
+-- under one peta(unit), and 'fail's if not.
 mkResources :: (MonadPlus m) => Data -> Data -> Parallelism -> Time -> m Resources
 mkResources d r c t = case () of
     _ | tooLarge  -> fail "Resource value too large"

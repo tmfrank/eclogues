@@ -17,10 +17,10 @@ module Main where
 
 import Prelude hiding (writeFile)
 
-import Eclogues.Job (RunResult (..))
 import qualified Eclogues.Job as Job
 import Eclogues.Paths (runResult, specFile)
-import Eclogues.Util (AbsDir (..), readJSON, orError, dirName, getOutputPath)
+import Eclogues.Util (
+    AbsDir (..), RunResult (..), readJSON, orError, dirName, getOutputPath)
 
 import Control.Arrow ((&&&))
 import Control.Lens ((^.))

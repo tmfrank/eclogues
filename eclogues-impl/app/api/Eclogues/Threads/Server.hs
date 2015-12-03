@@ -20,8 +20,8 @@ module Eclogues.Threads.Server (serve) where
 
 import Prelude hiding ((.))
 
-import Eclogues.API (VAPI, JobError (..), Health (Health))
-import Eclogues.ApiDocs (VAPIWithDocs, apiDocsHtml)
+import Eclogues.API (API, JobError (..), mkHealth)
+import Eclogues.ApiDocs (APIWithDocs, apiDocsHtml)
 import Eclogues.AppConfig (AppConfig)
 import qualified Eclogues.AppConfig as Config
 import Eclogues.Job (FailureReason (UserKilled))
@@ -67,19 +67,19 @@ serve :: IO ()                   -- ^ Action to run when listening has begun
       -> TVar AppState           -- ^ Mutable app state
       -> TVar (Maybe CM.Cluster) -- ^ Mutable cluster state
       -> IO ()
-serve bla host port conf state cluster = Warp.runSettings settings . myCors . Server.serve (Proxy :: (Proxy VAPIWithDocs)) $ server
+serve bla host port conf state cluster = Warp.runSettings settings . myCors . Server.serve (Proxy :: (Proxy APIWithDocs)) $ server
   where
     myCors = cors . const $ Just corsPolicy
     server = otherwiseShowDocs $ mainServer conf state cluster
     settings = Warp.setBeforeMainLoop bla $ Warp.setHost (fromString host) $ Warp.setPort port Warp.defaultSettings
 
-mainServer :: AppConfig -> TVar AppState -> TVar (Maybe CM.Cluster) -> Server VAPI
+mainServer :: AppConfig -> TVar AppState -> TVar (Maybe CM.Cluster) -> Server API
 mainServer conf stateV clusterV = handleExcept server' where
-    server' :: ServerT VAPI (ExceptT JobError IO)
+    server' :: ServerT API (ExceptT JobError IO)
     server' = getJobsH :<|> getJobH :<|> getJobStageH :<|> killJobH :<|>
               mesosJob :<|> outputH :<|> deleteJobH :<|> createJobH :<|> healthH
 
-    healthH = lift $ Health . isJust <$> atomically (Config.auroraURI conf)
+    healthH = lift $ mkHealth . isJust <$> atomically (Config.auroraURI conf)
     getJobsH = lift $ getJobs <$> atomically (readTVar stateV)
     getJobH jid = getJob jid =<< lift (atomically $ readTVar stateV)
     getJobStageH = fmap (^. Job.stage) . getJobH
@@ -106,7 +106,7 @@ mainServer conf stateV clusterV = handleExcept server' where
         throwE $ InvalidStageTransition "Can only set stage to Failed UserKilled"
     runScheduler' = runScheduler conf stateV
 
-handleExcept :: ServerT VAPI (ExceptT JobError IO) -> Server VAPI
+handleExcept :: ServerT API (ExceptT JobError IO) -> Server API
 handleExcept = enter $ fromExceptT . Nat (withExceptT onError)
 
 onError :: JobError -> ServantErr
@@ -128,7 +128,7 @@ runScheduler conf stateV f = mapExceptT atomically $ do
             writeTVar stateV $ ts ^. ES.appState
             maybeDo $ onCommit . Persist.atomically (Config.pctx conf) <$> ts ^. ES.persist
 
-otherwiseShowDocs :: Server VAPI -> Server VAPIWithDocs
+otherwiseShowDocs :: Server API -> Server APIWithDocs
 otherwiseShowDocs = (:<|> serveDocs) where
     serveDocs = lift $ pure apiDocsHtml
 

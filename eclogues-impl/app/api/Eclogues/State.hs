@@ -23,8 +23,8 @@ module Eclogues.State (
 
 import Eclogues.API (JobError (..))
 import Eclogues.Job (
-      FailureReason (..), RunErrorReason (..), QueueStage (LocalQueue), Stage (..)
-    , isActiveStage, isTerminationStage, isExpectedTransition, isOnScheduler)
+      FailureReason (..), RunErrorReason (..), QueueStage (..), Stage (..)
+    , isActiveStage, isTerminationStage, isOnScheduler, isQueueStage)
 import qualified Eclogues.Job as Job
 import Eclogues.Monitoring.Cluster (Cluster, jobDepSatisfy)
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
@@ -36,6 +36,7 @@ import Control.Lens ((^.), view)
 import Control.Monad (when, void, unless)
 import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.Trans.Writer.Lazy (WriterT, tell, execWriterT)
+import Data.Foldable (traverse_)
 import Data.HashMap.Lazy (elems, traverseWithKey)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe (catMaybes, isJust)
@@ -56,7 +57,7 @@ createJob uuid cluster spec = do
     let jstage = if activeDepCount == 0
             then Queued LocalQueue
             else Waiting activeDepCount
-        jStatus = Job.Status spec jstage satis uuid
+        jStatus = Job.mkStatus spec jstage satis uuid
     ES.insertJob jStatus
     if jstage == Queued LocalQueue
         then ES.schedule $ QueueJob spec uuid
@@ -142,13 +143,14 @@ updateJobs activeStatuses gotStages = void $ traverseWithKey transition activeSt
                     mapM_ (cascadeDepFailure name) rDepStatuses
         | otherwise                  = pure ()
     triggerDep :: Job.Name -> m ()
-    triggerDep rdepName = ES.getJob rdepName >>= \case
-        Just (Job.Status spec (Waiting 1) _ uuid) -> do
-            ES.schedule $ QueueJob spec uuid
-            ES.setJobStage rdepName $ Queued LocalQueue
-        Just (Job.Status _    (Waiting n) _ _) ->
-            ES.setJobStage rdepName $ Waiting $ n - 1
-        _         -> pure ()
+    triggerDep rdepName = (ES.getJob rdepName >>=) $ traverse_ $ \st ->
+        case st ^. Job.stage of
+            Waiting 1 -> do
+                ES.schedule $ QueueJob (st ^. Job.spec) (st ^. Job.uuid)
+                ES.setJobStage rdepName $ Queued LocalQueue
+            Waiting n ->
+                ES.setJobStage rdepName $ Waiting $ n - 1
+            _         -> pure ()
     cascadeDepFailure :: Job.Name -> Job.Status -> m ()
     cascadeDepFailure depName cst = do
         let name = cst ^. Job.name
@@ -167,3 +169,19 @@ getJob :: (MonadError JobError m) => Job.Name -> AppState -> m Job.Status
 getJob name state = case HashMap.lookup name (state ^. jobs) of
     Nothing -> throwError NoSuchJob
     Just js -> pure js
+
+-- | Whether the first 'Stage' may transition to the second in the lifecycle.
+-- Unexpected transitions are treated as scheduler errors
+-- ('BadSchedulerTransition').
+isExpectedTransition :: Stage -> Stage -> Bool
+isExpectedTransition (Queued LocalQueue) (Queued SchedulerQueue) = True
+isExpectedTransition (Queued _)   Running       = True
+isExpectedTransition (Waiting 0)  Running       = True
+isExpectedTransition Running      (Queued SchedulerQueue) = True
+isExpectedTransition Killing      (Failed UserKilled) = True
+isExpectedTransition o n | isQueueStage o || o == Running = case n of
+                                  Finished     -> True
+                                  (Failed _)   -> True
+                                  (RunError _) -> True
+                                  _            -> False
+isExpectedTransition _            _             = False

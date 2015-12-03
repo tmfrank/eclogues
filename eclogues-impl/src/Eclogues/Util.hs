@@ -23,12 +23,19 @@ import qualified Eclogues.Job as Job
 import Control.Exception (displayException)
 import Data.Aeson (FromJSON (..), eitherDecode)
 import qualified Data.Aeson as Aeson
+import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Data.ByteString.Lazy (readFile)
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import Path (Path, Abs, Rel, Dir, File, (</>), stripDir, mkAbsDir, parseAbsDir)
+import System.Exit (ExitCode)
 
 newtype AbsDir = AbsDir { getDir :: Path Abs Dir }
+
+-- | The result of a job, as communicated by the subexecutor. Other failure
+-- modes are communicated by the scheduler.
+data RunResult = Ended ExitCode | Overtime deriving (Show)
+$(deriveJSON defaultOptions ''RunResult)
 
 readJSON :: (FromJSON a) => FilePath -> IO (Either String a)
 readJSON = fmap eitherDecode . readFile

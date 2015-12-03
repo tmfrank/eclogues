@@ -1,5 +1,6 @@
 {-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -19,29 +20,30 @@ Specification of jobs and the current state of submitted jobs.
 -}
 
 module Eclogues.Job (
-    -- * Job satisfiability
-      Satisfiability (..), UnsatisfiableReason (..), isUnsatisfiable
     -- * Job status
-    , Status (Status), HasStatus (..)
-    -- ** Job spec
-    , Spec (Spec), HasSpec (..)
+      Status, HasStatus (..), mkStatus
+    -- * Job spec
+    , Spec, HasSpec (..), mkSpec
     , Name, nameText, mkName, uuidName
     , Command
     , OutputPath (..)
-    -- ** Resources
+    -- * Resources
     , module Eclogues.Job.Resources
-    -- ** Job lifecycle stage
-    , Stage (..), RunResult (..), FailureReason (..), RunErrorReason (..), QueueStage (..)
+    -- * Job satisfiability
+    , Satisfiability (..), UnsatisfiableReason (..), isUnsatisfiable
+    -- * Job lifecycle stage
+    , Stage (..), QueueStage (..), FailureReason (..), RunErrorReason (..)
     , majorStage, majorStages
-    -- * Predicates
-    , isActiveStage, isTerminationStage, isOnScheduler, isExpectedTransition, isPendingStage
+    -- ** Predicates
+    , isActiveStage, isTerminationStage, isOnScheduler, isPendingStage, isQueueStage
     ) where
 
 import Eclogues.Job.Aeson
 import Eclogues.Job.Resources
 
 import Control.Exception (displayException)
-import Control.Lens.TH (makeClassy)
+import Control.Lens (Lens')
+import Control.Lens.TH (makeLenses)
 import Control.Monad (MonadPlus)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
 import qualified Data.Aeson as Aeson
@@ -58,9 +60,10 @@ import Text.Regex.PCRE.Heavy ((=~), re)
 
 default (T.Text)
 
+-- | A job name.
 newtype Name = Name { _nameText :: T.Text } deriving (Eq, Hashable)
 
--- Don't want to export a record field
+-- | 'Name' as text.
 nameText :: Name -> T.Text
 nameText = _nameText
 
@@ -70,61 +73,107 @@ instance Show Name where
 instance Ord Name where
     compare = comparing _nameText
 
+-- | A bash command.
 type Command = T.Text
 
+-- | Newtype wrapper for JSON serialisation purposes.
 newtype OutputPath = OutputPath { getOutputPath :: Path Abs File }
                      deriving (Show, Eq)
 
-data Spec = Spec { _name          :: Name
-                 , _command       :: Command
-                 , __resources    :: Resources
-                 , _outputFiles   :: [OutputPath]
-                 , _captureStdout :: Bool
-                 , _dependsOn     :: [Name] }
-                 deriving (Show, Eq)
+-- | The reason a job has 'Failed'.
+data FailureReason =
+    -- | The user requested the job be killed.
+      UserKilled
+    -- | The job 'command' exited with a non-zero exit code.
+    | NonZeroExitCode Int
+    -- | The job exceeded its allocated 'ram'.
+    | MemoryExceeded --(Value Double Byte)
+    -- | The job exceeded its allocated 'disk'.
+    | DiskExceeded --(Value Double Byte)
+    -- | The job exceeded its allocated 'time'.
+    | TimeExceeded
+    -- | A job in 'dependsOn' failed.
+    | DependencyFailed Name
+    deriving (Show, Eq)
 
--- | The result of a job, as communicated by the subexecutor. Other failure
--- modes are communicated by the scheduler.
-data RunResult = Ended ExitCode | Overtime deriving (Show)
+-- | Details about an internal error.
+data RunErrorReason =
+    -- | The scheduler reported an unexpected state.
+      BadSchedulerTransition
+    -- | Eclogues subexecutor failure.
+    | SubexecutorFailure
+    -- | The scheduler lost the job.
+    | SchedulerLost
+    deriving (Show, Eq)
 
-data FailureReason = UserKilled
-                   | NonZeroExitCode Int
-                   | MemoryExceeded --(Value Double Byte)
-                   | DiskExceeded --(Value Double Byte)
-                   | TimeExceeded
-                   | DependencyFailed Name
-                   deriving (Show, Eq)
-
-data RunErrorReason = BadSchedulerTransition
-                    | SubexecutorFailure
-                    | SchedulerLost
-                    deriving (Show, Eq)
-
+-- | Whether the job is on an internal or the scheduler queue.
 data QueueStage = LocalQueue | SchedulerQueue deriving (Show, Eq)
 
-data Stage = Queued QueueStage
-           | Waiting Integer
-           | Running
-           | Killing
-           | Finished
-           | Failed FailureReason
-           | RunError RunErrorReason
-           deriving (Show, Eq)
+-- | A stage in the lifecycle of a job.
+data Stage =
+    -- | Waiting for a node to become available to run.
+      Queued QueueStage
+    -- | Waiting for @n@ jobs to be 'Finished'.
+    | Waiting Integer
+    | Running
+    -- | In the process of being killed. Transitions to 'Failed' 'UserKilled'.
+    | Killing
+    | Finished
+    | Failed FailureReason
+    -- | An internal error occurred.
+    | RunError RunErrorReason
+    deriving (Show, Eq)
 
+-- | Whether it's possible to run a job given known constraints.
 data Satisfiability = Satisfiable
                     | Unsatisfiable UnsatisfiableReason
+                    -- | There is insufficient information to determine if the
+                    -- job is satisfiable.
                     | SatisfiabilityUnknown
                       deriving (Show, Eq)
 
-data UnsatisfiableReason = InsufficientResources
-                         | DependenciesUnsatisfiable [Name]
-                           deriving (Show, Eq)
+-- | The reason a job was determined to be 'Unsatisfiable'.
+data UnsatisfiableReason
+    -- | There is no node in the cluster with enough resources to satisfy the
+    -- job's requested 'resources'.
+    = InsufficientResources
+    -- ^ One or more dependencies ('dependsOn') are 'Unsatisfiable'.
+    | DependenciesUnsatisfiable [Name]
+    deriving (Show, Eq)
 
-data Status = Status { __spec :: Spec
-                     , _stage :: Stage
-                     , _satis :: Satisfiability
-                     , _uuid  :: UUID }
+-- | Description of a job to run.
+data Spec = Spec { __name          :: Name
+                 , __command       :: Command
+                 , __resources     :: Resources
+                 , __outputFiles   :: [OutputPath]
+                 , __captureStdout :: Bool
+                 , __dependsOn     :: [Name] }
+                 deriving (Show, Eq)
+
+-- | Information about a submitted job.
+data Status = Status { __spec  :: Spec
+                     , __stage :: Stage
+                     , __satis :: Satisfiability
+                     , __uuid  :: UUID }
                      deriving (Show, Eq)
+
+-- | 'Spec' not-so-smart constructor.
+mkSpec :: Name          -- ^ 'name'
+       -> Command       -- ^ 'command'
+       -> Resources     -- ^ 'resources'
+       -> [OutputPath]  -- ^ 'outputFiles'
+       -> Bool          -- ^ 'captureStdout'
+       -> [Name]        -- ^ 'dependsOn'
+       -> Spec
+mkSpec = Spec
+
+-- | 'Status' not-so-smart constructor.
+mkStatus :: Spec            -- ^ 'spec'
+         -> Stage           -- ^ 'stage'
+         -> Satisfiability  -- ^ 'satis'
+         -> UUID            -- ^ 'uuid'
+         -> Status
+mkStatus = Status
 
 -- | Names of 'Stage' constructors. Could probably be replaced by something
 -- from "GHC.Generics".
@@ -174,37 +223,50 @@ isOnScheduler (Queued LocalQueue) = False
 isOnScheduler (Waiting _)         = False
 isOnScheduler s                   = isActiveStage s
 
--- | Whether the first 'Stage' may transition to the second in the lifecycle.
--- Unexpected transitions are treated as scheduler errors
--- ('BadSchedulerTransition').
-isExpectedTransition :: Stage -> Stage -> Bool
-isExpectedTransition (Queued LocalQueue) (Queued SchedulerQueue) = True
-isExpectedTransition (Queued _)   Running       = True
-isExpectedTransition (Waiting 0)  Running       = True
-isExpectedTransition Running      (Queued SchedulerQueue) = True
-isExpectedTransition Killing      (Failed UserKilled) = True
-isExpectedTransition o n | isQueueStage o || o == Running = case n of
-                                  Finished     -> True
-                                  (Failed _)   -> True
-                                  (RunError _) -> True
-                                  _            -> False
-isExpectedTransition _            _             = False
-
-
--- | Whether the Satisfiability is Unsatisfiable.
+-- | Whether the Satisfiability is 'Unsatisfiable'.
 isUnsatisfiable :: Satisfiability -> Bool
 isUnsatisfiable (Unsatisfiable _) = True
 isUnsatisfiable _                 = False
 
 $(deriveJSON defaultOptions ''ExitCode)
-$(deriveJSON defaultOptions ''RunResult)
 $(deriveJSON defaultOptions{fieldLabelModifier = specJName} ''Spec)
 $(deriveJSON defaultOptions{fieldLabelModifier = statusJName} ''Status)
 
-$(makeClassy ''Spec)
-$(makeClassy ''Status)
+$(makeLenses ''Spec)
+$(makeLenses ''Status)
+
+class (HasResources c) => HasSpec c where
+    spec :: Lens' c Spec
+    name :: Lens' c Name
+    name = spec . _name
+    -- | The bash command to execute.
+    command :: Lens' c Command
+    command = spec . _command
+    -- | List of output files where the working directory is the root (@/@).
+    outputFiles :: Lens' c [OutputPath]
+    outputFiles = spec . _outputFiles
+    -- | Whether to capture the standard output of the job as a file @stdout@.
+    captureStdout :: Lens' c Bool
+    captureStdout = spec . _captureStdout
+    -- | The names of the jobs this job requires output from.
+    dependsOn :: Lens' c [Name]
+    dependsOn = spec . _dependsOn
+
+class (HasSpec c) => HasStatus c where
+    status :: Lens' c Status
+    stage :: Lens' c Stage
+    stage = status . _stage
+    satis :: Lens' c Satisfiability
+    satis = status . _satis
+    -- | The UUID used to identify this job in the scheduler.
+    uuid :: Lens' c UUID
+    uuid = status . _uuid
+
 instance HasResources Spec where resources = _resources
+instance HasResources Status where resources = spec . resources
+instance HasSpec Spec where spec = id
 instance HasSpec Status where spec = _spec
+instance HasStatus Status where status = id
 
 instance ToJSON Stage where
     toJSON (Queued LocalQueue)     = object ["type" .= "Queued", "substage" .= "local"]
@@ -299,9 +361,11 @@ instance FromText Name where
 instance ToText Name where
     toText = nameText
 
+-- | A 'Name' if the provided text is valid, or otherwise 'fail'.
 mkName :: (MonadPlus m) => T.Text -> m Name
 mkName s | s =~ [re|^[a-zA-Z0-9\._\-]+$|] = pure $ Name s
          | otherwise                      = fail "invalid name"
 
+-- | All UUIDs are valid names.
 uuidName :: UUID -> Name
 uuidName = Name . T.pack . show
