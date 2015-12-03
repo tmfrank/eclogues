@@ -10,8 +10,6 @@ synopsis: API and controller for Apache Aurora.
 
 library
     exposed-modules:
-        Database.Zookeeper.Election,
-        Database.Zookeeper.ManagedEvents,
         Eclogues.Paths,
         Eclogues.Util
     build-depends:
@@ -19,18 +17,10 @@ library
         text >=1.1.0.0 && <1.3,
         bytestring >=0.10.4.0 && <0.11,
         aeson >=0.8 && <0.10,
-        transformers >=0.4.0.0 && <0.5,
-        async >=2.0.1.5 && <2.1,
-        hzk >=2.1.0 && <2.2,
-        stm-io-hooks >=1.1.0,
-        concurrent-extra >=0.7.0.9 && <0.8,
-        lifted-base >=0.2.3.6 && <0.3,
-        either >=4.3.4.1 && <4.5,
-        mmorph >=1.0.4 && <1.1,
         path >=0.5,
         eclogues ==0.1.0.0
     default-language: Haskell2010
-    other-extensions: LambdaCase ScopedTypeVariables TemplateHaskell Trustworthy
+    other-extensions: LambdaCase TemplateHaskell Trustworthy
     hs-source-dirs: src
     ghc-options: -Wall -Werror
 
@@ -80,6 +70,7 @@ executable eclogues-api
         units-defs,
         digital-metrology-frontiers,
         aegle,
+        hzk-elections,
         eclogues ==0.1.0.0,
         eclogues-impl ==0.1.0.0
     default-language: Haskell2010
@@ -148,6 +139,7 @@ executable eclogues-client
         bifunctors >=4.1.1.1 && <6,
         unordered-containers >=0.2.4.0 && <0.3,
         lens,
+        hzk-elections,
         eclogues ==0.1.0.0,
         eclogues-impl ==0.1.0.0
     default-language: Haskell2010

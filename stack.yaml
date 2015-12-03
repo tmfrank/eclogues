@@ -18,6 +18,10 @@ packages:
     git: git@github.com:ssilab/aegle
     commit: e0d0feb92cd6abb3b64af20e55da92b754c485e4
   extra-dep: true
+- location:
+    git: git@github.com:ssilab/hzk-elections
+    commit: 093cbd034d4dedb4aaf2c0fd452e25361dca7852
+  extra-dep: true
 extra-deps:
 - data-default-generics-0.3
 - hzk-2.1.0
