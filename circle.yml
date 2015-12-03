@@ -1,3 +1,12 @@
+general:
+  branches:
+    ignore:
+      - gh-pages
+
+machine:
+  environment:
+    CIRCLE_STACK_DEPLOY_HADDOCK: 1
+
 dependencies:
   cache_directories:
     - "~/.stack"
@@ -9,3 +18,10 @@ dependencies:
 test:
   override:
     - circle-stack-test
+
+deployment:
+  haddocks:
+    branch: master
+    owner: rimmington
+    commands:
+      - circle-stack-deployment
