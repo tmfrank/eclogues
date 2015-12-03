@@ -24,9 +24,9 @@ module Eclogues.API (
 import qualified Eclogues.Job as Job
 import Eclogues.ServantInstances ()
 
-import Control.Lens (Lens', (&), (.~))
-import Control.Lens.TH (makeLensesWith, lensRules, generateSignatures)
 import Data.Aeson.TH (deriveJSON, defaultOptions)
+import Lens.Micro (Lens', (&), (.~))
+import Lens.Micro.TH (makeLensesWith, lensRules, generateSignatures)
 import Network.URI (URI)
 import Path (Path, Abs, File)
 import Servant.API ((:>), (:<|>), Get, Post, Put, Delete, ReqBody, Capture, QueryParam, JSON)

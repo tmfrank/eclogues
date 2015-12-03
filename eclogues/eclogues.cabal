@@ -25,7 +25,6 @@ library
         transformers >=0.4.0.0 && <0.5,
         uuid >=1.3.10 && <1.4,
         uuid-aeson >=0.1 && <0.2,
-        lens >=4.7.0.1 && <4.14,
         path >=0.5,
         network-uri >=2.6,
         pcre-heavy,
@@ -34,7 +33,9 @@ library
         units-defs,
         units-attoparsec,
         digital-metrology-frontiers,
-        attoparsec
+        attoparsec,
+        microlens,
+        microlens-th
     default-language: Haskell2010
     other-extensions: DataKinds ExtendedDefaultRules FlexibleInstances
                       GeneralizedNewtypeDeriving LambdaCase OverloadedStrings

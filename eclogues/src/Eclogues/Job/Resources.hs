@@ -26,8 +26,6 @@ module Eclogues.Job.Resources (
     ) where
 
 import Control.Monad (MonadPlus, join)
-import Control.Lens (Lens', Getter, (^.), to)
-import Control.Lens.TH (makeLenses)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
@@ -44,6 +42,8 @@ import Data.Scientific.Suspicious (
     Sustific, toBoundedInteger, toBoundedRealFloat)
 import Data.Text (Text, pack)
 import qualified Data.Units.SI.Units.Attoparsec.Text as A
+import Lens.Micro (Lens', (^.), to)
+import Lens.Micro.TH (Getter, makeLenses)
 
 -- | A set of resources required to run a job.
 data Resources = Resources { __disk :: Data

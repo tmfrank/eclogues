@@ -42,8 +42,6 @@ import Eclogues.Job.Aeson
 import Eclogues.Job.Resources
 
 import Control.Exception (displayException)
-import Control.Lens (Lens')
-import Control.Lens.TH (makeLenses)
 import Control.Monad (MonadPlus)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
 import qualified Data.Aeson as Aeson
@@ -53,6 +51,8 @@ import Data.Ord (comparing)
 import qualified Data.Text as T
 import Data.UUID (UUID)
 import Data.UUID.Aeson ()
+import Lens.Micro (Lens')
+import Lens.Micro.TH (makeLenses)
 import Path (Path, Abs, File, parseAbsFile, toFilePath)
 import Servant.Common.Text (FromText (..), ToText (..))
 import System.Exit (ExitCode)
