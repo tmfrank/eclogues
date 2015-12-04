@@ -5,6 +5,7 @@ general:
 
 machine:
   environment:
+    CIRCLE_STACK_LOW_MEM: 1
     CIRCLE_STACK_DEPLOY_HADDOCK: 1
 
 dependencies:
