@@ -2,7 +2,7 @@
 
 set -e
 
-BUILD_DIR="$(pwd)/$(stack path --dist-dir)/build"
+BIN_DIR="$(stack path --local-install-root)/bin"
 REL_DIR="./release"
 
 rm -r $REL_DIR
@@ -13,7 +13,7 @@ stack build --ghc-options -O2
 cd $REL_DIR
 
 for bin in "eclogues-api" "eclogues-subexecutor" "eclogues-client" "eclogues-mock"; do
-    cp $BUILD_DIR/$bin/$bin tmp/$bin
+    cp $BIN_DIR/$bin tmp/$bin
     strip -p --strip-unneeded --remove-section=.comment -otmp/$bin.stripped tmp/$bin
     upx --no-env -8 -o$bin tmp/$bin.stripped
 done
