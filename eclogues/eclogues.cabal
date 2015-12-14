@@ -53,12 +53,15 @@ test-suite hspec
         bytestring >=0.10.4.0 && <0.11,
         units-defs,
         digital-metrology-frontiers,
+        path,
         eclogues ==0.1.0.0,
+        neat-interpolation,
         QuickCheck >=2.6 && <2.9,
         hspec <2.2
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
-    other-extensions: FlexibleContexts OverloadedStrings TypeFamilies
+    other-extensions: FlexibleContexts OverloadedStrings QuasiQuotes
+                      TemplateHaskell TypeFamilies
     hs-source-dirs: test
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
     other-modules:

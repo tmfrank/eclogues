@@ -17,10 +17,8 @@ module Eclogues.Job.Aeson where
 import Data.Char (toLower)
 
 specJName :: String -> String
-specJName "__resources" = "resources"
-specJName x             = toLower <$> drop 1 x
+specJName x = toLower <$> drop 2 x
 
 statusJName :: String -> String
-statusJName "__spec" = "spec"
-statusJName "_satis" = "satisfiability"
-statusJName x        = toLower <$> drop 1 x
+statusJName "__satis" = "satisfiability"
+statusJName x         = toLower <$> drop 2 x
