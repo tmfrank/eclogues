@@ -33,6 +33,7 @@ import Control.Monad.Trans.Either (runEitherT)
 import Control.Exception (IOException, throwIO, try)
 import Control.Lens ((^.))
 import Control.Monad.Trans.Except (runExceptT)
+import Data.Foldable (traverse_)
 import qualified Data.HashMap.Lazy as HashMap
 import Servant.Client (ServantError)
 import Servant.Common.BaseUrl (BaseUrl)
@@ -59,10 +60,10 @@ loadSchedulerState conf stateV = do
         Right (Left resp)         -> throwIO resp
 
 -- | Obtain estimated resources for all available sources and update job satisfiability.
-monitorCluster :: BaseUrl -> STM.TVar AppState -> STM.TVar (Maybe CM.Cluster) -> IO ()
-monitorCluster url stateV clusterV = do
-    clusterRes <- runEitherT $ slaveResources url
-    case clusterRes of
+monitorCluster :: STM.AdvSTM (Maybe BaseUrl) -> STM.TVar AppState -> STM.TVar (Maybe CM.Cluster) -> IO ()
+monitorCluster urlM stateV clusterV = traverse_ go =<< STM.atomically urlM
+  where
+    go url = runEitherT (slaveResources url) >>= \case
         Right cluster -> STM.atomically $ do
             STM.writeTVar clusterV (Just cluster)
             state <- STM.readTVar stateV

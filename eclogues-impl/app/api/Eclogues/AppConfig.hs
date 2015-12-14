@@ -42,7 +42,7 @@ data AppConfig = AppConfig {
                            -- | User the subexecutor is run as.
                            , subexecutorUser :: Text
                            -- | URL for Aegle server monitoring cluster.
-                           , monitorUrl      :: Maybe BaseUrl }
+                           , monitorUrl      :: AdvSTM (Maybe BaseUrl) }
 
 -- | Wait until the scheduler is available.
 requireSchedConf :: AppConfig -> AdvSTM ScheduleConf

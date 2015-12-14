@@ -22,6 +22,7 @@ import Eclogues.API (AbsFile)
 import Eclogues.AppConfig (AppConfig (AppConfig))
 import qualified Eclogues.AppConfig as Config
 import qualified Eclogues.Job as Job
+import Eclogues.Monitoring.Monitor (followAegleMaster)
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
 import Eclogues.Scheduling.Command (runScheduleCommand, schedulerJobUI)
@@ -31,11 +32,12 @@ import Eclogues.Threads.Update (loadSchedulerState, monitorCluster)
 import Eclogues.Threads.Server (serve)
 import Eclogues.Util (AbsDir (getDir), readJSON, orError)
 
+import Control.Applicative ((<|>))
 import Control.Concurrent (threadDelay)
 import qualified Control.Concurrent.AdvSTM as STM
 import Control.Concurrent.AdvSTM.TChan (newTChanIO, writeTChan, readTChan)
 import Control.Concurrent.AdvSTM.TVar (newTVarIO)
-import Control.Concurrent.Async (Async, waitAny, withAsync)
+import Control.Concurrent.Async (Concurrently (..), runConcurrently)
 import Control.Concurrent.Lock (Lock)
 import qualified Control.Concurrent.Lock as Lock
 import Control.Exception (Exception, throwIO)
@@ -57,7 +59,6 @@ import Database.Zookeeper (ZKError)
 import Network.URI (URI (uriPath), escapeURIString, isUnescapedInURI)
 import Path (toFilePath)
 import Path.IO (createDirectoryIfMissing)
-import Servant.Common.BaseUrl (BaseUrl (BaseUrl), Scheme (Http))
 import System.IO (hPutStrLn, stderr)
 import System.Random (mkStdGen, setStdGen)
 
@@ -67,9 +68,7 @@ data ApiConfig = ApiConfig { jobsDir :: AbsDir
                            , bindAddress :: String
                            , bindPort :: Word16
                            , subexecutorUser :: T.Text
-                           , outputUrlPrefix :: URI
-                           , aegleAddress :: Maybe String
-                           , aeglePort :: Maybe Int }
+                           , outputUrlPrefix :: URI }
 
 $(deriveFromJSON defaultOptions ''ApiConfig)
 
@@ -92,20 +91,22 @@ withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
 withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
     let jdir = getDir $ jobsDir apiConf
     schedV <- newTChanIO  -- Scheduler action channel
-    (followAuroraFailure, getURI) <- followAuroraMaster zk "/aurora/scheduler"
+    (followAuroraFailure, getAurora) <- followAuroraMaster zk
+    (followAegleFailure,  getAegle)  <- followAegleMaster  zk
     createDirectoryIfMissing False jdir
     Persist.withPersistDir jdir $ \pctx' -> do
-        let conf   = AppConfig jdir getURI schedV pctx' jobURI outURI user monUrl
+        let conf   = AppConfig jdir getAurora schedV pctx' jobURI outURI user getAegle
             user   = subexecutorUser apiConf
             jobURI = schedulerJobUI $ T.unpack user
             outURI = mkOutputURI $ outputUrlPrefix apiConf
             host   = bindAddress apiConf
             port   = fromIntegral $ bindPort apiConf
-            monUrl = BaseUrl Http <$> aegleAddress apiConf <*> aeglePort apiConf
-        lift $ withPersist host port conf webLock followAuroraFailure
+            zkErrors = Concurrently followAuroraFailure
+                   <|> Concurrently followAegleFailure
+        lift $ withPersist host port conf webLock zkErrors
 
-withPersist :: String -> Int -> AppConfig -> Lock -> Async ZKError -> IO ZKError
-withPersist host port conf webLock followAuroraFailure = do
+withPersist :: String -> Int -> AppConfig -> Lock -> Concurrently ZKError -> IO ZKError
+withPersist host port conf webLock zkErrors = do
     st <- loadFromDB conf
     stateV <- newTVarIO st
     clusterV <- newTVarIO Nothing
@@ -113,20 +114,19 @@ withPersist host port conf webLock followAuroraFailure = do
         updater = forever $ do
             loadSchedulerState conf stateV
             threadDelay . floor $ ((1 % Second) # micro Second :: Double)
-        monitor url = forever $ do
-            monitorCluster url stateV clusterV
+        monitor = forever $ do
+            monitorCluster (Config.monitorUrl conf) stateV clusterV
             threadDelay . floor $ ((30 % Second) # micro Second :: Double)
         -- TODO: catch run error and reschedule
         enacter = forever . STM.atomically $ runSingleCommand conf
 
     -- Configure threads ignoring monitoring if the relevant configuration is not provided
     hPutStrLn stderr $ "Starting server on " ++ host ++ ':':show port
-    withAsync web $ \webA -> withAsync updater $ \updaterA -> withAsync enacter $ \enacterA -> do
-        let results = [followAuroraFailure, const undefined <$> webA, updaterA, enacterA]
-        case Config.monitorUrl conf of
-            Just url -> withAsync (monitor url) $ \mon -> snd <$> waitAny (results ++ [const undefined <$> mon])
-            Nothing  -> hPutStrLn stderr warningMsg *> (snd <$> waitAny results)
-                where warningMsg = "Unable to monitor cluster due to absent configuration"
+    runConcurrently $ Concurrently (const (error "web failed") <$> web)
+                  <|> Concurrently updater
+                  <|> Concurrently enacter
+                  <|> Concurrently monitor
+                  <|> zkErrors
 
 -- | Contest Zookeeper election with the provided node data, and perform some
 -- action while elected. If leadership is lost, wait until re-elected and
@@ -139,7 +139,7 @@ whileLeader zk advertisedHost act =
 
 -- | Create encoded (host, port) to advertise via Zookeeper.
 advertisedData :: ApiConfig -> BSS.ByteString
-advertisedData (ApiConfig _ _ host port _ _ _ _) = BSL.toStrict $ encode (host, port)
+advertisedData (ApiConfig _ _ host port _ _) = BSL.toStrict $ encode (host, port)
 
 -- | Append the job name and file path to the path of the job output server URI.
 mkOutputURI :: URI -> Job.Name -> AbsFile -> URI

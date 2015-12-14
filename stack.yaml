@@ -16,7 +16,9 @@ packages:
   extra-dep: true
 - location:
     git: git@github.com:ssilab/aegle
-    commit: e0d0feb92cd6abb3b64af20e55da92b754c485e4
+    commit: 176070ee5bb72f8ab2d3c9301d02bf5a1b0327c3
+  subdirs:
+  - 'aegle'
   extra-dep: true
 - location:
     git: git@github.com:ssilab/hzk-elections

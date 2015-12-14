@@ -37,7 +37,7 @@ main = run (pure ()) "127.0.0.1" 8000
 run :: IO () -> String -> Word16 -> IO ()
 run bla host port' = withSystemTempDirectory "em" $ \d -> withPersistDir d $ \pctx -> lift $ do
     schedV <- newTChanIO
-    let conf   = AppConfig jdir getURI schedV pctx jobURI outURI user Nothing
+    let conf   = AppConfig jdir getURI schedV pctx jobURI outURI user (pure Nothing)
         jdir   = $(mkAbsDir "/mock/jobs")
         user   = "test"
         getURI = pure . Just . fromJust $ parseURI "http://localhost:8081/"
