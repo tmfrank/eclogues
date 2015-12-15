@@ -82,10 +82,13 @@ main = do
     webLock <- Lock.new
     res <- withZookeeper (zookeeperHosts apiConf) $ runExceptT . withZK apiConf webLock
     case res of
-        Left (LZKError e)         -> error $ "Zookeeper coordination error: " ++ show e
-        Left (ActionException ex) -> throwIO ex
-        Left LeadershipLost       -> error "impossibru!"
-        Right e                   -> error $ "Aurora ZK lookup error: " ++ show e
+        Left (LZKError e)               ->
+            error $ "Zookeeper coordination error: " ++ show e
+        Left (ActionException ex)       -> throwIO ex
+        Left ZookeeperInvariantViolated -> error "ZookeeperInvariantViolated!"
+        Left LeadershipLost             -> error "impossibru!"
+        Right e                         ->
+            error $ "Aurora ZK lookup error: " ++ show e
 
 withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
 withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do

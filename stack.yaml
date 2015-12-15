@@ -22,7 +22,7 @@ packages:
   extra-dep: true
 - location:
     git: git@github.com:ssilab/hzk-elections
-    commit: 5f9cae5b4c608c077671d8b028ceeed3c5931926
+    commit: 7394c729bf8f8c517aa60c020a2b21f13a9265a8
   extra-dep: true
 extra-deps:
 - data-default-generics-0.3
