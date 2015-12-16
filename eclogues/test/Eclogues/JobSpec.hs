@@ -32,7 +32,7 @@ spec = do
              $ either (const False) (== x) decoded
 
     describe "Spec" $
-        it "can be decoded from a particular string" $ do
+        it "can be decoded from a particular string" $
             eitherDecode exampleEncoded `shouldBe` Right exampleSpec
 
 exampleEncoded :: ByteString
