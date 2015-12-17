@@ -16,9 +16,8 @@ API executable entry point.
 
 module Main where
 
-import Database.Zookeeper.Election (LeadershipError (..), whenLeader)
-import Database.Zookeeper.ManagedEvents (ZKURI, ManagedZK, withZookeeper)
 import Eclogues.API (AbsFile)
+import Eclogues.APIElection (LeadershipError (..), ManagedZK, ZKURI, whileLeader)
 import Eclogues.AppConfig (AppConfig (AppConfig))
 import qualified Eclogues.AppConfig as Config
 import qualified Eclogues.Job as Job
@@ -40,15 +39,12 @@ import Control.Concurrent.AdvSTM.TVar (newTVarIO)
 import Control.Concurrent.Async (Concurrently (..), runConcurrently)
 import Control.Concurrent.Lock (Lock)
 import qualified Control.Concurrent.Lock as Lock
-import Control.Exception (Exception, throwIO)
+import Control.Exception (throwIO)
 import Control.Lens ((^.))
 import Control.Monad (forever)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE, catchE)
-import Data.Aeson (encode)
+import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson.TH (deriveFromJSON, defaultOptions)
-import qualified Data.ByteString as BSS
-import qualified Data.ByteString.Lazy as BSL
 import Data.Default.Generics (def)
 import Data.Metrology ((%), (#))
 import Data.Metrology.SI (Second (Second), micro)
@@ -76,11 +72,12 @@ main :: IO ()
 main = do
     seedStdGen
     apiConf <- orError =<< readJSON "/etc/xdg/eclogues/api.json"
+    let (ApiConfig _ zkUri host port _ _) = apiConf
     -- Used to prevent multiple web server threads from running at the same
     -- time. This can happen if the web thread doesn't finish dying between
     -- losing and regaining ZK election master status.
     webLock <- Lock.new
-    res <- withZookeeper (zookeeperHosts apiConf) $ runExceptT . withZK apiConf webLock
+    res <- runExceptT . whileLeader zkUri host port $ withZK apiConf webLock
     case res of
         Left (LZKError e)               ->
             error $ "Zookeeper coordination error: " ++ show e
@@ -90,8 +87,8 @@ main = do
         Right e                         ->
             error $ "Aurora ZK lookup error: " ++ show e
 
-withZK :: ApiConfig -> Lock -> ManagedZK -> ExceptT LeadershipError IO ZKError
-withZK apiConf webLock zk = whileLeader zk (advertisedData apiConf) $ do
+withZK :: ApiConfig -> Lock -> ManagedZK -> IO ZKError
+withZK apiConf webLock zk = do
     let jdir = getDir $ jobsDir apiConf
     schedV <- newTChanIO  -- Scheduler action channel
     (followAuroraFailure, getAurora) <- followAuroraMaster zk
@@ -131,19 +128,6 @@ withPersist host port conf webLock zkErrors = do
                   <|> Concurrently monitor
                   <|> zkErrors
 
--- | Contest Zookeeper election with the provided node data, and perform some
--- action while elected. If leadership is lost, wait until re-elected and
--- perform the action again. This function will never throw 'LeadershipLost'.
-whileLeader :: ManagedZK -> BSS.ByteString -> IO a -> ExceptT LeadershipError IO a
-whileLeader zk advertisedHost act =
-    catchE (whenLeader zk "/eclogues" advertisedHost act) $ \case
-        LeadershipLost -> whileLeader zk advertisedHost act
-        e              -> throwE e
-
--- | Create encoded (host, port) to advertise via Zookeeper.
-advertisedData :: ApiConfig -> BSS.ByteString
-advertisedData (ApiConfig _ _ host port _ _) = BSL.toStrict $ encode (host, port)
-
 -- | Append the job name and file path to the path of the job output server URI.
 mkOutputURI :: URI -> Job.Name -> AbsFile -> URI
 mkOutputURI pf name path = pf { uriPath = uriPath pf ++ name' ++ escapedPath }
@@ -168,10 +152,7 @@ runSingleCommand conf = do
         runScheduleCommand schedConf cmd
         lift . Persist.atomically (Config.pctx conf) $ Persist.deleteIntent cmd
   where
-    throwExc :: (Exception e) => ExceptT e IO a -> IO a
-    throwExc act = runExceptT act >>= \case
-        Left e  -> throwIO e
-        Right a -> pure a
+    throwExc act = either throwIO pure =<< runExceptT act
 
 -- | Seed the PRNG with the current time.
 seedStdGen :: IO ()

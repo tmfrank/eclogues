@@ -16,7 +16,8 @@ Eclogues REST API definition. See also the <https://github.com/rimmington/eclogu
 -}
 
 module Eclogues.API (
-      API, JobError (..), AbsFile, Get'
+      API, JobError (..), zkNode, parseZKData
+    , AbsFile, Get'
     -- * Health reporting
     , Health, mkHealth, schedulerAccessible
     ) where
@@ -24,7 +25,10 @@ module Eclogues.API (
 import qualified Eclogues.Job as Job
 import Eclogues.ServantInstances ()
 
+import Data.Aeson (decodeStrict')
 import Data.Aeson.TH (deriveJSON, defaultOptions)
+import Data.ByteString (ByteString)
+import Data.Word (Word16)
 import Lens.Micro (Lens', (&), (.~))
 import Lens.Micro.TH (makeLensesWith, lensRules, generateSignatures)
 import Network.URI (URI)
@@ -46,6 +50,15 @@ type API =  "jobs"   :> Get' [Job.Status]
        :<|> "jobs"   :> Capture "name" Job.Name  :> Delete '[JSON] ()
        :<|> "jobs"   :> ReqBody '[JSON] Job.Spec :> Post '[JSON] ()
        :<|> "health" :> Get' Health
+
+-- | The Zookeeper node on which Eclogues instances run elections.
+zkNode :: String
+zkNode = "/eclogues"
+
+-- | Attempt to parse a host and port from a Zookeeper node involved in Eclogues
+-- elections.
+parseZKData :: ByteString -> Maybe (String, Word16)
+parseZKData = decodeStrict'
 
 -- | The various ways requests can fail.
 data JobError =
