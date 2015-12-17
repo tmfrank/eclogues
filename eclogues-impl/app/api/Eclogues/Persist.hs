@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -22,21 +23,22 @@ Persistence for job states and yet-to-be-run 'ScheduleCommand's.
 -}
 
 module Eclogues.Persist (
-                        -- * 'Action'
-                          Action, Context
-                        -- ** Running
-                        , withPersistDir, atomically
-                        -- * View
-                        , allIntents, allJobs
-                        -- * Mutate
-                        , insert, updateStage, updateSatis, delete, scheduleIntent, deleteIntent )
-                        where
+    -- * 'Action'
+      Action, Context
+    -- ** Running
+    , withPersistDir, atomically
+    -- * View
+    , allIntents, allJobs
+    -- * Mutate
+    , insert, updateStage, updateSatis, delete, scheduleIntent, deleteIntent
+    ) where
 
 import Eclogues.Persist.Stage1 ()
 import Eclogues.Scheduling.Command (ScheduleCommand)
 import qualified Eclogues.Job as Job
 
 import Control.Lens ((^.))
+import Control.Monad.Base (MonadBase, liftBase)
 import Control.Monad.Logger (LoggingT, runStderrLoggingT)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Monoid ((<>))
@@ -86,8 +88,8 @@ withPersistDir path f = runStderrLoggingT $ withSqlitePool ("WAL=off " <> path' 
     path' = T.pack $ toFilePath path
 
 -- | Apply some Action in a transaction.
-atomically :: Context -> Action r -> IO r
-atomically (Context pool) (Action a) = PSql.runSqlPool a pool
+atomically :: (MonadBase IO m) => Context -> Action r -> m r
+atomically (Context pool) (Action a) = liftBase $ PSql.runSqlPool a pool
 
 insert :: Job.Status -> Action ()
 insert status = Action $ P.insert_ job where

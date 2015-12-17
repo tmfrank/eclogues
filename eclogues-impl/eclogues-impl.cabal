@@ -72,6 +72,7 @@ executable eclogues-api
         aegle,
         hzk-elections,
         monad-control,
+        transformers-base,
         eclogues ==0.1.0.0,
         eclogues-impl ==0.1.0.0
     default-language: Haskell2010
@@ -196,6 +197,7 @@ executable eclogues-mock
         units,
         units-defs,
         digital-metrology-frontiers,
+        transformers-base,
         eclogues ==0.1.0.0,
         eclogues-impl ==0.1.0.0
     default-language: Haskell2010
@@ -251,6 +253,7 @@ test-suite hspec
         servant-client,
         hzk-elections,
         monad-control,
+        transformers-base,
         eclogues ==0.1.0.0,
         eclogues-impl ==0.1.0.0,
         hspec <2.2

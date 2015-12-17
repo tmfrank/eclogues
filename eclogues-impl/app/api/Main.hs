@@ -137,7 +137,7 @@ mkOutputURI pf name path = pf { uriPath = uriPath pf ++ name' ++ escapedPath }
 
 loadFromDB :: AppConfig -> IO AppState
 loadFromDB conf = fmap ((^. ES.appState) . snd) . ES.runStateTS def $ do
-    (js, cmds) <- lift . Persist.atomically (Config.pctx conf) $
+    (js, cmds) <- Persist.atomically (Config.pctx conf) $
         (,) <$> Persist.allJobs <*> Persist.allIntents
     ES.loadJobs js
     lift . STM.atomically $ mapM_ (writeTChan $ Config.schedChan conf) cmds
@@ -150,7 +150,7 @@ runSingleCommand conf = do
     schedConf <- Config.requireSchedConf conf
     STM.onCommit . throwExc $ do
         runScheduleCommand schedConf cmd
-        lift . Persist.atomically (Config.pctx conf) $ Persist.deleteIntent cmd
+        Persist.atomically (Config.pctx conf) $ Persist.deleteIntent cmd
   where
     throwExc act = either throwIO pure =<< runExceptT act
 
