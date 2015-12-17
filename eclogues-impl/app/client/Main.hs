@@ -24,7 +24,6 @@ import Eclogues.Client ( ecloguesClient, getJobs, getJobStage, baseUrl
 import qualified Eclogues.Job as Job
 
 import Control.Applicative (optional)
-import Control.Lens ((^.))
 import Control.Monad ((<=<), when)
 import Control.Monad.Loops (firstM)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
@@ -41,6 +40,7 @@ import Data.Maybe (isNothing)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
 import Database.Zookeeper (ZLogLevel (ZLogWarn), setDebugLevel)
+import Lens.Micro ((^.))
 import Options.Applicative ( Parser, argument, strOption, strArgument, switch
                            , long, metavar, help, info, helper, fullDesc
                            , subparser, command, progDesc, header, execParser )

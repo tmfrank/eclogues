@@ -23,7 +23,6 @@ import Eclogues.Util (
     AbsDir (..), RunResult (..), readJSON, orError, dirName, getOutputPath)
 
 import Control.Arrow ((&&&))
-import Control.Lens ((^.))
 import Control.Monad (when)
 import Data.Aeson (encode)
 import Data.Aeson.TH (deriveFromJSON, defaultOptions)
@@ -32,6 +31,7 @@ import Data.Metrology.SI (Second (Second))
 import Data.Metrology.Computing ((#>), Time)
 import Data.Scientific.Suspicious (toBoundedInteger)
 import qualified Data.Text as T
+import Lens.Micro ((^.))
 import Path ( Path, Abs, Dir, (</>), toFilePath
             , parseAbsFile, mkRelFile, mkRelDir )
 import Path.IO (getCurrentDirectory, createDirectoryIfMissing, copyFile, writeFile)

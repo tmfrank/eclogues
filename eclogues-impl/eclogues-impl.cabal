@@ -108,7 +108,7 @@ executable eclogues-subexecutor
         aeson,
         process,
         filepath,
-        lens,
+        microlens,
         Glob,
         path,
         path-io,
@@ -140,7 +140,7 @@ executable eclogues-client
         directory,
         bifunctors,
         unordered-containers,
-        lens,
+        microlens,
         hzk-elections,
         eclogues ==0.1.0.0,
         eclogues-impl ==0.1.0.0
