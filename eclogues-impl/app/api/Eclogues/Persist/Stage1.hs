@@ -22,8 +22,8 @@ import qualified Eclogues.Job as Job
 
 import Control.Monad ((<=<))
 import Data.Aeson (FromJSON, ToJSON, encode, eitherDecodeStrict)
+import Data.Bifunctor (first)
 import qualified Data.ByteString.Lazy as BSL
-import Data.Either.Combinators (mapLeft)
 import Data.Monoid ((<>))
 import Data.Proxy (Proxy (..))
 import qualified Data.Text as T
@@ -35,7 +35,7 @@ jsonPersistValue :: (ToJSON a) => a -> P.PersistValue
 jsonPersistValue = P.PersistByteString . BSL.toStrict . encode
 
 jsonPersistParse :: (FromJSON a) => T.Text -> P.PersistValue -> Either T.Text a
-jsonPersistParse _ (P.PersistByteString bs) = mapLeft T.pack $ eitherDecodeStrict bs
+jsonPersistParse _ (P.PersistByteString bs) = first T.pack $ eitherDecodeStrict bs
 jsonPersistParse n e                        = Left . (("Invalid " <> n <> " persist value ") <>) . T.pack $ show e
 
 instance P.PersistField Job.Stage where
@@ -78,7 +78,7 @@ instance PSql.PersistFieldSql UUID where
 
 instance P.PersistField Job.Name where
     toPersistValue = P.toPersistValue . Job.nameText
-    fromPersistValue = mapLeft T.pack . Job.mkName <=< P.fromPersistValue
+    fromPersistValue = first T.pack . Job.mkName <=< P.fromPersistValue
 
 instance PSql.PersistFieldSql Job.Name where
     sqlType _ = PSql.sqlType (Proxy :: Proxy T.Text)

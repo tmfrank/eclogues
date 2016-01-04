@@ -33,7 +33,7 @@ import Control.Monad ((<=<))
 import Control.Monad.Trans.Either (runEitherT)
 import Control.Monad.Trans.Except (ExceptT (..), throwE, withExceptT)
 import Data.Aeson (eitherDecode, eitherDecodeStrict)
-import Data.Either.Combinators (mapLeft)
+import Data.Bifunctor (first)
 import Data.Proxy (Proxy (..))
 import Data.Word (Word16)
 import Servant.API ((:<|>) (..))
@@ -93,7 +93,7 @@ mkClient url =
      :<|> getHealth') = client (Proxy :: Proxy API) url
     err = withExceptT tryParseErr . ExceptT . runEitherT
     tryParseErr :: ServantError -> Either ServantError JobError
-    tryParseErr serr@(FailureResponse _ _ bs) = mapLeft (const serr) $ eitherDecode bs
+    tryParseErr serr@(FailureResponse _ _ bs) = first (const serr) $ eitherDecode bs
     tryParseErr other                         = Left other
 
 -- | Lookup the Eclogues master and return a set of functions for interacting
