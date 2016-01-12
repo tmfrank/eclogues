@@ -14,6 +14,8 @@ import Servant.Client (BaseUrl (..), Scheme (Http), ServantError, client)
 
 import Test.Hspec
 
+{-# ANN module ("HLint: ignore Use ." :: String) #-}
+
 apiHost :: String
 apiHost = "127.0.0.1"
 

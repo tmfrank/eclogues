@@ -65,7 +65,7 @@ getOutputPath :: Path Abs Dir -> Job.OutputPath -> Path Abs File
 getOutputPath dir = (dir </>) . toRelPath . Job.getOutputPath
 
 instance FromJSON AbsDir where
-    parseJSON (Aeson.String s) = toP $ parseAbsDir $ T.unpack s
+    parseJSON (Aeson.String s) = toP . parseAbsDir $ T.unpack s
       where
         toP = either (fail . ("Absolute dir: " ++) . displayException) (pure . AbsDir)
     parseJSON _                = fail "Absolute dir must be string"

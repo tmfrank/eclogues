@@ -39,6 +39,8 @@ import Control.Monad.Trans (lift)
 
 import Test.Hspec
 
+{-# ANN module ("HLint: ignore Use ." :: String) #-}
+
 job :: Job.Name
 job = forceName "job"
 

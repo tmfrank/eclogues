@@ -341,7 +341,7 @@ instance FromJSON Satisfiability where
     parseJSON _ = fail "Invalid job satisfiability value"
 
 instance FromJSON OutputPath where
-    parseJSON (Aeson.String s) = toP $ parseAbsFile $ T.unpack s
+    parseJSON (Aeson.String s) = toP . parseAbsFile $ T.unpack s
       where
         toP = either (fail . ("Output path: " ++) . displayException) (pure . OutputPath)
     parseJSON _                = fail "Output path must be string"

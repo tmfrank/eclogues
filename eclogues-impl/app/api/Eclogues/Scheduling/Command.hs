@@ -77,20 +77,20 @@ runScheduleCommand conf (QueueJob spec uuid) = do
         createDirectoryIfMissing False dir
         createDirectoryIfMissing False $ dir </> $(mkRelDir "output")
         writeFile (dir </> specFile) (encode spec)
-    client <- lift $ A.thriftClient $ auroraURI conf
+    client <- lift . A.thriftClient $ auroraURI conf
     A.createJob client (auroraRole conf) subspec
 runScheduleCommand conf (KillJob _name uuid) = do
-    client <- lift $ A.thriftClient $ auroraURI conf
+    client <- lift . A.thriftClient $ auroraURI conf
     A.killTasks client (auroraRole conf) [Job.uuidName uuid]
-runScheduleCommand conf (CleanupJob name _uuid) = lift . void $
+runScheduleCommand conf (CleanupJob name _uuid) = lift . void .
     tryJust (guard . isDoesNotExistError) . removeDirectoryRecursive $ jobDir conf name
 
 getSchedulerStatuses :: ScheduleConf -> [Job.Status] -> ExceptT A.UnexpectedResponse IO [(Job.Name, Job.Stage)]
 getSchedulerStatuses conf jss = do
-    client <- lift $ A.thriftClient $ auroraURI conf
-    auroraTasks <- A.getTasksWithoutConfigs client (auroraRole conf) (map fst uuids)
+    client <- lift . A.thriftClient $ auroraURI conf
+    auroraTasks <- A.getTasksWithoutConfigs client (auroraRole conf) (fmap fst uuids)
     let newUncheckedStages = lookupNewStages uuids auroraTasks
-    lift $ mapM checkFinStage newUncheckedStages
+    lift $ traverse checkFinStage newUncheckedStages
     where
         checkFinStage :: (Job.Name, Job.Stage) -> IO (Job.Name, Job.Stage)
         checkFinStage (n, Finished) = do
@@ -104,7 +104,7 @@ getSchedulerStatuses conf jss = do
             Ended ExitSuccess     -> Finished
             Ended (ExitFailure c) -> Failed (NonZeroExitCode c)
             Overtime              -> Failed TimeExceeded
-        uuids = map (Job.uuidName . view Job.uuid &&& view Job.name) jss
+        uuids = fmap (Job.uuidName . view Job.uuid &&& view Job.name) jss
 
 lookupNewStages ::
        [(Job.Name, Job.Name)]  -- ^ Mapping of job UUID to name

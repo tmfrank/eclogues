@@ -52,7 +52,7 @@ createJob uuid cluster spec = do
         deps = spec ^. Job.dependsOn
     existing <- ES.getJob name
     when (isJust existing) $ throwError JobNameUsed
-    Sum activeDepCount <- execWriterT $ mapM_ (checkDep name) deps
+    Sum activeDepCount <- execWriterT $ traverse_ (checkDep name) deps
     satis <- maybe (pure Job.SatisfiabilityUnknown) (jobDepSatisfy spec) cluster
     let jstage = if activeDepCount == 0
             then Queued LocalQueue
@@ -135,30 +135,30 @@ updateJobs activeStatuses gotStages = void $ traverseWithKey transition activeSt
             let name = pst ^. Job.name
             rDepNames <- ES.getDependents name
             -- Remove this job from the rev deps of its dependencies
-            mapM_ (`ES.removeRevDep` name) $ pst ^. Job.dependsOn
+            traverse_ (`ES.removeRevDep` name) $ pst ^. Job.dependsOn
             case newStage of
-                Finished -> mapM_ triggerDep rDepNames
+                Finished -> traverse_ triggerDep rDepNames
                 _        -> do
-                    rDepStatuses <- catMaybes <$> mapM ES.getJob rDepNames
-                    mapM_ (cascadeDepFailure name) rDepStatuses
+                    rDepStatuses <- catMaybes <$> traverse ES.getJob rDepNames
+                    traverse_ (cascadeDepFailure name) rDepStatuses
         | otherwise                  = pure ()
     triggerDep :: Job.Name -> m ()
-    triggerDep rdepName = (ES.getJob rdepName >>=) $ traverse_ $ \st ->
+    triggerDep rdepName = (ES.getJob rdepName >>=) . traverse_ $ \st ->
         case st ^. Job.stage of
             Waiting 1 -> do
                 ES.schedule $ QueueJob (st ^. Job.spec) (st ^. Job.uuid)
                 ES.setJobStage rdepName $ Queued LocalQueue
             Waiting n ->
-                ES.setJobStage rdepName $ Waiting $ n - 1
+                ES.setJobStage rdepName . Waiting $ n - 1
             _         -> pure ()
     cascadeDepFailure :: Job.Name -> Job.Status -> m ()
     cascadeDepFailure depName cst = do
         let name = cst ^. Job.name
         rDepNames <- ES.getDependents name
-        mapM_ (`ES.removeRevDep` name) $ cst ^. Job.dependsOn
+        traverse_ (`ES.removeRevDep` name) $ cst ^. Job.dependsOn
         ES.setJobStage name (Failed $ DependencyFailed depName)
-        rDepStatuses <- catMaybes <$> mapM ES.getJob rDepNames
-        mapM_ (cascadeDepFailure name) rDepStatuses
+        rDepStatuses <- catMaybes <$> traverse ES.getJob rDepNames
+        traverse_ (cascadeDepFailure name) rDepStatuses
 
 -- | All jobs.
 getJobs :: AppState -> [Job.Status]

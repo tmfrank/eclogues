@@ -81,7 +81,7 @@ minSatisfy sfs
     | not . null $ sfs ^. unknown       = Just SatisfiabilityUnknown
     | not . null $ sfs ^. satisfiable   = Just Satisfiable
     | otherwise                         = Nothing
-        where badDeps = DependenciesUnsatisfiable . map (view Job.name)
+        where badDeps = DependenciesUnsatisfiable . fmap (view Job.name)
 
 -- | Return a record containing the given job statuses bucketed according to satisfiability.
 groupSatisfy :: [Status] -> Satisfiabilities
@@ -96,7 +96,7 @@ groupSatisfy st = Satisfiabilities (filter satisfiable' st) (filter unsatisfiabl
 
 -- | Determine the minimum satisfiability of a number of jobs by name.
 jobsMinSatisfy :: (TS m) => [Name] -> m (Maybe Satisfiability)
-jobsMinSatisfy deps = minSatisfy . groupSatisfy . catMaybes <$> mapM ES.getJob deps
+jobsMinSatisfy deps = minSatisfy . groupSatisfy . catMaybes <$> traverse ES.getJob deps
 
 -- | Return job satisfiability factoring in the resources it requires and the
 --   satisfiability of its dependencies.
@@ -131,11 +131,11 @@ allSatisfyUnknown aState = itraverse_ stateOrUnknown (aState ^. jobs)
 
 -- | Order jobs with respect to dependencies.
 orderByDep :: (TS m) => [Job.Status] -> m [Job.Status]
-orderByDep jobStatuses = graph jobStatuses <&> \(x, y) -> map y (topSort x)
+orderByDep jobStatuses = graph jobStatuses <&> \(x, y) -> fmap y (topSort x)
     where
         graph :: (TS m) => [Status] -> m (Graph, Vertex -> Status)
         graph statuses = do
-            let nodes = mapM node statuses
+            let nodes = traverse node statuses
             (graph', gLookup, _) <- graphFromEdges <$> nodes
             let gLookup' = (\(r, _, _) -> r) . gLookup
             pure (graph', gLookup')

@@ -52,5 +52,5 @@ requireAurora :: AppConfig -> AdvSTM AuroraURI
 requireAurora conf = do
     uriM <- auroraURI conf
     case uriM of
-        Just uri -> return uri
+        Just uri -> pure uri
         Nothing  -> retry

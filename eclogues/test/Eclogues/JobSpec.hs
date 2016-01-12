@@ -22,6 +22,8 @@ import Test.Hspec
 import Test.QuickCheck (
     Arbitrary (arbitrary), getNonZero, property, counterexample)
 
+{-# ANN module ("HLint: ignore Use ." :: String) #-}
+
 spec :: Spec
 spec = do
     describe "Resources" $

@@ -102,7 +102,7 @@ ecloguesClient :: ManagedZK -> ExceptT (Either ZKError String) IO (Maybe Eclogue
 ecloguesClient = go <=< getEcloguesLeader where
     go :: Maybe (String, Word16) -> ExceptT (Either ZKError String) IO (Maybe EcloguesClient)
     go hostM = pure . flip fmap hostM $
-        \(host, port) -> mkClient $ BaseUrl Http host $ fromIntegral port
+        \(host, port) -> mkClient . BaseUrl Http host $ fromIntegral port
 
 -- | Query Zookeeper for the Eclogues master host details, if any.
 getEcloguesLeader :: ManagedZK -> ExceptT (Either ZKError String) IO (Maybe (String, Word16))

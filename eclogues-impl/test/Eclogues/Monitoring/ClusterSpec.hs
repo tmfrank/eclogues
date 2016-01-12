@@ -26,6 +26,8 @@ import TestUtils (
 
 import Test.Hspec
 
+{-# ANN module ("HLint: ignore Use ." :: String) #-}
+
 job :: Job.Name
 job = forceName "job"
 

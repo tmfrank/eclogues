@@ -108,7 +108,7 @@ go opts = do
         getStats = foldl' (\m j -> HashMap.insertWith (+) (Job.majorStage $ j ^. Job.stage) 1 m)
 
 main :: IO ()
-main = execParser opts >>= go where
+main = go =<< execParser opts where
     opts = info (helper <*> optsP)
         ( fullDesc
        <> header "eclogues-client - Direct an Eclogues task scheduler" )

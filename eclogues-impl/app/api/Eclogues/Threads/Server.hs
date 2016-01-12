@@ -71,7 +71,10 @@ serve bla host port conf state cluster = Warp.runSettings settings . myCors . Se
   where
     myCors = cors . const $ Just corsPolicy
     server = otherwiseShowDocs $ mainServer conf state cluster
-    settings = Warp.setBeforeMainLoop bla $ Warp.setHost (fromString host) $ Warp.setPort port Warp.defaultSettings
+    settings =
+        Warp.setBeforeMainLoop bla .
+        Warp.setHost (fromString host) $
+        Warp.setPort port Warp.defaultSettings
 
 mainServer :: AppConfig -> TVar AppState -> TVar (Maybe CM.Cluster) -> Server API
 mainServer conf stateV clusterV = handleExcept server' where

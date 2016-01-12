@@ -15,6 +15,8 @@ import Data.Text.Lazy.Encoding (encodeUtf8)
 
 import Test.Hspec
 
+{-# ANN module ("HLint: ignore Use ." :: String) #-}
+
 spec :: Spec
 spec = do
     let task = Job.mkSpec tn "/bin/echo" res [] False []
