@@ -1,0 +1,70 @@
+import "hint" HLint.HLint
+import "hint" HLint.Dollar
+
+import Control.Applicative
+import qualified Control.Arrow
+import Control.Monad
+import qualified Data.Bifunctor
+import Data.Foldable
+import Data.Monoid
+import qualified Data.Either.Combinators
+import qualified Data.HashMap.Lazy
+import qualified Data.HashMap.Strict
+import qualified Safe
+
+--
+-- From HLint.Generalise
+--
+
+warn = concatMap ==> (=<<)
+warn = liftM ==> fmap
+    where _ = noQuickCheck
+warn = map ==> fmap
+
+--
+-- Custom
+--
+
+error = return ==> pure
+-- mapM may eventually become traverse; there are apparently no performance
+-- regressions:
+-- http://markmail.org/message/nemg4cecliwjnd6x#query:+page:1+mid:t3h4ydnrgwd25hqq+state:results
+error = mapM ==> traverse
+error = sequence ==> sequenceA
+-- Not in Prelude, ignoring for now
+-- error = mapM_ ==> traverse_
+error = Data.Either.Combinators.mapLeft ==> Data.Bifunctor.first
+error = Data.Either.Combinators.mapRight ==> fmap
+-- These won't work with arrows that aren't actually (->), but who uses those
+-- anyway
+warn = Control.Arrow.left f ==> Data.Bifunctor.first f
+warn = Control.Arrow.right f ==> fmap f
+error = sequenceA (fmap f v) ==> traverse f v
+error = sequenceA (f <$> v) ==> traverse f v
+error = void (traverse f v) ==> traverse_ f v
+warn = v >>= f ==> f =<< v
+  where _ = not (isLambda f) && not (isCase f) && not (isLCase f)
+error = foldl f z v ==> foldl' f z v
+  where note = "decreases laziness, consider foldr"
+error = f >=> g ==> g <=< f
+error = Data.HashMap.Strict.map ==> fmap
+error = Data.HashMap.Lazy.map ==> fmap
+error = read ==> Safe.readMay
+
+{-
+<TEST>
+yes = return -- pure
+import Data.Either.Combinators (mapLeft) \
+yes = mapLeft -- Data.Bifunctor.first
+yes = sequenceA $ fmap f v -- traverse f v
+yes = sequenceA $ f <$> v -- traverse f v
+yes = void . traverse f -- traverse_ f
+yes = show 1 >>= putStrLn -- putStrLn =<< show 1
+no = show 1 >>= \x -> putStrLn x
+no = show 1 >>= \case "1" -> 0
+yes = foldl (-) 0 [1, 2, 3] -- foldl' (-) 0 [1, 2, 3]
+yes = readFile >=> writeFile "b" -- writeFile "b" <=< readFile
+import qualified Data.HashMap.Strict \
+yes = Data.HashMap.Strict.map -- fmap
+</TEST>
+-}

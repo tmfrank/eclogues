@@ -8,6 +8,9 @@ copyright: (c) 2015 Swinburne Software Innovation Lab
 maintainer: Rhys Adams <rhysadams@swin.edu.au>, Shannon Pace <space@swin.edu.au>
 synopsis: API and controller for Apache Aurora.
 
+data-dir: ..
+data-files: HLint.hints
+
 library
     exposed-modules:
         Eclogues.Paths,
@@ -271,12 +274,14 @@ test-suite hspec
         TestUtils
 
 test-suite hlint
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      test
-  main-is:             HLint.hs
-  build-depends:       base
-                     , hlint
-  default-language:    Haskell2010
+    type:                exitcode-stdio-1.0
+    hs-source-dirs:      test
+    main-is:             HLint.hs
+    other-modules:
+        Paths_eclogues_impl
+    build-depends:       base
+                       , hlint
+    default-language:    Haskell2010
 
 source-repository head
   type: git
