@@ -38,7 +38,8 @@ library
         digital-metrology-frontiers,
         attoparsec,
         microlens,
-        microlens-th
+        microlens-th,
+        deepseq
     default-language: Haskell2010
     other-extensions: DataKinds ExtendedDefaultRules FlexibleInstances
                       GeneralizedNewtypeDeriving LambdaCase OverloadedStrings

@@ -3,6 +3,14 @@ packages:
 - 'eclogues'
 - 'eclogues-impl'
 - location:
+    git: https://github.com/rimmington/path
+    commit: cd470f2d11e48d9f5e5110785408a62d806a0101
+  extra-dep: true
+- location:
+    git: https://github.com/rimmington/units
+    commit: 7e11e858387923ad793115e6f2bdca5af968ccf4
+  extra-dep: true
+- location:
     git: git@github.com:rimmington/thrift-hs
     commit: 6fe95c60d5085723fc49ed8e156cae8dd151456f
   extra-dep: true
@@ -30,7 +38,6 @@ extra-deps:
 - stm-io-hooks-1.1.0
 - uuid-aeson-0.1.0.0
 - xdg-basedir-0.2.2
-- units-2.3
 - units-attoparsec-1.0
 - units-defs-2.0.0.1
 - units-parser-0.1.0.0

@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
@@ -42,6 +43,7 @@ module Eclogues.Job (
 import Eclogues.Job.Aeson
 import Eclogues.Job.Resources
 
+import Control.DeepSeq (NFData (..))
 import Control.Exception (displayException)
 import Control.Monad (MonadPlus)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=), object)
@@ -54,6 +56,7 @@ import Data.UUID (UUID)
 import Data.UUID.Aeson ()
 import Lens.Micro (Lens')
 import Lens.Micro.TH (makeLenses)
+import GHC.Generics (Generic)
 import Path (Path, Abs, File, parseAbsFile, toFilePath)
 import Servant.Common.Text (FromText (..), ToText (..))
 import System.Exit (ExitCode)
@@ -62,7 +65,7 @@ import Text.Regex.PCRE.Heavy ((=~), re)
 default (T.Text)
 
 -- | A job name.
-newtype Name = Name { _nameText :: T.Text } deriving (Eq, Hashable)
+newtype Name = Name { _nameText :: T.Text } deriving (Eq, Hashable, NFData)
 
 -- | 'Name' as text.
 nameText :: Name -> T.Text
@@ -79,7 +82,7 @@ type Command = T.Text
 
 -- | Newtype wrapper for JSON serialisation purposes.
 newtype OutputPath = OutputPath { getOutputPath :: Path Abs File }
-                     deriving (Show, Eq)
+                     deriving (Show, Eq, NFData)
 
 -- | The reason a job has 'Failed'.
 data FailureReason =
@@ -95,7 +98,7 @@ data FailureReason =
     | TimeExceeded
     -- | A job in 'dependsOn' failed.
     | DependencyFailed Name
-    deriving (Show, Eq)
+    deriving (Show, Eq, Generic)
 
 -- | Details about an internal error.
 data RunErrorReason =
@@ -105,10 +108,10 @@ data RunErrorReason =
     | SubexecutorFailure
     -- | The scheduler lost the job.
     | SchedulerLost
-    deriving (Show, Eq)
+    deriving (Show, Eq, Generic)
 
 -- | Whether the job is on an internal or the scheduler queue.
-data QueueStage = LocalQueue | SchedulerQueue deriving (Show, Eq)
+data QueueStage = LocalQueue | SchedulerQueue deriving (Show, Eq, Generic)
 
 -- | A stage in the lifecycle of a job.
 data Stage =
@@ -123,7 +126,7 @@ data Stage =
     | Failed FailureReason
     -- | An internal error occurred.
     | RunError RunErrorReason
-    deriving (Show, Eq)
+    deriving (Show, Eq, Generic)
 
 -- | Whether it's possible to run a job given known constraints.
 data Satisfiability = Satisfiable
@@ -131,7 +134,7 @@ data Satisfiability = Satisfiable
                     -- | There is insufficient information to determine if the
                     -- job is satisfiable.
                     | SatisfiabilityUnknown
-                      deriving (Show, Eq)
+                      deriving (Show, Eq, Generic)
 
 -- | The reason a job was determined to be 'Unsatisfiable'.
 data UnsatisfiableReason
@@ -140,7 +143,7 @@ data UnsatisfiableReason
     = InsufficientResources
     -- ^ One or more dependencies ('dependsOn') are 'Unsatisfiable'.
     | DependenciesUnsatisfiable [Name]
-    deriving (Show, Eq)
+    deriving (Show, Eq, Generic)
 
 -- | Description of a job to run.
 data Spec = Spec { __name          :: Name
@@ -370,3 +373,18 @@ mkName s | s =~ [re|^[a-zA-Z0-9\._\-]+$|] = pure $ Name s
 -- | All UUIDs are valid names.
 uuidName :: UUID -> Name
 uuidName = Name . T.pack . show
+
+-- No Generic instance to preserve mkStatus invariants
+instance NFData Status where
+    rnf (Status a b c d) = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
+
+-- No Generic instance to preserve mkSpec invariants`
+instance NFData Spec where
+    rnf (Spec a b c d e f) = rnf a `seq` rnf b `seq` rnf c `seq` rnf d `seq` rnf e `seq` rnf f
+
+instance NFData Stage where  -- Using Generic instance
+instance NFData QueueStage where  -- Using Generic instance
+instance NFData RunErrorReason where  -- Using Generic instance
+instance NFData FailureReason where  -- Using Generic instance
+instance NFData Satisfiability where  -- Using Generic instance
+instance NFData UnsatisfiableReason where  -- Using Generic instance

@@ -25,6 +25,7 @@ module Eclogues.Job.Resources (
     , diskBytes, diskMB, ramBytes, ramMB, cpuCores, timeSeconds
     ) where
 
+import Control.DeepSeq (NFData (..))
 import Control.Monad (MonadPlus, join)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import qualified Data.Aeson as Aeson
@@ -142,3 +143,6 @@ instance ToJSON Resources where
         ]
       where
         go q u = pack $ show (q #> u) ++ ' ':show u
+
+instance NFData Resources where
+    rnf (Resources a b c d) = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
