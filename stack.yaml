@@ -3,8 +3,8 @@ packages:
 - 'eclogues'
 - 'eclogues-impl'
 - location:
-    git: https://github.com/rimmington/path
-    commit: cd470f2d11e48d9f5e5110785408a62d806a0101
+    git: https://github.com/chrisdone/path
+    commit: 9af2a76b2e587c6f763c7e6eae53285f49e1c95d
   extra-dep: true
 - location:
     git: https://github.com/rimmington/units
