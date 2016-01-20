@@ -120,8 +120,6 @@ withPersist host port conf webLock zkErrors = do
             threadDelay . floor $ ((30 % Second) # micro Second :: Double)
         -- TODO: catch run error and reschedule
         enacter = forever . STM.atomically $ runSingleCommand conf
-
-    -- Configure threads ignoring monitoring if the relevant configuration is not provided
     hPutStrLn stderr $ "Starting server on " ++ host ++ ':':show port
     runConcurrently $ Concurrently (const (error "web failed") <$> web)
                   <|> Concurrently updater

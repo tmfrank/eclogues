@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
@@ -18,23 +19,25 @@ module Eclogues.Monitoring.Cluster (
     -- * Types
       Cluster, NodeResources (..)
     -- * Satisfiability updates
-    , updateSatisfiabilities, allSatisfyUnknown
+    , updateSatisfiabilities
     -- * Satisfiability checking
-    , jobDepSatisfy
+    , stagelessSatisfy
     ) where
 
 import qualified Eclogues.Job as Job
-import Eclogues.Job (Name, Resources, Spec, Status, Satisfiability (..), UnsatisfiableReason (..))
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Monad (TS)
 import Eclogues.State.Types (AppState, jobs)
 
-import Control.Lens ((^.), (<&>), view, itraverse_)
+import Control.Applicative ((<|>))
+import Control.Lens ((^.))
 import Control.Lens.TH (makeClassy)
 import Control.Monad (when)
 import Data.Bool (bool)
+import Data.Foldable (traverse_)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Graph (Graph, Vertex, graphFromEdges, topSort)
+import qualified Data.HashMap.Lazy as HM
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Metrology.Computing (Data, Parallelism)
 
@@ -46,16 +49,10 @@ $(makeClassy ''NodeResources)
 
 type Cluster = [NodeResources]
 
-type Node = (Status, Name, [Name])
-
-data Satisfiabilities = Satisfiabilities { _satisfiable   :: [Status]
-                                         , _unsatisfiable :: [Status]
-                                         , _unknown       :: [Status] }
-
-$(makeClassy ''Satisfiabilities)
+type Node = (Job.Status, Job.Name, [Job.Name])
 
 -- | Return whether the given resources can be accommodated within the cluster.
-resourcesAvailable :: Cluster -> Resources -> Bool
+resourcesAvailable :: Cluster -> Job.Resources -> Bool
 resourcesAvailable cluster jobRes = not . null $ filter sufficientRes cluster
     where
         sufficientRes nodeRes = suffCpu nodeRes && suffRam nodeRes && suffDisk nodeRes
@@ -63,77 +60,75 @@ resourcesAvailable cluster jobRes = not . null $ filter sufficientRes cluster
         suffRam nodeRes = nodeRes ^. ram >= jobRes ^. Job.ram
         suffDisk nodeRes = nodeRes ^. disk >= jobRes ^. Job.disk
 
--- | Return the satisfiability of a job with respect to cluster resources.
-specSatisfy :: Cluster -> Spec -> Satisfiability
-specSatisfy cluster = satisfy . resourcesAvailable cluster . view Job.resources
-    where satisfy = bool (Unsatisfiable InsufficientResources) Satisfiable
+-- | Return the satisfiability of a job as can be determined using cluster resources.
+specSatisfy :: Job.Spec -> Cluster -> Maybe Job.Satisfiability
+specSatisfy spec cluster = satisfy $ resourcesAvailable cluster (spec ^. Job.resources)
+    where satisfy = bool (Just $ Job.Unsatisfiable Job.InsufficientResources) Nothing
 
 -- | Return satisfiability of the given job status as can be determined by its state.
---   Job is satisfiable if running or complete, otherwise satisfiability cannot be determined.
-stateSatisfy :: Status -> Maybe Satisfiability
-stateSatisfy status = bool (Just Satisfiable) Nothing $ Job.isPendingStage (status ^. Job.stage)
+stageSatisfy :: Job.Status -> Maybe Job.Satisfiability
+stageSatisfy status = bool (Just Job.Satisfiable) Nothing $ Job.isPendingStage (status ^. Job.stage)
 
--- | Return the collective satisfiability of a set of satisfiable, unsatisfiable
---   and satisfiability-unknown jobs. Assumes a dependency context.
-minSatisfy :: Satisfiabilities -> Maybe Satisfiability
-minSatisfy sfs
-    | not . null $ sfs ^. unsatisfiable = Just . Unsatisfiable $ badDeps (sfs ^. unsatisfiable)
-    | not . null $ sfs ^. unknown       = Just SatisfiabilityUnknown
-    | not . null $ sfs ^. satisfiable   = Just Satisfiable
-    | otherwise                         = Nothing
-        where badDeps = DependenciesUnsatisfiable . fmap (view Job.name)
+-- | Return satisfiability of a hypothetical job which has the named dependencies. Returns
+--   Nothing if the satisfiability of the hypothetical job cannot be determined from the
+--   dependencies alone.
+depSatisfy :: TS m => [Job.Name] -> m (Maybe Job.Satisfiability)
+depSatisfy names = do
+    let collectSatis = HM.fromList . fmap (\x -> (x ^. Job.name, x ^. Job.satis))
+    satisfiabilities <- (collectSatis . catMaybes) <$> traverse ES.getJob names
+    let orNothing x = bool (Just x) Nothing . HM.null
+        depsFailed :: Maybe Job.Satisfiability
+        depsFailed = orNothing (Job.Unsatisfiable $ badDeps failed) failed
+            where
+                badDeps = Job.DependenciesUnsatisfiable . HM.keys
+                failed = flip HM.filter satisfiabilities $ \case
+                    (Job.Unsatisfiable _) -> True
+                    _                     -> False
+        depUnknown :: Maybe Job.Satisfiability
+        depUnknown = orNothing Job.SatisfiabilityUnknown unknown
+            where
+                unknown = flip HM.filter satisfiabilities $ \case
+                    Job.SatisfiabilityUnknown -> True
+                    _                         -> False
+    pure $ depsFailed <|> depUnknown
 
--- | Return a record containing the given job statuses bucketed according to satisfiability.
-groupSatisfy :: [Status] -> Satisfiabilities
-groupSatisfy st = Satisfiabilities (filter satisfiable' st) (filter unsatisfiable' st) (filter unknown' st)
-    where
-        satisfiable', unknown', unsatisfiable' :: Status -> Bool
-        satisfiable' status = status ^. Job.satis == Satisfiable
-        unsatisfiable' status = case status ^. Job.satis of
-            Unsatisfiable _ -> True
-            _ -> False
-        unknown' status = status ^. Job.satis == SatisfiabilityUnknown
+-- | Return the satisfiability of the given job specification if this can be determined
+--   from the state of the cluster and the job's dependencies.
+stagelessSatisfy :: TS m => Maybe Cluster -> Job.Spec -> m Job.Satisfiability
+stagelessSatisfy clusterM spec = do
+    depSatisfy' <- depSatisfy $ spec ^. Job.dependsOn
+    pure $ case clusterM of
+        Just cluster -> fromMaybe Job.Satisfiable knownSatis
+            where knownSatis = specSatisfy spec cluster <|> depSatisfy'
+        Nothing      -> fromMaybe Job.SatisfiabilityUnknown depSatisfy'
 
--- | Determine the minimum satisfiability of a number of jobs by name.
-jobsMinSatisfy :: (TS m) => [Name] -> m (Maybe Satisfiability)
-jobsMinSatisfy deps = minSatisfy . groupSatisfy . catMaybes <$> traverse ES.getJob deps
-
--- | Return job satisfiability factoring in the resources it requires and the
---   satisfiability of its dependencies.
-jobDepSatisfy :: (TS m) => Spec -> Cluster -> m Satisfiability
-jobDepSatisfy spec cluster = case specSatisfy cluster spec of
-    u@(Job.Unsatisfiable _) -> pure u
-    x                       -> fromMaybe x <$> jobsMinSatisfy (spec ^. Job.dependsOn)
-
--- | Update the satisfiability of a single job with respect to the cluster, its state and
---   its dependencies.
-updateSatisfy :: (TS m) => Cluster -> Status -> m ()
-updateSatisfy cluster status = do
-    satis <- maybe (jobDepSatisfy (status ^. Job.spec) cluster) pure $ stateSatisfy status
+-- | Update the satisfiability of a job based on its state, dependencies or
+--   required resources (with respect to cluster state).
+updateSatisfy :: (TS m) => Maybe Cluster -> Job.Status -> m ()
+updateSatisfy clusterM status = do
+    depSatisfy' <- depSatisfy (status ^. Job.dependsOn)
+    let stageSatisfy' = stageSatisfy status
+        satis = case clusterM of
+            Just cluster -> fromMaybe Job.Satisfiable knownSatis
+                where
+                    knownSatis = stageSatisfy' <|> specSatisfy' <|> depSatisfy'
+                    specSatisfy' = specSatisfy (status ^. Job.spec) cluster
+            Nothing      -> fromMaybe Job.SatisfiabilityUnknown knownSatis
+                where knownSatis = stageSatisfy' <|> depSatisfy'
     when (status ^. Job.satis /= satis) $
         ES.setJobSatis (status ^. Job.name) satis
 
 -- | Update the satisfiability of all jobs with respect to the cluster, their state and
 --   their dependencies.
-updateSatisfiabilities :: (TS m) => Cluster -> AppState -> m ()
-updateSatisfiabilities cluster aState = mapM_ (updateSatisfy cluster) =<< depOrdered
+updateSatisfiabilities :: (TS m) => Maybe Cluster -> AppState -> m ()
+updateSatisfiabilities cluster aState = traverse_ (updateSatisfy cluster) =<< depOrdered
     where depOrdered = orderByDep $ HashMap.elems (aState ^. jobs)
-
--- | > orUnknown = fromMaybe SatisfiabilityUnknown
-orUnknown :: Maybe Satisfiability -> Satisfiability
-orUnknown = fromMaybe SatisfiabilityUnknown
-
--- | Set the satisfiability of all jobs that are not running or completed to unknown.
-allSatisfyUnknown :: (TS m) => AppState -> m ()
-allSatisfyUnknown aState = itraverse_ stateOrUnknown (aState ^. jobs)
-    where
-        stateOrUnknown k v = ES.setJobSatis k . orUnknown $ stateSatisfy v
 
 -- | Order jobs with respect to dependencies.
 orderByDep :: (TS m) => [Job.Status] -> m [Job.Status]
-orderByDep jobStatuses = graph jobStatuses <&> \(x, y) -> fmap y (topSort x)
+orderByDep jobStatuses = graph jobStatuses >>= \(x, y) -> pure $ fmap y (topSort x)
     where
-        graph :: (TS m) => [Status] -> m (Graph, Vertex -> Status)
+        graph :: (TS m) => [Job.Status] -> m (Graph, Vertex -> Job.Status)
         graph statuses = do
             let nodes = traverse node statuses
             (graph', gLookup, _) <- graphFromEdges <$> nodes
@@ -141,6 +136,5 @@ orderByDep jobStatuses = graph jobStatuses <&> \(x, y) -> fmap y (topSort x)
             pure (graph', gLookup')
         node :: (TS m) => Job.Status -> m Node
         node status = do
-            let name = status ^. Job.name
-            dependents <- ES.getDependents name
-            pure (status, name, dependents)
+            dependents <- ES.getDependents $ status ^. Job.name
+            pure (status, status ^. Job.name, dependents)

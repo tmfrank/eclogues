@@ -37,7 +37,7 @@ dep = forceName "dep"
 monitored :: Scheduler -> Cluster -> EitherError AppState
 monitored sched cluster = do
     state <- scheduler' sched
-    let monitor = updateSatisfiabilities cluster state
+    let monitor = updateSatisfiabilities (Just cluster) state
     scheduler state monitor
 
 testCluster :: Cluster
@@ -46,7 +46,7 @@ testCluster = [nodeResources fullResources]
 spec :: Spec
 spec = do
     describe "updateSatisfiabilities" $
-        it "should tag satisfiable jobs involving a dependency as Satisfiable" $
+        it "should tag unsatisfiable job involving an unsatisfiable dependency as unsatisfiable" $
             let createdJobs = do
                     createJob' $ isolatedJob  dep       overResources
                     createJob' $ dependentJob job [dep] overResources
