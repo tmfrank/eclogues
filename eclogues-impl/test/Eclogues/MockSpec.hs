@@ -8,9 +8,11 @@ import Control.Concurrent.MVar (putMVar, takeMVar, newEmptyMVar)
 import Control.Concurrent.Async (withAsync)
 import Control.Monad.Trans.Either (EitherT, runEitherT)
 import Data.Proxy (Proxy (Proxy))
+import qualified Data.Text as T
 import Data.Word (Word16)
 import Servant ((:<|>) (..))
 import Servant.Client (BaseUrl (..), Scheme (Http), ServantError, client)
+import TestUtils (isolatedJob', forceName)
 
 import Test.Hspec
 
@@ -25,6 +27,7 @@ apiPort = 8000
 type Call a = EitherT ServantError IO a
 
 getJobs :: Call [Job.Status]
+createJob :: Job.Spec -> Call ()
 (     getJobs
  :<|> _  -- jobStatus
  :<|> _  -- jobStage
@@ -32,7 +35,7 @@ getJobs :: Call [Job.Status]
  :<|> _  -- deleteJob
  :<|> _  -- scheduler redirect
  :<|> _  -- output redirect
- :<|> _  -- createJob
+ :<|> createJob
  :<|> _  -- getHealth
  ) = client (Proxy :: Proxy API) (BaseUrl Http apiHost $ fromIntegral apiPort)
 
@@ -48,7 +51,17 @@ shouldGive ma b = runEitherT ma >>= \case
     Left e  -> expectationFailure $ show e
     Right a -> a `shouldBe` b
 
-spec :: Spec
-spec = describe "the mock API" $
+getJobsSpec :: Spec
+getJobsSpec = describe "the mock API" $
     it "returns an empty list of jobs" $ runningAPI $
         getJobs `shouldGive` []
+
+createSpec :: Spec
+createSpec = describe "create a job" $
+    it "should create 1 job" $ runningAPI $
+        createJob (isolatedJob' $ forceName $ T.pack "will_succeed_jerb") `shouldGive` ()
+
+spec :: Spec
+spec = do
+  getJobsSpec
+  createSpec
