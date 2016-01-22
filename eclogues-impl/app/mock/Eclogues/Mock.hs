@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Eclogues.Mock where
@@ -10,7 +11,7 @@ import Eclogues.Persist (withPersistDir)
 import Eclogues.Scheduling.Command (schedulerJobUI)
 import Eclogues.State (updateJobs)
 import Eclogues.State.Monad (runState, appState)
-import Eclogues.State.Types (AppState, jobs)
+import Eclogues.State.Types (AppState, Jobs, jobs)
 import Eclogues.Threads.Server (serve)
 
 import Control.Concurrent (threadDelay)
@@ -22,7 +23,8 @@ import Control.Lens ((^.))
 import Control.Monad (forever)
 import Control.Monad.Trans (lift)
 import Data.Default.Generics (def)
-import Data.Maybe (fromJust)
+import Data.HashMap.Lazy (keys)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.Metrology ((%), (#))
 import Data.Metrology.SI (Second (Second), micro)
 import qualified Data.Text as T
@@ -61,8 +63,29 @@ update stateV = atomically $ do
     let jerbs   = state ^. jobs
         (_, ts) = runState state . updateJobs jerbs $ changes jerbs
     writeTVar stateV $ ts ^. appState
+
+changes :: Jobs -> [(Job.Name, Job.Stage)]
+changes jerbs = checkJerbNames $ keys jerbs
+
+checkJerbNames :: [Job.Name] -> [(Job.Name, Job.Stage)]
+checkJerbNames = map checkTheJerb
+
+checkTheJerb :: Job.Name -> (Job.Name, Job.Stage)
+checkTheJerb jobName = (jobName, checkNamePrefix jobName)
+
+checkNamePrefix :: Job.Name -> Job.Stage
+checkNamePrefix name
+    | check "will_crash"         = Job.Failed (Job.NonZeroExitCode 42)
+    | check "will_succeed"       = Job.Finished
+    | check "user_killed"        = Job.Failed Job.UserKilled
+    | check "memory_exceeded"    = Job.Failed Job.MemoryExceeded
+    | check "disk_exceeded"      = Job.Failed Job.DiskExceeded
+    | check "time_exceeded"      = Job.Failed Job.TimeExceeded
+    | check "failed_dependency"  = Job.Failed (Job.DependencyFailed $ forceName "failedDependency")
+    | check "queued"             = Job.Queued Job.LocalQueue
+    | otherwise                  = Job.Failed (Job.NonZeroExitCode 666)
   where
-    changes _ = []
+    check = (`T.isPrefixOf` Job.nameText name)
 
 -- TODO: move somewhere else
 -- | Append the job name and file path to the path of the job output server URI.
@@ -71,3 +94,6 @@ mkOutputURI pf name path = pf { uriPath = uriPath pf ++ name' ++ escapedPath }
   where
     escapedPath = escapeURIString isUnescapedInURI $ toFilePath path
     name' = T.unpack $ Job.nameText name
+
+forceName :: T.Text -> Job.Name
+forceName jName = fromMaybe (error $ "invalid test name " ++ show jName) $ Job.mkName jName
