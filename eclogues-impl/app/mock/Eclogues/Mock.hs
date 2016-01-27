@@ -26,6 +26,7 @@ import Data.HashMap.Lazy (keys)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Metrology ((%), (#))
 import Data.Metrology.SI (Second (Second), micro)
+import Data.Monoid ((<>))
 import qualified Data.Text as T
 import Data.Word (Word16)
 import Network.URI (URI (uriPath), escapeURIString, isUnescapedInURI, parseURI)
@@ -81,7 +82,7 @@ checkNamePrefix name
     | check "queued"             = Job.Queued Job.LocalQueue
     | otherwise                  = Job.Failed (Job.NonZeroExitCode 666)
   where
-    check = (`T.isPrefixOf` Job.nameText name)
+    check pre = (pre <> "_") `T.isPrefixOf` Job.nameText name
 
 -- TODO: move somewhere else
 -- | Append the job name and file path to the path of the job output server URI.
