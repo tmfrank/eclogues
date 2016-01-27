@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Eclogues.Mock where
@@ -65,10 +64,7 @@ update stateV = atomically $ do
     writeTVar stateV $ ts ^. appState
 
 changes :: Jobs -> [(Job.Name, Job.Stage)]
-changes jerbs = checkJerbNames $ keys jerbs
-
-checkJerbNames :: [Job.Name] -> [(Job.Name, Job.Stage)]
-checkJerbNames = map checkTheJerb
+changes jerbs = checkTheJerb <$> keys jerbs
 
 checkTheJerb :: Job.Name -> (Job.Name, Job.Stage)
 checkTheJerb jobName = (jobName, checkNamePrefix jobName)
