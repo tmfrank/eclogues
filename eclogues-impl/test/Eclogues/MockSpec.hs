@@ -4,6 +4,7 @@ import Eclogues.API (API)
 import qualified Eclogues.Job as Job
 import qualified Eclogues.Mock as Mock
 
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.MVar (putMVar, takeMVar, newEmptyMVar)
 import Control.Concurrent.Async (withAsync)
 import Control.Monad.Trans.Either (EitherT, runEitherT)
@@ -28,9 +29,10 @@ type Call a = EitherT ServantError IO a
 
 getJobs :: Call [Job.Status]
 createJob :: Job.Spec -> Call ()
+jobStage :: Job.Name -> Call Job.Stage
 (     getJobs
  :<|> _  -- jobStatus
- :<|> _  -- jobStage
+ :<|> jobStage
  :<|> _  -- setJobStage
  :<|> _  -- deleteJob
  :<|> _  -- scheduler redirect
@@ -51,17 +53,14 @@ shouldGive ma b = runEitherT ma >>= \case
     Left e  -> expectationFailure $ show e
     Right a -> a `shouldBe` b
 
-getJobsSpec :: Spec
-getJobsSpec = describe "the mock API" $
+spec :: Spec
+spec = describe "the mock API" $ do
     it "returns an empty list of jobs" $ runningAPI $
         getJobs `shouldGive` []
-
-createSpec :: Spec
-createSpec = describe "create a job" $
-    it "should create 1 job" $ runningAPI $
+    it "should successfully create a job" $ runningAPI $ do
+        createJob (isolatedJob' $ forceName $ T.pack "test_jerb") `shouldGive` ()
+        jobStage (forceName $ T.pack "test_jerb") `shouldGive` Job.Queued Job.LocalQueue
+    it "it should create a job and then the job will complete" $ runningAPI $ do
         createJob (isolatedJob' $ forceName $ T.pack "will_succeed_jerb") `shouldGive` ()
-
-spec :: Spec
-spec = do
-  getJobsSpec
-  createSpec
+        threadDelay 2000000 -- Wait for update to run
+        jobStage (forceName $ T.pack "will_succeed_jerb") `shouldGive` Job.Finished
