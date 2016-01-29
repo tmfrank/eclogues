@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
@@ -40,10 +41,11 @@ import Control.Concurrent.AdvSTM.TVar (TVar, readTVar, writeTVar)
 import Control.Concurrent.AdvSTM.TChan (writeTChan)
 import Control.Lens ((^.))
 import Control.Monad ((<=<))
+import Control.Monad.Except (
+    ExceptT, runExceptT, withExceptT, mapExceptT, throwError)
 import Control.Monad.State (State)
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Either (EitherT (EitherT))
-import Control.Monad.Trans.Except (ExceptT, runExceptT, withExceptT, mapExceptT, throwE)
 import Data.Aeson (encode)
 import qualified Data.ByteString.Char8 as BSSC
 import Data.Maybe (isJust, fromMaybe)
@@ -95,18 +97,18 @@ mainServer conf stateV clusterV = handleExcept server' where
     mesosJob = toMesos <=< getJobH where
         toMesos :: Job.Status -> ExceptT JobError IO ()
         toMesos js = (lift . atomically $ Config.auroraURI conf) >>= \case
-            Nothing  -> throwE SchedulerInaccessible
-            Just uri -> throwE . SchedulerRedirect . Config.schedJobURI conf uri $ js ^. Job.uuid
+            Nothing  -> throwError SchedulerInaccessible
+            Just uri -> throwError . SchedulerRedirect . Config.schedJobURI conf uri $ js ^. Job.uuid
     outputH name pathM =
         getJobH name *>
-        throwE (SchedulerRedirect $ Config.outputURI conf name path)
+        throwError (SchedulerRedirect $ Config.outputURI conf name path)
       where
         path = fromMaybe $(mkAbsFile "/stdout") pathM
 
     killJobH jid (Job.Failed UserKilled) = runScheduler' $ killJob jid
     killJobH jid _                       = do
         _ <- getJobH jid
-        throwE $ InvalidStageTransition "Can only set stage to Failed UserKilled"
+        throwError $ InvalidStageTransition "Can only set stage to Failed UserKilled"
     runScheduler' = runScheduler conf stateV
 
 handleExcept :: ServerT API (ExceptT JobError IO) -> Server API
@@ -125,7 +127,7 @@ runScheduler :: AppConfig -> TVar AppState -> Scheduler -> ExceptT JobError IO (
 runScheduler conf stateV f = mapExceptT atomically $ do
     state <- lift $ readTVar stateV
     case ES.runState state $ runExceptT f of
-        (Left  e, _ ) -> throwE e
+        (Left  e, _ ) -> throwError e
         (Right _, ts) -> lift $ do
             mapM_ (writeTChan $ Config.schedChan conf) $ ts ^. ES.scheduleCommands
             writeTVar stateV $ ts ^. ES.appState

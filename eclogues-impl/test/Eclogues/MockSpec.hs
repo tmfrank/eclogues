@@ -5,13 +5,11 @@ import qualified Eclogues.Job as Job
 import qualified Eclogues.Mock as Mock
 
 import Control.Concurrent (threadDelay)
-import Control.Concurrent.MVar (putMVar, takeMVar, newEmptyMVar)
-import Control.Concurrent.Async (withAsync)
 import Control.Monad.Trans.Either (EitherT, runEitherT)
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text as T
 import Data.Word (Word16)
-import Servant ((:<|>) (..))
+import Servant.API ((:<|>) (..))
 import Servant.Client (BaseUrl (..), Scheme (Http), ServantError, client)
 import TestUtils (isolatedJob', forceName)
 
@@ -41,17 +39,13 @@ jobStage :: Job.Name -> Call Job.Stage
  :<|> _  -- getHealth
  ) = client (Proxy :: Proxy API) (BaseUrl Http apiHost $ fromIntegral apiPort)
 
-runningAPI :: Expectation -> Expectation
-runningAPI a = do
-    go <- newEmptyMVar
-    withAsync (Mock.run (putMVar go ()) apiHost apiPort) . const $ do
-        takeMVar go
-        a
-
 shouldGive :: (Eq a, Show a, Show e) => EitherT e IO a -> a -> Expectation
 shouldGive ma b = runEitherT ma >>= \case
     Left e  -> expectationFailure $ show e
     Right a -> a `shouldBe` b
+
+runningAPI :: IO a -> IO a
+runningAPI = Mock.runningMock apiHost apiPort
 
 spec :: Spec
 spec = describe "the mock API" $ do

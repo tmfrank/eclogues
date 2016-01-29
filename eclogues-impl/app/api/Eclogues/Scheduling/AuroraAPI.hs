@@ -35,7 +35,7 @@ import Eclogues.Scheduling.AuroraConfig (Role, auroraJobConfig, lockKey, default
 
 import Control.Exception (Exception)
 import Control.Monad (void)
-import Control.Monad.Trans.Except (ExceptT (..))
+import Control.Monad.Except (ExceptT (..))
 import Data.Foldable (toList)
 import qualified Data.HashSet as HashSet
 import qualified Data.Text.Lazy as L

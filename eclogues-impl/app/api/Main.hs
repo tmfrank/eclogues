@@ -24,7 +24,8 @@ import qualified Eclogues.Job as Job
 import Eclogues.Monitoring.Monitor (followAegleMaster)
 import qualified Eclogues.Persist as Persist
 import Eclogues.Scheduling.AuroraZookeeper (followAuroraMaster)
-import Eclogues.Scheduling.Command (runScheduleCommand, schedulerJobUI)
+import Eclogues.Scheduling.Run (
+    runScheduleCommand, schedulerJobUI, requireSchedConf)
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Types (AppState)
 import Eclogues.Threads.Update (loadSchedulerState, monitorCluster)
@@ -42,8 +43,8 @@ import qualified Control.Concurrent.Lock as Lock
 import Control.Exception (throwIO)
 import Control.Lens ((^.))
 import Control.Monad (forever)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans (lift)
+import Control.Monad.Except (runExceptT)
 import Data.Aeson.TH (deriveFromJSON, defaultOptions)
 import Data.Default.Generics (def)
 import Data.Metrology ((%), (#))
@@ -147,7 +148,7 @@ loadFromDB conf = fmap ((^. ES.appState) . snd) . ES.runStateTS def $ do
 runSingleCommand :: AppConfig -> STM.AdvSTM ()
 runSingleCommand conf = do
     cmd <- readTChan $ Config.schedChan conf
-    schedConf <- Config.requireSchedConf conf
+    schedConf <- requireSchedConf conf
     STM.onCommit . throwExc $ do
         runScheduleCommand schedConf cmd
         Persist.atomically (Config.pctx conf) $ Persist.deleteIntent cmd

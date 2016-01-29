@@ -1,6 +1,7 @@
 flags: {}
 packages:
 - 'eclogues'
+- 'eclogues-mock'
 - 'eclogues-impl'
 - location:
     git: https://github.com/chrisdone/path

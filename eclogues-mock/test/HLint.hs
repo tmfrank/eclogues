@@ -1,12 +1,13 @@
 module Main (main) where
 
-import Paths_eclogues_impl (getDataFileName)
+import Paths_eclogues_mock (getDataFileName)
 import Language.Haskell.HLint (hlint)
 import System.Exit (exitFailure, exitSuccess)
 
 paths :: [String]
 paths =
     [ "app"
+    , "src"
     , "test"
     ]
 

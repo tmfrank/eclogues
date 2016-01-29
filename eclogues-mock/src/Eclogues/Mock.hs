@@ -1,13 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Eclogues.Mock where
+module Eclogues.Mock (main, runningMock) where
 
 import Eclogues.API (AbsFile)
 import Eclogues.AppConfig (AppConfig (AppConfig))
 import qualified Eclogues.Job as Job
 import Eclogues.Persist (withPersistDir)
-import Eclogues.Scheduling.Command (schedulerJobUI)
 import Eclogues.State (updateJobs)
 import Eclogues.State.Monad (runState, appState)
 import Eclogues.State.Types (AppState, Jobs, jobs)
@@ -18,6 +17,7 @@ import Control.Concurrent.AdvSTM (atomically)
 import Control.Concurrent.AdvSTM.TVar (TVar, newTVarIO, readTVar, writeTVar)
 import Control.Concurrent.AdvSTM.TChan (newTChanIO)
 import Control.Concurrent.Async (waitAny, withAsync)
+import Control.Concurrent.MVar (putMVar, takeMVar, newEmptyMVar)
 import Control.Lens ((^.))
 import Control.Monad (forever)
 import Control.Monad.Trans (lift)
@@ -28,6 +28,7 @@ import Data.Metrology ((%), (#))
 import Data.Metrology.SI (Second (Second), micro)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
+import Data.UUID (UUID)
 import Data.Word (Word16)
 import Network.URI (URI (uriPath), escapeURIString, isUnescapedInURI, parseURI)
 import Path (toFilePath, mkAbsDir)
@@ -39,11 +40,10 @@ main = run (pure ()) "127.0.0.1" 8000
 run :: IO () -> String -> Word16 -> IO ()
 run bla host port' = withSystemTempDirectory "em" $ \d -> withPersistDir d $ \pctx -> lift $ do
     schedV <- newTChanIO
-    let conf   = AppConfig jdir getURI schedV pctx jobURI outURI user (pure Nothing)
+    let conf   = AppConfig jdir getURI schedV pctx fakeSchedulerJobUI outURI user (pure Nothing)
         jdir   = $(mkAbsDir "/mock/jobs")
         user   = "test"
         getURI = pure . Just . fromJust $ parseURI "http://localhost:8081/"
-        jobURI = schedulerJobUI $ T.unpack user
         outURI = mkOutputURI . fromJust $ parseURI "http://localhost:8001/"
         port   = fromIntegral port'
     stateV   <- newTVarIO def
@@ -56,6 +56,9 @@ run bla host port' = withSystemTempDirectory "em" $ \d -> withPersistDir d $ \pc
     putStrLn $ "Starting server on " ++ host ++ ':':show port
     withAsync web $ \webA -> withAsync updater $ \updaterA ->
         snd <$> waitAny [const undefined <$> webA, updaterA]
+
+fakeSchedulerJobUI :: URI -> UUID -> URI
+fakeSchedulerJobUI uri uuid = uri { uriPath = "/nonexistant-scheduler/" ++ show uuid }
 
 update :: TVar AppState -> IO ()
 update stateV = atomically $ do
@@ -94,3 +97,10 @@ mkOutputURI pf name path = pf { uriPath = uriPath pf ++ name' ++ escapedPath }
 
 forceName :: T.Text -> Job.Name
 forceName jName = fromMaybe (error $ "invalid test name " ++ show jName) $ Job.mkName jName
+
+runningMock :: String -> Word16 -> IO a -> IO a
+runningMock apiHost apiPort a = do
+    go <- newEmptyMVar
+    withAsync (run (putMVar go ()) apiHost apiPort) . const $ do
+        takeMVar go
+        a

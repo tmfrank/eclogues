@@ -40,7 +40,7 @@ import qualified Eclogues.Job as Job
 import Control.Lens ((^.))
 import Control.Monad.Base (MonadBase, liftBase)
 import Control.Monad.Logger (LoggingT, runStderrLoggingT)
-import Control.Monad.Trans.Reader (ReaderT)
+import Control.Monad.Reader (ReaderT)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
 import Data.UUID (UUID)

@@ -18,8 +18,8 @@ module Eclogues.APIElection (
 
 import Eclogues.API (zkNode)
 
+import Control.Monad.Except (ExceptT, throwError, catchError)
 import Control.Monad.Trans.Control (liftBaseOp)
-import Control.Monad.Trans.Except (ExceptT, throwE, catchE)
 import Data.Aeson (encode)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (toStrict)
@@ -39,9 +39,9 @@ whileLeader :: ZKURI
             -> ExceptT LeadershipError IO a
 whileLeader zkUri host port act = liftBaseOp (withZookeeper zkUri) go
   where
-    go zk = catchE (whenLeader zk zkNode zkData $ act zk) $ \case
+    go zk = catchError (whenLeader zk zkNode zkData $ act zk) $ \case
         LeadershipLost -> go zk
-        e              -> throwE e
+        e              -> throwError e
     zkData = advertisedData host port
 
 -- | Create encoded (host, port) to advertise via Zookeeper.

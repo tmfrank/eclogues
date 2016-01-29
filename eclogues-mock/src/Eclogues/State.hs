@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
 {-|
@@ -35,7 +37,7 @@ import Eclogues.State.Types (AppState, Jobs, jobs)
 import Control.Lens ((^.), view)
 import Control.Monad (when, void, unless)
 import Control.Monad.Except (MonadError, throwError)
-import Control.Monad.Trans.Writer.Lazy (WriterT, tell, execWriterT)
+import Control.Monad.Writer.Lazy (WriterT, tell, execWriterT)
 import Data.Foldable (traverse_)
 import Data.HashMap.Lazy (elems, traverseWithKey)
 import qualified Data.HashMap.Lazy as HashMap

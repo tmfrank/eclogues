@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Eclogues.Scheduling.CommandSpec (spec) where
+module Eclogues.Scheduling.RunSpec (spec) where
 
 import Api_Types (
       AssignedTask (..), ScheduledTask (..), TaskEvent (..)
@@ -11,7 +11,7 @@ import Eclogues.Job (
     , FailureReason (UserKilled), RunErrorReason (SubexecutorFailure)
     , nameText)
 import Eclogues.Scheduling.AuroraConfig (auroraJobConfig)
-import Eclogues.Scheduling.Command (lookupNewStages)
+import Eclogues.Scheduling.Run (lookupNewStages)
 import TestUtils (isolatedJob', forceName)
 
 import qualified Data.HashMap.Strict as HM

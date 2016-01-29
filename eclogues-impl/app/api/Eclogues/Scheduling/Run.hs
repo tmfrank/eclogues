@@ -16,18 +16,21 @@ Portability : portable
 Communication with the remote scheduler.
 -}
 
-module Eclogues.Scheduling.Command (
+module Eclogues.Scheduling.Run (
       ScheduleCommand (..), ScheduleConf (..), AuroraURI
     , runScheduleCommand, getSchedulerStatuses, schedulerJobUI
+    , requireSchedConf
     -- * Exports for testing
     , lookupNewStages
     ) where
 
 import Prelude hiding (writeFile, readFile)
 
+import qualified Eclogues.AppConfig as AC
 import qualified Eclogues.Scheduling.AuroraAPI as A
 import Eclogues.Scheduling.AuroraConfig (
     Role, ScheduledTask, getJobName, getJobStage)
+import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import Eclogues.Job (
       Stage (..), QueueStage (..)
     , FailureReason (..), RunErrorReason (..))
@@ -36,13 +39,13 @@ import Eclogues.Paths (runResult, specFile)
 import Eclogues.Util (RunResult (..), dirName)
 
 import Control.Arrow ((&&&))
+import Control.Concurrent.AdvSTM (AdvSTM, retry)
 import Control.Exception (IOException, try, tryJust)
 import Control.Lens ((^.), (&), (.~), view)
 import Control.Monad ((<=<), guard, void)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT (..))
+import Control.Monad.Except (ExceptT (..))
+import Control.Monad.Trans (lift)
 import Data.Aeson (encode, eitherDecode')
-import Data.Aeson.TH (deriveJSON, defaultOptions)
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.HashMap.Strict as HM
 import Data.List (foldl')
@@ -54,13 +57,6 @@ import Path ((</>), mkRelDir)
 import Path.IO (Dir, readFile, writeFile, createDirectoryIfMissing, removeDirectoryRecursive)
 import System.Exit (ExitCode (..))
 import System.IO.Error (isDoesNotExistError)
-
--- | Tell the scheduler to do something.
-data ScheduleCommand = QueueJob   Job.Spec UUID
-                     | KillJob    Job.Name UUID
-                     | CleanupJob Job.Name UUID
-
-$(deriveJSON defaultOptions ''ScheduleCommand)
 
 type AuroraURI = URI
 data ScheduleConf = ScheduleConf { jobsDir :: Dir, auroraRole :: Role, auroraURI :: AuroraURI }
@@ -123,3 +119,14 @@ lookupNewStages uuids auroraTasks = HM.toList $ foldl' go HM.empty auroraTasks
 
 schedulerJobUI :: String -> URI -> UUID -> URI
 schedulerJobUI user uri uuid = uri { uriPath = "/scheduler/" ++ user ++ "/devel/" ++ show uuid }
+
+-- | Wait until the scheduler is available.
+requireSchedConf :: AC.AppConfig -> AdvSTM ScheduleConf
+requireSchedConf conf = ScheduleConf (AC.jobsDir conf) (L.fromStrict $ AC.subexecutorUser conf) <$> requireAurora conf
+
+requireAurora :: AC.AppConfig -> AdvSTM AuroraURI
+requireAurora conf = do
+    uriM <- AC.auroraURI conf
+    case uriM of
+        Just uri -> pure uri
+        Nothing  -> retry

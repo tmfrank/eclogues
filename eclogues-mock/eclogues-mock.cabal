@@ -1,0 +1,92 @@
+name: eclogues-mock
+version: 0.1.0.0
+cabal-version: >=1.10
+build-type: Simple
+license: BSD3
+license-file: ../LICENSE
+copyright: (c) 2015 Swinburne Software Innovation Lab
+maintainer: Rhys Adams <rhysadams@swin.edu.au>, Shannon Pace <space@swin.edu.au>
+synopsis: Eclogues mock server for testing.
+
+data-dir: ..
+data-files: HLint.hints
+
+library
+    exposed-modules:
+        Eclogues.Mock
+    build-depends:
+        base,
+        text,
+        unordered-containers,
+        bytestring,
+        network-uri,
+        aeson,
+        servant,
+        servant-server,
+        servant-docs,
+        servant-pandoc,
+        pandoc,
+        http-types,
+        warp,
+        either,
+        stm-io-hooks,
+        async,
+        wai-cors,
+        persistent,
+        persistent-template,
+        persistent-sqlite,
+        monad-logger,
+        lens,
+        data-default-generics,
+        uuid,
+        random,
+        http-media,
+        mtl,
+        path,
+        path-io,
+        containers,
+        servant-client,
+        units,
+        units-defs,
+        digital-metrology-frontiers,
+        transformers-base,
+        eclogues ==0.1.0.0
+    default-language: Haskell2010
+    other-extensions: LambdaCase TemplateHaskell Trustworthy
+    hs-source-dirs: src
+    ghc-options: -Wall -Werror
+    other-modules:
+        Eclogues.ApiDocs,
+        Eclogues.AppConfig,
+        Eclogues.Persist,
+        Eclogues.Persist.Stage1,
+        Eclogues.Scheduling.Command,
+        Eclogues.State,
+        Eclogues.State.Monad,
+        Eclogues.State.Types,
+        Eclogues.Threads.Server,
+        Eclogues.Monitoring.Cluster,
+        Eclogues.Util
+
+executable eclogues-mock
+    main-is: Main.hs
+    build-depends:
+        base,
+        eclogues-mock ==0.1.0.0
+    default-language: Haskell2010
+    hs-source-dirs: app
+    ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
+
+test-suite hlint
+    type:                exitcode-stdio-1.0
+    hs-source-dirs:      test
+    main-is:             HLint.hs
+    other-modules:
+        Paths_eclogues_mock
+    build-depends:       base
+                       , hlint
+    default-language:    Haskell2010
+
+source-repository head
+  type: git
+  location: git://github.com/rimmington/eclogues.git

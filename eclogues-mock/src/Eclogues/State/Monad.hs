@@ -118,7 +118,7 @@ removeRevDep on by = revDeps . at on %= (>>= removed) where
 getDependents :: (TS m) => Job.Name -> m [Job.Name]
 getDependents name = use $ revDeps . at name . non []
 
-loadJobs :: forall m. (TS m) => [Job.Status] -> m ()
+loadJobs :: (TS m) => [Job.Status] -> m ()
 loadJobs = mapM_ $ \j -> do
     let name = j ^. Job.name
     jobs . at name ?= j

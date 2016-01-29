@@ -22,8 +22,8 @@ import qualified Eclogues.State.Monad as ES
 import Eclogues.State (createJob)
 
 import Control.Lens (view, at, (^.), (.~))
+import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.State (State)
-import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Data.Default.Generics (def)
 import qualified Data.HashMap.Lazy as HM
 import Data.Maybe (fromMaybe, isNothing)

@@ -24,7 +24,7 @@ library
         eclogues ==0.1.0.0
     default-language: Haskell2010
     other-extensions: LambdaCase TemplateHaskell Trustworthy
-    hs-source-dirs: src
+    hs-source-dirs: ../eclogues-mock/src
     ghc-options: -Wall -Werror
 
 executable eclogues-api
@@ -47,7 +47,6 @@ executable eclogues-api
         servant-pandoc,
         pandoc,
         http-types,
-        transformers,
         warp,
         either,
         stm-io-hooks,
@@ -84,9 +83,10 @@ executable eclogues-api
                       FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving
                       MultiParamTypeClasses OverloadedStrings RankNTypes QuasiQuotes
                       TemplateHaskell TupleSections TypeFamilies TypeOperators
-    hs-source-dirs: gen-hs app/api
+    hs-source-dirs: gen-hs app/api ../eclogues-mock/src
     other-modules:
         Eclogues.ApiDocs,
+        Eclogues.APIElection,
         Eclogues.AppConfig,
         Eclogues.Persist,
         Eclogues.Persist.Stage1,
@@ -94,6 +94,7 @@ executable eclogues-api
         Eclogues.Scheduling.AuroraConfig,
         Eclogues.Scheduling.AuroraZookeeper,
         Eclogues.Scheduling.Command,
+        Eclogues.Scheduling.Run,
         Eclogues.State,
         Eclogues.State.Monad,
         Eclogues.State.Types,
@@ -155,59 +156,6 @@ executable eclogues-client
         Eclogues.Client
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
 
-executable eclogues-mock
-    main-is: MockMain.hs
-    build-depends:
-        base,
-        text,
-        unordered-containers,
-        bytestring,
-        hashable,
-        QuickCheck,
-        vector,
-        network-uri,
-        thrift,
-        aeson,
-        servant,
-        servant-server,
-        servant-docs,
-        servant-pandoc,
-        pandoc,
-        http-types,
-        transformers,
-        warp,
-        either,
-        stm-io-hooks,
-        async,
-        hzk,
-        concurrent-extra,
-        wai-cors,
-        persistent,
-        persistent-template,
-        persistent-sqlite,
-        monad-logger,
-        lens,
-        data-default-generics,
-        uuid,
-        random,
-        time,
-        http-media,
-        mtl,
-        path,
-        path-io,
-        containers,
-        servant-client,
-        units,
-        units-defs,
-        digital-metrology-frontiers,
-        transformers-base,
-        eclogues ==0.1.0.0,
-        eclogues-impl ==0.1.0.0
-    default-language: Haskell2010
-    default-extensions: LambdaCase ScopedTypeVariables
-    hs-source-dirs: gen-hs app/api app/mock
-    ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
-
 test-suite hspec
     type: exitcode-stdio-1.0
     main-is: Spec.hs
@@ -228,7 +176,6 @@ test-suite hspec
         servant-pandoc,
         pandoc,
         http-types,
-        transformers,
         warp,
         either,
         stm-io-hooks,
@@ -263,12 +210,14 @@ test-suite hspec
     default-language: Haskell2010
     default-extensions: LambdaCase ScopedTypeVariables
     other-extensions: OverloadedStrings
-    hs-source-dirs: gen-hs app/api app/mock test
+    hs-source-dirs: gen-hs app/api ../eclogues-mock/src test
     ghc-options: -threaded -with-rtsopts=-N -Wall -Werror
     other-modules:
+        Eclogues.APIElectionSpec,
         Eclogues.MockSpec,
         Eclogues.Monitoring.ClusterSpec,
         Eclogues.Scheduling.AuroraConfigSpec,
+        Eclogues.Scheduling.RunSpec,
         Eclogues.StateSpec,
         Spec,
         TestUtils
