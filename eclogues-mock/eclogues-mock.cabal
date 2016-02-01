@@ -50,6 +50,7 @@ library
         units-defs,
         digital-metrology-frontiers,
         transformers-base,
+        concurrent-extra,
         eclogues ==0.1.0.0
     default-language: Haskell2010
     other-extensions: LambdaCase TemplateHaskell Trustworthy

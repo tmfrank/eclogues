@@ -4,7 +4,6 @@ import Eclogues.API (API)
 import qualified Eclogues.Job as Job
 import qualified Eclogues.Mock as Mock
 
-import Control.Concurrent (threadDelay)
 import Control.Monad.Trans.Either (EitherT, runEitherT)
 import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text as T
@@ -44,17 +43,17 @@ shouldGive ma b = runEitherT ma >>= \case
     Left e  -> expectationFailure $ show e
     Right a -> a `shouldBe` b
 
-runningAPI :: IO a -> IO a
+runningAPI :: (Mock.MockHelper -> IO a) -> IO a
 runningAPI = Mock.runningMock apiHost apiPort
 
 spec :: Spec
 spec = describe "the mock API" $ do
-    it "returns an empty list of jobs" $ runningAPI $
+    it "returns an empty list of jobs" $ runningAPI $ \_ ->
         getJobs `shouldGive` []
-    it "should successfully create a job" $ runningAPI $ do
+    it "should successfully create a job" $ runningAPI $ \_ -> do
         createJob (isolatedJob' $ forceName $ T.pack "test_jerb") `shouldGive` ()
         jobStage (forceName $ T.pack "test_jerb") `shouldGive` Job.Queued Job.LocalQueue
-    it "it should create a job and then the job will complete" $ runningAPI $ do
+    it "it should create a job and then the job will complete" $ runningAPI $ \h -> do
         createJob (isolatedJob' $ forceName $ T.pack "will_succeed_jerb") `shouldGive` ()
-        threadDelay 2000000 -- Wait for update to run
+        Mock.waitForUpdate h
         jobStage (forceName $ T.pack "will_succeed_jerb") `shouldGive` Job.Finished

@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Eclogues.Mock (main, runningMock) where
+module Eclogues.Mock (MockHelper, main, runningMock, waitForUpdate) where
 
 import Eclogues.API (AbsFile)
 import Eclogues.AppConfig (AppConfig (AppConfig))
@@ -17,7 +17,7 @@ import Control.Concurrent.AdvSTM (atomically)
 import Control.Concurrent.AdvSTM.TVar (TVar, newTVarIO, readTVar, writeTVar)
 import Control.Concurrent.AdvSTM.TChan (newTChanIO)
 import Control.Concurrent.Async (waitAny, withAsync)
-import Control.Concurrent.MVar (putMVar, takeMVar, newEmptyMVar)
+import qualified Control.Concurrent.Event as Event
 import Control.Lens ((^.))
 import Control.Monad (forever)
 import Control.Monad.Trans (lift)
@@ -35,10 +35,12 @@ import Path (toFilePath, mkAbsDir)
 import Path.IO (withSystemTempDirectory)
 
 main :: IO ()
-main = run (pure ()) "127.0.0.1" 8000
+main = run nope nope "127.0.0.1" 8000
+  where
+    nope = pure ()
 
-run :: IO () -> String -> Word16 -> IO ()
-run bla host port' = withSystemTempDirectory "em" $ \d -> withPersistDir d $ \pctx -> lift $ do
+run :: IO () -> IO () -> String -> Word16 -> IO ()
+run bla ua host port' = withSystemTempDirectory "em" $ \d -> withPersistDir d $ \pctx -> lift $ do
     schedV <- newTChanIO
     let conf   = AppConfig jdir getURI schedV pctx fakeSchedulerJobUI outURI user (pure Nothing)
         jdir   = $(mkAbsDir "/mock/jobs")
@@ -51,6 +53,7 @@ run bla host port' = withSystemTempDirectory "em" $ \d -> withPersistDir d $ \pc
     let web = serve bla host port conf stateV clusterV
         updater = forever $ do
             update stateV
+            ua
             threadDelay . floor $ ((1 % Second) # micro Second :: Double)
 
     putStrLn $ "Starting server on " ++ host ++ ':':show port
@@ -98,9 +101,17 @@ mkOutputURI pf name path = pf { uriPath = uriPath pf ++ name' ++ escapedPath }
 forceName :: T.Text -> Job.Name
 forceName jName = fromMaybe (error $ "invalid test name " ++ show jName) $ Job.mkName jName
 
-runningMock :: String -> Word16 -> IO a -> IO a
+newtype MockHelper = MockHelper Event.Event
+
+runningMock :: String -> Word16 -> (MockHelper -> IO a) -> IO a
 runningMock apiHost apiPort a = do
-    go <- newEmptyMVar
-    withAsync (run (putMVar go ()) apiHost apiPort) . const $ do
-        takeMVar go
-        a
+    go <- Event.new
+    ev <- Event.new
+    let onStart  = Event.set go
+        onUpdate = Event.signal ev
+    withAsync (run onStart onUpdate apiHost apiPort) . const $ do
+        Event.wait go
+        a $ MockHelper ev
+
+waitForUpdate :: MockHelper -> IO ()
+waitForUpdate (MockHelper ev) = Event.wait ev
