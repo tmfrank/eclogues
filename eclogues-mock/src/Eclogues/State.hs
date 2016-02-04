@@ -28,7 +28,7 @@ import Eclogues.Job (
       FailureReason (..), RunErrorReason (..), QueueStage (..), Stage (..)
     , isActiveStage, isTerminationStage, isOnScheduler, isQueueStage)
 import qualified Eclogues.Job as Job
-import Eclogues.Monitoring.Cluster (Cluster, jobDepSatisfy)
+import Eclogues.Monitoring.Cluster (Cluster, stagelessSatisfy)
 import Eclogues.Scheduling.Command (ScheduleCommand (..))
 import qualified Eclogues.State.Monad as ES
 import Eclogues.State.Monad (TS)
@@ -55,7 +55,7 @@ createJob uuid cluster spec = do
     existing <- ES.getJob name
     when (isJust existing) $ throwError JobNameUsed
     Sum activeDepCount <- execWriterT $ traverse_ (checkDep name) deps
-    satis <- maybe (pure Job.SatisfiabilityUnknown) (jobDepSatisfy spec) cluster
+    satis <- stagelessSatisfy cluster spec
     let jstage = if activeDepCount == 0
             then Queued LocalQueue
             else Waiting activeDepCount

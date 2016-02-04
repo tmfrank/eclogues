@@ -34,9 +34,7 @@ import Control.Exception (IOException, throwIO, try)
 import Control.Lens ((^.))
 import Control.Monad.Except (runExceptT)
 import Control.Monad.Trans.Either (runEitherT)
-import Data.Foldable (traverse_)
 import qualified Data.HashMap.Lazy as HashMap
-import Servant.Client (ServantError)
 import Servant.Common.BaseUrl (BaseUrl)
 import System.IO (hPutStrLn, stderr)
 
@@ -62,18 +60,16 @@ loadSchedulerState conf stateV = do
 
 -- | Obtain estimated resources for all available sources and update job satisfiability.
 monitorCluster :: STM.AdvSTM (Maybe BaseUrl) -> STM.TVar AppState -> STM.TVar (Maybe CM.Cluster) -> IO ()
-monitorCluster urlM stateV clusterV = traverse_ go =<< STM.atomically urlM
-  where
-    go url = runEitherT (slaveResources url) >>= \case
-        Right cluster -> STM.atomically $ do
-            STM.writeTVar clusterV (Just cluster)
-            state <- STM.readTVar stateV
-            let (_, ts) = ES.runState state $ CM.updateSatisfiabilities cluster state
-            STM.writeTVar stateV $ ts ^. ES.appState
-        Left (ex :: ServantError) -> do
-            hPutStrLn stderr $ "Error connecting to health monitor at " ++ show url ++ "; retrying: " ++ show ex
+monitorCluster urlM stateV clusterV = go =<< STM.atomically urlM
+    where
+        go urlM' = do
+            let noHealthUrl = pure Nothing <* hPutStrLn stderr "No health monitor avaiable"
+                connFailed url ex = pure Nothing <* hPutStrLn stderr msg
+                    where msg = "Error connecting to health monitor at " ++ show url ++ "; " ++ show ex
+                getResources url = either (connFailed url) (pure . Just) =<< runEitherT (slaveResources url)
+            cluster <- maybe noHealthUrl getResources urlM'
             STM.atomically $ do
-                STM.writeTVar clusterV Nothing
+                STM.writeTVar clusterV cluster
                 state <- STM.readTVar stateV
-                let (_, ts) = ES.runState state $ CM.allSatisfyUnknown state
+                let (_, ts) = ES.runState state $ CM.updateSatisfiabilities cluster state
                 STM.writeTVar stateV $ ts ^. ES.appState
