@@ -19,6 +19,9 @@ Eclogues REST API definition. See also the <https://github.com/rimmington/eclogu
 module Eclogues.API (
       API, JobError (..), zkNode, parseZKData
     , AbsFile, Get'
+    -- * Specific endpoints
+    , ListJobs, JobStatus, JobStage, PutJobStage, JobOnScheduler, JobOutput
+    , DeleteJob, CreateJob, GetHealth
     -- * Health reporting
     , Health, mkHealth, schedulerAccessible
     ) where
@@ -40,17 +43,21 @@ import Servant.API ((:>), (:<|>), Get, Post, Put, Delete, ReqBody, Capture, Quer
 type AbsFile = Path Abs File
 type Get' = Get '[JSON]
 
+type ListJobs       = "jobs"   :> Get' [Job.Status]
+type JobStatus      = "jobs"   :> Capture "name" Job.Name  :> Get' Job.Status
+type JobStage       = "jobs"   :> Capture "name" Job.Name  :> "stage" :> Get' Job.Stage
+type PutJobStage    = "jobs"   :> Capture "name" Job.Name  :> "stage" :> ReqBody '[JSON] Job.Stage  :> Put '[JSON] ()
+type JobOnScheduler = "jobs"   :> Capture "name" Job.Name  :> "scheduler" :> Get' ()
+type JobOutput      = "jobs"   :> Capture "name" Job.Name  :> "output" :> QueryParam "path" AbsFile :> Get' ()
+type DeleteJob      = "jobs"   :> Capture "name" Job.Name  :> Delete '[JSON] ()
+type CreateJob      = "jobs"   :> ReqBody '[JSON] Job.Spec :> Post '[JSON] ()
+type GetHealth      = "health" :> Get' Health
+
 -- NB: Make sure the module header is updated with this.
 -- | Eclogues API definition.
-type API =  "jobs"   :> Get' [Job.Status]
-       :<|> "jobs"   :> Capture "name" Job.Name  :> Get' Job.Status
-       :<|> "jobs"   :> Capture "name" Job.Name  :> "stage" :> Get' Job.Stage
-       :<|> "jobs"   :> Capture "name" Job.Name  :> "stage" :> ReqBody '[JSON] Job.Stage  :> Put '[JSON] ()
-       :<|> "jobs"   :> Capture "name" Job.Name  :> "scheduler" :> Get' ()
-       :<|> "jobs"   :> Capture "name" Job.Name  :> "output" :> QueryParam "path" AbsFile :> Get' ()
-       :<|> "jobs"   :> Capture "name" Job.Name  :> Delete '[JSON] ()
-       :<|> "jobs"   :> ReqBody '[JSON] Job.Spec :> Post '[JSON] ()
-       :<|> "health" :> Get' Health
+type API = ListJobs       :<|> JobStatus :<|> JobStage  :<|> PutJobStage
+      :<|> JobOnScheduler :<|> JobOutput :<|> DeleteJob :<|> CreateJob
+      :<|> GetHealth
 
 -- | The Zookeeper node on which Eclogues instances run elections.
 zkNode :: String
