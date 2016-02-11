@@ -53,7 +53,12 @@ spec = describe "the mock API" $ do
     it "should successfully create a job" $ runningAPI $ \_ -> do
         createJob (isolatedJob' $ forceName $ T.pack "test_jerb") `shouldGive` ()
         jobStage (forceName $ T.pack "test_jerb") `shouldGive` Job.Queued Job.LocalQueue
-    it "it should create a job and then the job will complete" $ runningAPI $ \h -> do
-        createJob (isolatedJob' $ forceName $ T.pack "will_succeed_jerb") `shouldGive` ()
+    it "it should create a job and then the job will complete after 0 ticks" $ runningAPI $ \h -> do
+        createJob (isolatedJob' $ forceName $ T.pack "will_succeed_0_jerb") `shouldGive` ()
         Mock.waitForUpdate h
-        jobStage (forceName $ T.pack "will_succeed_jerb") `shouldGive` Job.Finished
+        jobStage (forceName $ T.pack "will_succeed_0_jerb") `shouldGive` Job.Finished
+    it "it should create a job and then the job will complete after 3 ticks" $ runningAPI $ \i -> do
+        createJob (isolatedJob' $ forceName $ T.pack "will_succeed_3_jerb") `shouldGive` ()
+        Mock.waitForUpdate i
+        Mock.waitForUpdate i
+        Mock.waitForUpdate i
